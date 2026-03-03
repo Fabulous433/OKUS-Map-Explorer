@@ -11,13 +11,15 @@ export const users = pgTable("users", {
 
 export const wajibPajak = pgTable("wajib_pajak", {
   id: serial("id").primaryKey(),
-  npwp: varchar("npwp", { length: 30 }).notNull(),
+  npwpd: varchar("npwpd", { length: 30 }).notNull(),
   nama: text("nama").notNull(),
+  namaUsaha: text("nama_usaha"),
   alamat: text("alamat").notNull(),
   kelurahan: text("kelurahan"),
   kecamatan: text("kecamatan"),
   telepon: varchar("telepon", { length: 20 }),
   email: varchar("email", { length: 255 }),
+  jenisPajak: text("jenis_pajak").notNull(),
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),
   status: varchar("status", { length: 20 }).notNull().default("active"),
@@ -26,20 +28,35 @@ export const wajibPajak = pgTable("wajib_pajak", {
 
 export const objekPajak = pgTable("objek_pajak", {
   id: serial("id").primaryKey(),
-  nop: varchar("nop", { length: 30 }).notNull(),
+  nopd: varchar("nopd", { length: 30 }).notNull(),
   wpId: integer("wp_id").references(() => wajibPajak.id),
-  jenis: text("jenis").notNull(),
+  jenisPajak: text("jenis_pajak").notNull(),
+  namaObjek: text("nama_objek").notNull(),
   alamat: text("alamat").notNull(),
   kelurahan: text("kelurahan"),
   kecamatan: text("kecamatan"),
-  luasTanah: decimal("luas_tanah", { precision: 12, scale: 2 }),
-  luasBangunan: decimal("luas_bangunan", { precision: 12, scale: 2 }),
-  njop: decimal("njop", { precision: 15, scale: 2 }),
+  omsetBulanan: decimal("omset_bulanan", { precision: 15, scale: 2 }),
+  tarifPersen: decimal("tarif_persen", { precision: 5, scale: 2 }),
+  pajakBulanan: decimal("pajak_bulanan", { precision: 15, scale: 2 }),
+  rating: decimal("rating", { precision: 3, scale: 1 }),
+  reviewCount: integer("review_count"),
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),
   status: varchar("status", { length: 20 }).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+export const JENIS_PAJAK_OPTIONS = [
+  "PBJT Makanan dan Minuman",
+  "PBJT Jasa Perhotelan",
+  "PBJT Jasa Parkir",
+  "PBJT Jasa Kesenian dan Hiburan",
+  "PBJT Tenaga Listrik",
+  "Pajak Reklame",
+  "Pajak Air Tanah",
+  "Pajak Sarang Burung Walet",
+  "Pajak MBLB",
+] as const;
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,

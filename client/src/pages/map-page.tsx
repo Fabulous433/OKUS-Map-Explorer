@@ -2,15 +2,39 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, MapPin, Search, ZoomIn, ZoomOut, Crosshair, Layers, Users, Building2, Info, X, ExternalLink } from "lucide-react";
+import { useSearch } from "wouter";
+import { Loader2, MapPin, Search, ZoomIn, ZoomOut, Crosshair, Layers, Users, Building2, Info, X, ExternalLink, Navigation, Star, Tag, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import type { WikiLandmark, WajibPajak, ObjekPajak } from "@shared/schema";
 import "leaflet/dist/leaflet.css";
 
-const OKU_SELATAN_CENTER: [number, number] = [-4.4167, 104.0333];
-const DEFAULT_ZOOM = 11;
+const OKU_SELATAN_CENTER: [number, number] = [-4.5250, 104.0270];
+const DEFAULT_ZOOM = 14;
+
+const BASE_MAPS = {
+  osm: {
+    name: "OpenStreetMap",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+  },
+  esri: {
+    name: "ESRI Satellite",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: '&copy; <a href="https://www.esri.com">Esri</a>, Maxar, Earthstar Geographics',
+    maxZoom: 18,
+  },
+  cartodb: {
+    name: "CartoDB Positron",
+    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
+    maxZoom: 20,
+  },
+} as const;
+
+type BaseMapKey = keyof typeof BASE_MAPS;
 
 const landmarkIcon = new L.DivIcon({
   className: "landmark-marker",
@@ -53,6 +77,25 @@ function MapEventHandler({ onBoundsChange }: { onBoundsChange: (bounds: L.LatLng
   return null;
 }
 
+function FlyToHandler({ lat, lng, zoom }: { lat: number | null; lng: number | null; zoom: number }) {
+  const map = useMap();
+  const lastCoords = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (lat !== null && lng !== null) {
+      const coordKey = `${lat},${lng},${zoom}`;
+      if (lastCoords.current !== coordKey) {
+        lastCoords.current = coordKey;
+        setTimeout(() => {
+          map.flyTo([lat, lng], zoom, { duration: 1.5 });
+        }, 500);
+      }
+    }
+  }, [lat, lng, zoom, map]);
+
+  return null;
+}
+
 function MapControls() {
   const map = useMap();
 
@@ -85,6 +128,51 @@ function MapControls() {
       >
         <Crosshair className="w-5 h-5 text-black" />
       </Button>
+    </div>
+  );
+}
+
+function BaseMapSwitcher({ activeMap, onChange }: { activeMap: BaseMapKey; onChange: (key: BaseMapKey) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="absolute top-4 right-16 z-[1000]" data-testid="basemap-switcher">
+      <Button
+        size="icon"
+        variant="outline"
+        className="bg-white border-[3px] border-black rounded-none w-10 h-10 no-default-hover-elevate no-default-active-elevate"
+        onClick={() => setIsOpen(!isOpen)}
+        data-testid="button-basemap-toggle"
+      >
+        <Layers className="w-5 h-5 text-black" />
+      </Button>
+      {isOpen && (
+        <div className="absolute top-12 right-0 bg-white border-[3px] border-black p-3 min-w-[200px]" data-testid="basemap-options">
+          <div className="flex items-center gap-2 mb-3 pb-2 border-b-[2px] border-black">
+            <Layers className="w-4 h-4 text-black" />
+            <span className="font-mono text-xs font-bold text-black">BASE MAP</span>
+          </div>
+          {(Object.keys(BASE_MAPS) as BaseMapKey[]).map((key) => (
+            <label
+              key={key}
+              className="flex items-center gap-2 py-1.5 cursor-pointer"
+              data-testid={`basemap-option-${key}`}
+            >
+              <input
+                type="radio"
+                name="basemap"
+                checked={activeMap === key}
+                onChange={() => {
+                  onChange(key);
+                  setIsOpen(false);
+                }}
+                className="accent-black w-4 h-4"
+              />
+              <span className="font-mono text-xs text-black">{BASE_MAPS[key].name}</span>
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -153,11 +241,18 @@ function LandmarkDetail({ landmark, onClose }: { landmark: WikiLandmark; onClose
 }
 
 export default function MapPage() {
+  const searchString = useSearch();
+  const params = new URLSearchParams(searchString);
+  const focusLat = params.get("lat") ? parseFloat(params.get("lat")!) : null;
+  const focusLng = params.get("lng") ? parseFloat(params.get("lng")!) : null;
+  const focusZoom = params.get("zoom") ? parseInt(params.get("zoom")!) : 17;
+
   const [bounds, setBounds] = useState<{ north: number; south: number; east: number; west: number } | null>(null);
   const [selectedLandmark, setSelectedLandmark] = useState<WikiLandmark | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showLayers, setShowLayers] = useState({ landmarks: true, wp: true, op: true });
   const [sidePanel, setSidePanel] = useState<"none" | "wp" | "op">("none");
+  const [activeBaseMap, setActiveBaseMap] = useState<BaseMapKey>("osm");
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const [debouncedBounds, setDebouncedBounds] = useState(bounds);
 
@@ -207,6 +302,16 @@ export default function MapPage() {
     ? landmarks.filter((l) => l.title.toLowerCase().includes(searchQuery.toLowerCase()))
     : landmarks;
 
+  const currentBaseMap = BASE_MAPS[activeBaseMap];
+
+  const jenisPajakColor = (jenis: string) => {
+    if (jenis.includes("Makanan")) return "bg-[#FF6B00] text-white";
+    if (jenis.includes("Perhotelan")) return "bg-blue-600 text-white";
+    if (jenis.includes("Reklame")) return "bg-purple-600 text-white";
+    if (jenis.includes("Parkir")) return "bg-green-600 text-white";
+    return "bg-gray-600 text-white";
+  };
+
   return (
     <div className="h-screen w-screen relative bg-white overflow-hidden" data-testid="map-page">
       <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-3" data-testid="map-header">
@@ -219,7 +324,7 @@ export default function MapPage() {
               OKU SELATAN
             </h1>
             <p className="font-mono text-[10px] text-white tracking-widest uppercase">
-              Peta Interaktif & Pajak
+              Peta Pajak Daerah
             </p>
           </div>
         </div>
@@ -339,6 +444,8 @@ export default function MapPage() {
         />
       )}
 
+      <BaseMapSwitcher activeMap={activeBaseMap} onChange={setActiveBaseMap} />
+
       <MapContainer
         center={OKU_SELATAN_CENTER}
         zoom={DEFAULT_ZOOM}
@@ -347,11 +454,14 @@ export default function MapPage() {
         attributionControl={true}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          key={activeBaseMap}
+          attribution={currentBaseMap.attribution}
+          url={currentBaseMap.url}
+          maxZoom={currentBaseMap.maxZoom}
         />
         <MapEventHandler onBoundsChange={handleBoundsChange} />
         <MapControls />
+        <FlyToHandler lat={focusLat} lng={focusLng} zoom={focusZoom} />
 
         {showLayers.landmarks &&
           filteredLandmarks.map((landmark) => (
@@ -381,7 +491,9 @@ export default function MapPage() {
                 <Popup>
                   <div className="font-mono text-xs space-y-1">
                     <div className="font-bold text-sm">{wp.nama}</div>
-                    <div>NPWP: {wp.npwp}</div>
+                    {wp.namaUsaha && <div className="text-gray-600">{wp.namaUsaha}</div>}
+                    <div>NPWPD: {wp.npwpd}</div>
+                    <div className="font-bold text-[#FF6B00]">{wp.jenisPajak}</div>
                     <div>{wp.alamat}</div>
                   </div>
                 </Popup>
@@ -399,9 +511,19 @@ export default function MapPage() {
               >
                 <Popup>
                   <div className="font-mono text-xs space-y-1">
-                    <div className="font-bold text-sm">{op.jenis}</div>
-                    <div>NOP: {op.nop}</div>
+                    <div className="font-bold text-sm">{op.namaObjek}</div>
+                    <div className="font-bold text-[#FF6B00]">{op.jenisPajak}</div>
+                    <div>NOPD: {op.nopd}</div>
                     <div>{op.alamat}</div>
+                    {op.rating && (
+                      <div className="flex items-center gap-1">
+                        <span>Rating: {Number(op.rating).toFixed(1)}</span>
+                        {op.reviewCount && <span>({op.reviewCount} ulasan)</span>}
+                      </div>
+                    )}
+                    {op.pajakBulanan && (
+                      <div className="font-bold">Pajak: Rp {Number(op.pajakBulanan).toLocaleString("id-ID")}/bln</div>
+                    )}
                   </div>
                 </Popup>
               </Marker>
@@ -424,6 +546,14 @@ function SidePanel({
 }) {
   const isWP = type === "wp";
   const items = isWP ? wpList : opList;
+
+  const jenisPajakColor = (jenis: string) => {
+    if (jenis.includes("Makanan")) return "bg-[#FF6B00] text-white";
+    if (jenis.includes("Perhotelan")) return "bg-blue-600 text-white";
+    if (jenis.includes("Reklame")) return "bg-purple-600 text-white";
+    if (jenis.includes("Parkir")) return "bg-green-600 text-white";
+    return "bg-gray-600 text-white";
+  };
 
   return (
     <div
@@ -483,7 +613,7 @@ function SidePanel({
             >
               <div className="flex items-start justify-between gap-2">
                 <h3 className="font-serif font-black text-sm text-black leading-tight">
-                  {isWP ? item.nama : item.jenis}
+                  {isWP ? item.nama : item.namaObjek}
                 </h3>
                 <Badge
                   className={`rounded-none border-[2px] border-black font-mono text-[10px] flex-shrink-0 ${
@@ -493,12 +623,32 @@ function SidePanel({
                   {item.status?.toUpperCase()}
                 </Badge>
               </div>
+              {!isWP && item.namaObjek && (
+                <Badge className={`rounded-none border-[2px] border-black font-mono text-[10px] ${jenisPajakColor(item.jenisPajak)}`}>
+                  <Tag className="w-3 h-3 mr-1" />
+                  {item.jenisPajak}
+                </Badge>
+              )}
+              {isWP && item.jenisPajak && (
+                <Badge className={`rounded-none border-[2px] border-black font-mono text-[10px] ${jenisPajakColor(item.jenisPajak)}`}>
+                  <Tag className="w-3 h-3 mr-1" />
+                  {item.jenisPajak}
+                </Badge>
+              )}
               <div className="font-mono text-xs text-gray-600 space-y-0.5">
-                <div><span className="font-bold text-black">{isWP ? "NPWP" : "NOP"}:</span> {isWP ? item.npwp : item.nop}</div>
+                <div><span className="font-bold text-black">{isWP ? "NPWPD" : "NOPD"}:</span> {isWP ? item.npwpd : item.nopd}</div>
+                {isWP && item.namaUsaha && <div><span className="font-bold text-black">USAHA:</span> {item.namaUsaha}</div>}
                 <div><span className="font-bold text-black">ALAMAT:</span> {item.alamat}</div>
                 {item.kecamatan && <div><span className="font-bold text-black">KEC:</span> {item.kecamatan}</div>}
-                {!isWP && item.njop && (
-                  <div><span className="font-bold text-black">NJOP:</span> Rp {Number(item.njop).toLocaleString("id-ID")}</div>
+                {!isWP && item.pajakBulanan && (
+                  <div><span className="font-bold text-black">PAJAK:</span> Rp {Number(item.pajakBulanan).toLocaleString("id-ID")}/bln</div>
+                )}
+                {!isWP && item.rating && (
+                  <div className="flex items-center gap-1">
+                    <Star className="w-3 h-3 text-black fill-black" />
+                    <span className="font-bold text-black">{Number(item.rating).toFixed(1)}</span>
+                    {item.reviewCount && <span className="text-gray-400">({item.reviewCount})</span>}
+                  </div>
                 )}
               </div>
               {item.latitude && item.longitude && (

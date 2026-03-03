@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Plus, Users, MapPin, Trash2, Search, Phone, Mail } from "lucide-react";
+import { ArrowLeft, Plus, Users, MapPin, Trash2, Search, Phone, Mail, Store, Tag } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,16 +32,19 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { WajibPajak, InsertWajibPajak } from "@shared/schema";
+import type { WajibPajak } from "@shared/schema";
+import { JENIS_PAJAK_OPTIONS } from "@shared/schema";
 
 const wpFormSchema = z.object({
-  npwp: z.string().min(1, "NPWP wajib diisi"),
+  npwpd: z.string().min(1, "NPWPD wajib diisi"),
   nama: z.string().min(1, "Nama wajib diisi"),
+  namaUsaha: z.string().nullable().optional(),
   alamat: z.string().min(1, "Alamat wajib diisi"),
   kelurahan: z.string().nullable().optional(),
   kecamatan: z.string().nullable().optional(),
   telepon: z.string().nullable().optional(),
   email: z.string().nullable().optional(),
+  jenisPajak: z.string().min(1, "Jenis Pajak wajib diisi"),
   latitude: z.string().nullable().optional(),
   longitude: z.string().nullable().optional(),
   status: z.string().default("active"),
@@ -59,13 +62,15 @@ export default function WajibPajakPage() {
   const form = useForm<z.infer<typeof wpFormSchema>>({
     resolver: zodResolver(wpFormSchema),
     defaultValues: {
-      npwp: "",
+      npwpd: "",
       nama: "",
+      namaUsaha: "",
       alamat: "",
       kelurahan: "",
       kecamatan: "",
       telepon: "",
       email: "",
+      jenisPajak: "",
       latitude: "",
       longitude: "",
       status: "active",
@@ -102,9 +107,19 @@ export default function WajibPajakPage() {
     ? wpList.filter(
         (wp) =>
           wp.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          wp.npwp.includes(searchQuery)
+          wp.npwpd.includes(searchQuery) ||
+          (wp.namaUsaha && wp.namaUsaha.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          wp.jenisPajak.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : wpList;
+
+  const jenisPajakColor = (jenis: string) => {
+    if (jenis.includes("Makanan")) return "bg-[#FF6B00] text-white";
+    if (jenis.includes("Perhotelan")) return "bg-blue-600 text-white";
+    if (jenis.includes("Reklame")) return "bg-purple-600 text-white";
+    if (jenis.includes("Parkir")) return "bg-green-600 text-white";
+    return "bg-gray-600 text-white";
+  };
 
   return (
     <div className="min-h-screen bg-white" data-testid="wp-page">
@@ -127,10 +142,10 @@ export default function WajibPajakPage() {
               </div>
               <div>
                 <h1 className="font-serif text-2xl font-black text-white leading-none" data-testid="text-page-title">
-                  WAJIB PAJAK
+                  WAJIB PAJAK DAERAH
                 </h1>
                 <p className="font-mono text-[10px] text-black/70 tracking-widest uppercase">
-                  Data Wajib Pajak OKU Selatan
+                  Data WP Pajak Daerah OKU Selatan
                 </p>
               </div>
             </div>
@@ -145,7 +160,7 @@ export default function WajibPajakPage() {
                 TAMBAH WP
               </Button>
             </DialogTrigger>
-            <DialogContent className="rounded-none border-[4px] border-black max-w-lg bg-white p-0">
+            <DialogContent className="rounded-none border-[4px] border-black max-w-lg bg-white p-0 max-h-[90vh] overflow-y-auto">
               <DialogHeader className="p-4 border-b-[3px] border-black bg-[#FF6B00]">
                 <DialogTitle className="font-serif text-xl font-black text-white">
                   TAMBAH WAJIB PAJAK
@@ -156,15 +171,37 @@ export default function WajibPajakPage() {
                   onSubmit={form.handleSubmit((data) => createMutation.mutate(data))}
                   className="p-4 space-y-4"
                 >
+                  <FormField
+                    control={form.control}
+                    name="jenisPajak"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-mono text-xs font-bold text-black">JENIS PAJAK DAERAH</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="select-jenis-pajak">
+                              <SelectValue placeholder="Pilih Jenis Pajak" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="rounded-none border-[2px] border-black">
+                            {JENIS_PAJAK_OPTIONS.map((jp) => (
+                              <SelectItem key={jp} value={jp}>{jp}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   <div className="grid grid-cols-2 gap-3">
                     <FormField
                       control={form.control}
-                      name="npwp"
+                      name="npwpd"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="font-mono text-xs font-bold text-black">NPWP</FormLabel>
+                          <FormLabel className="font-mono text-xs font-bold text-black">NPWPD</FormLabel>
                           <FormControl>
-                            <Input {...field} className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="input-npwp" />
+                            <Input {...field} className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="input-npwpd" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -184,6 +221,18 @@ export default function WajibPajakPage() {
                       )}
                     />
                   </div>
+                  <FormField
+                    control={form.control}
+                    name="namaUsaha"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-mono text-xs font-bold text-black">NAMA USAHA</FormLabel>
+                        <FormControl>
+                          <Input {...field} value={field.value || ""} placeholder="Nama rumah makan, hotel, dll" className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="input-nama-usaha" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
                   <FormField
                     control={form.control}
                     name="alamat"
@@ -317,7 +366,7 @@ export default function WajibPajakPage() {
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari nama atau NPWP..."
+              placeholder="Cari nama, NPWPD, usaha, atau jenis pajak..."
               className="pl-9 rounded-none border-[3px] border-black font-mono text-sm"
               data-testid="input-search-wp"
             />
@@ -369,9 +418,15 @@ export default function WajibPajakPage() {
                     <h3 className="font-serif font-black text-base text-black truncate" data-testid={`text-wp-nama-${wp.id}`}>
                       {wp.nama}
                     </h3>
-                    <p className="font-mono text-xs text-gray-500">{wp.npwp}</p>
+                    <p className="font-mono text-xs text-gray-500">{wp.npwpd}</p>
                   </div>
                 </div>
+                {wp.namaUsaha && (
+                  <div className="flex items-center gap-1 font-mono text-xs text-gray-700">
+                    <Store className="w-3 h-3 flex-shrink-0 text-black" />
+                    <span className="font-bold">{wp.namaUsaha}</span>
+                  </div>
+                )}
                 <div className="font-mono text-xs text-gray-600 space-y-1">
                   <div className="flex items-start gap-1">
                     <MapPin className="w-3 h-3 mt-0.5 flex-shrink-0 text-black" />
@@ -392,17 +447,18 @@ export default function WajibPajakPage() {
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <Badge
+                    className={`rounded-none border-[2px] border-black font-mono text-[10px] ${jenisPajakColor(wp.jenisPajak)}`}
+                  >
+                    <Tag className="w-3 h-3 mr-1" />
+                    {wp.jenisPajak}
+                  </Badge>
+                  <Badge
                     className={`rounded-none border-[2px] border-black font-mono text-[10px] ${
                       wp.status === "active" ? "bg-[#FFFF00] text-black" : "bg-gray-200 text-gray-600"
                     }`}
                   >
                     {wp.status.toUpperCase()}
                   </Badge>
-                  {wp.kecamatan && (
-                    <Badge className="rounded-none border-[2px] border-black bg-white text-black font-mono text-[10px]">
-                      {wp.kecamatan}
-                    </Badge>
-                  )}
                 </div>
               </div>
             ))}
