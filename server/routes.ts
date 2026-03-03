@@ -91,6 +91,14 @@ export async function registerRoutes(
     res.json(data);
   });
 
+  app.get("/api/objek-pajak/:id", async (req, res) => {
+    const op = await storage.getObjekPajak(parseInt(req.params.id));
+    if (!op) {
+      return res.status(404).json({ message: "Objek Pajak tidak ditemukan" });
+    }
+    res.json(op);
+  });
+
   app.post("/api/objek-pajak", async (req, res) => {
     const parsed = insertObjekPajakSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -98,6 +106,21 @@ export async function registerRoutes(
     }
     const created = await storage.createObjekPajak(parsed.data);
     res.status(201).json(created);
+  });
+
+  app.patch("/api/objek-pajak/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    const existing = await storage.getObjekPajak(id);
+    if (!existing) {
+      return res.status(404).json({ message: "Objek Pajak tidak ditemukan" });
+    }
+    const partialSchema = insertObjekPajakSchema.partial();
+    const parsed = partialSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+    const updated = await storage.updateObjekPajak(id, parsed.data);
+    res.json(updated);
   });
 
   app.delete("/api/objek-pajak/:id", async (req, res) => {

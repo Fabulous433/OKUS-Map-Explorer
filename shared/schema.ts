@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal, timestamp, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, decimal, timestamp, serial, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -40,6 +40,7 @@ export const objekPajak = pgTable("objek_pajak", {
   pajakBulanan: decimal("pajak_bulanan", { precision: 15, scale: 2 }),
   rating: decimal("rating", { precision: 3, scale: 1 }),
   reviewCount: integer("review_count"),
+  detailPajak: jsonb("detail_pajak"),
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),
   status: varchar("status", { length: 20 }).notNull().default("active"),
@@ -89,4 +90,36 @@ export type WikiLandmark = {
   description?: string;
   thumbnail?: string;
   extract?: string;
+};
+
+export type DetailPBJTMakanan = {
+  jenisUsaha?: string;
+  kapasitasTempat?: number;
+  jamOperasi?: string;
+};
+
+export type DetailPBJTHotel = {
+  jumlahKamar?: number;
+  klasifikasi?: string;
+  fasilitasTambahan?: string;
+};
+
+export type DetailPajakReklame = {
+  jenisReklame?: string;
+  ukuranPanjang?: number;
+  ukuranLebar?: number;
+  lokasiPenempatan?: string;
+  masaBerlaku?: string;
+};
+
+export type DetailPBJTParkir = {
+  jenisLokasi?: string;
+  kapasitasKendaraan?: number;
+  tarifParkir?: string;
+};
+
+export type DetailPBJTHiburan = {
+  jenisHiburan?: string;
+  kapasitasPenonton?: number;
+  frekuensi?: string;
 };

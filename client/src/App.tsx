@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import MapPage from "@/pages/map-page";
 import WajibPajakPage from "@/pages/wajib-pajak-page";
 import ObjekPajakPage from "@/pages/objek-pajak-page";
+import DashboardPage from "@/pages/dashboard-page";
 
 function Router() {
   return (
@@ -14,6 +15,7 @@ function Router() {
       <Route path="/" component={MapPage} />
       <Route path="/wajib-pajak" component={WajibPajakPage} />
       <Route path="/objek-pajak" component={ObjekPajakPage} />
+      <Route path="/dashboard" component={DashboardPage} />
       <Route component={NotFound} />
     </Switch>
   );

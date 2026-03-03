@@ -32,6 +32,7 @@ export interface IStorage {
   getAllObjekPajak(): Promise<ObjekPajak[]>;
   getObjekPajak(id: number): Promise<ObjekPajak | undefined>;
   createObjekPajak(op: InsertObjekPajak): Promise<ObjekPajak>;
+  updateObjekPajak(id: number, op: Partial<InsertObjekPajak>): Promise<ObjekPajak>;
   deleteObjekPajak(id: number): Promise<void>;
 }
 
@@ -81,6 +82,11 @@ export class DatabaseStorage implements IStorage {
   async createObjekPajak(op: InsertObjekPajak): Promise<ObjekPajak> {
     const [created] = await db.insert(objekPajak).values(op).returning();
     return created;
+  }
+
+  async updateObjekPajak(id: number, op: Partial<InsertObjekPajak>): Promise<ObjekPajak> {
+    const [updated] = await db.update(objekPajak).set(op).where(eq(objekPajak.id, id)).returning();
+    return updated;
   }
 
   async deleteObjekPajak(id: number): Promise<void> {

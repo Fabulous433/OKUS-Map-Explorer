@@ -3,10 +3,11 @@ import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from "re
 import L from "leaflet";
 import { useQuery } from "@tanstack/react-query";
 import { useSearch } from "wouter";
-import { Loader2, MapPin, Search, ZoomIn, ZoomOut, Crosshair, Layers, Users, Building2, Info, X, ExternalLink, Navigation, Star, Tag, DollarSign } from "lucide-react";
+import { Loader2, MapPin, Search, ZoomIn, ZoomOut, Crosshair, Layers, Users, Building2, Info, X, ExternalLink, Navigation, Star, Tag, DollarSign, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Link } from "wouter";
 import type { WikiLandmark, WajibPajak, ObjekPajak } from "@shared/schema";
 import "leaflet/dist/leaflet.css";
 
@@ -407,6 +408,17 @@ export default function MapPage() {
           <Building2 className="w-4 h-4 mr-1" />
           Objek Pajak
         </Button>
+        <Link href="/dashboard">
+          <Button
+            size="sm"
+            variant="outline"
+            className="rounded-none border-[3px] border-black font-mono text-xs h-9 bg-[#FFFF00] text-black border-[#FFFF00] no-default-hover-elevate no-default-active-elevate"
+            data-testid="button-dashboard"
+          >
+            <BarChart3 className="w-4 h-4 mr-1" />
+            Dashboard
+          </Button>
+        </Link>
       </div>
 
       {landmarksLoading && (
