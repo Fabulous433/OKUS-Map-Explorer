@@ -59,6 +59,11 @@
 - **Acceptance**: Routes baru aktif, file lama dihapus, replit.md di-update
 - **Verified**: Ya
 
+### T010b: README & Future Plan
+- **Status**: [x] Selesai
+- **Acceptance**: README.md lengkap dengan fitur, tech stack, API endpoints, struktur; future-plan.md dengan roadmap Phase 2-7
+- **Verified**: Ya
+
 ---
 
 ## Phase 2: Enhancements (Backlog)
