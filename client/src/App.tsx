@@ -5,17 +5,17 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import MapPage from "@/pages/map-page";
-import WajibPajakPage from "@/pages/wajib-pajak-page";
-import ObjekPajakPage from "@/pages/objek-pajak-page";
-import DashboardPage from "@/pages/dashboard-page";
+import BackofficeDashboard from "@/pages/backoffice/dashboard";
+import BackofficeWajibPajak from "@/pages/backoffice/wajib-pajak";
+import BackofficeObjekPajak from "@/pages/backoffice/objek-pajak";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={MapPage} />
-      <Route path="/wajib-pajak" component={WajibPajakPage} />
-      <Route path="/objek-pajak" component={ObjekPajakPage} />
-      <Route path="/dashboard" component={DashboardPage} />
+      <Route path="/backoffice" component={BackofficeDashboard} />
+      <Route path="/backoffice/wajib-pajak" component={BackofficeWajibPajak} />
+      <Route path="/backoffice/objek-pajak" component={BackofficeObjekPajak} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -2,70 +2,16 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertWajibPajakSchema, insertObjekPajakSchema } from "@shared/schema";
-import { log } from "./index";
+import { stringify } from "csv-stringify/sync";
+import { parse } from "csv-parse/sync";
+import multer from "multer";
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-
-  app.get("/api/landmarks", async (req, res) => {
-    try {
-      const { north, south, east, west } = req.query;
-
-      if (!north || !south || !east || !west) {
-        return res.json([]);
-      }
-
-      const lat = (parseFloat(north as string) + parseFloat(south as string)) / 2;
-      const lon = (parseFloat(east as string) + parseFloat(west as string)) / 2;
-
-      const latDiff = Math.abs(parseFloat(north as string) - parseFloat(south as string));
-      const lonDiff = Math.abs(parseFloat(east as string) - parseFloat(west as string));
-      const radius = Math.max(latDiff, lonDiff) * 111000 / 2;
-      const clampedRadius = Math.min(Math.max(radius, 5000), 10000);
-
-      const geoUrl = `https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lon}&gsradius=${Math.round(clampedRadius)}&gslimit=50&format=json`;
-
-      const geoRes = await fetch(geoUrl);
-      const geoData = await geoRes.json();
-
-      if (!geoData.query || !geoData.query.geosearch) {
-        return res.json([]);
-      }
-
-      const landmarks = geoData.query.geosearch;
-      const pageIds = landmarks.map((l: any) => l.pageid).join("|");
-
-      if (!pageIds) {
-        return res.json([]);
-      }
-
-      const detailUrl = `https://en.wikipedia.org/w/api.php?action=query&pageids=${pageIds}&prop=extracts|pageimages&exintro=true&explaintext=true&exsentences=3&piprop=thumbnail&pithumbsize=400&format=json`;
-
-      const detailRes = await fetch(detailUrl);
-      const detailData = await detailRes.json();
-      const pages = detailData.query?.pages || {};
-
-      const results = landmarks.map((l: any) => {
-        const page = pages[l.pageid] || {};
-        return {
-          pageid: l.pageid,
-          title: l.title,
-          lat: l.lat,
-          lon: l.lon,
-          dist: l.dist,
-          extract: page.extract || "",
-          thumbnail: page.thumbnail?.source || null,
-        };
-      });
-
-      res.json(results);
-    } catch (err: any) {
-      log(`Wikipedia API error: ${err.message}`, "wikipedia");
-      res.json([]);
-    }
-  });
 
   app.get("/api/wajib-pajak", async (_req, res) => {
     const data = await storage.getAllWajibPajak();
@@ -81,14 +27,175 @@ export async function registerRoutes(
     res.status(201).json(created);
   });
 
+  app.patch("/api/wajib-pajak/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    const existing = await storage.getWajibPajak(id);
+    if (!existing) {
+      return res.status(404).json({ message: "Wajib Pajak tidak ditemukan" });
+    }
+    const partialSchema = insertWajibPajakSchema.partial();
+    const parsed = partialSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+    const updated = await storage.updateWajibPajak(id, parsed.data);
+    res.json(updated);
+  });
+
   app.delete("/api/wajib-pajak/:id", async (req, res) => {
     await storage.deleteWajibPajak(parseInt(req.params.id));
     res.status(204).send();
   });
 
+  app.get("/api/wajib-pajak/export", async (_req, res) => {
+    const data = await storage.getAllWajibPajak();
+    const rows = data.map((wp) => ({
+      npwpd: wp.npwpd,
+      nama: wp.nama,
+      nama_usaha: wp.namaUsaha || "",
+      alamat: wp.alamat,
+      kelurahan: wp.kelurahan || "",
+      kecamatan: wp.kecamatan || "",
+      telepon: wp.telepon || "",
+      email: wp.email || "",
+      jenis_pajak: wp.jenisPajak,
+      latitude: wp.latitude || "",
+      longitude: wp.longitude || "",
+      status: wp.status,
+    }));
+    const csv = stringify(rows, { header: true });
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=wajib_pajak.csv");
+    res.send(csv);
+  });
+
+  app.post("/api/wajib-pajak/import", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "File CSV diperlukan" });
+      }
+      const content = req.file.buffer.toString("utf-8");
+      const records = parse(content, { columns: true, skip_empty_lines: true, trim: true });
+      let success = 0;
+      let failed = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < records.length; i++) {
+        const row = records[i];
+        const wpData = {
+          npwpd: row.npwpd || "",
+          nama: row.nama || "",
+          namaUsaha: row.nama_usaha || null,
+          alamat: row.alamat || "",
+          kelurahan: row.kelurahan || null,
+          kecamatan: row.kecamatan || null,
+          telepon: row.telepon || null,
+          email: row.email || null,
+          jenisPajak: row.jenis_pajak || "",
+          latitude: row.latitude || null,
+          longitude: row.longitude || null,
+          status: row.status || "active",
+        };
+        const parsed = insertWajibPajakSchema.safeParse(wpData);
+        if (!parsed.success) {
+          failed++;
+          errors.push(`Baris ${i + 2}: ${parsed.error.issues.map(e => e.message).join(", ")}`);
+          continue;
+        }
+        try {
+          await storage.createWajibPajak(parsed.data);
+          success++;
+        } catch (err: any) {
+          failed++;
+          errors.push(`Baris ${i + 2}: ${err.message}`);
+        }
+      }
+      res.json({ success, failed, total: records.length, errors });
+    } catch (err: any) {
+      res.status(400).json({ message: `Gagal parsing CSV: ${err.message}` });
+    }
+  });
+
   app.get("/api/objek-pajak", async (_req, res) => {
     const data = await storage.getAllObjekPajak();
     res.json(data);
+  });
+
+  app.get("/api/objek-pajak/export", async (_req, res) => {
+    const data = await storage.getAllObjekPajak();
+    const rows = data.map((op) => ({
+      nopd: op.nopd,
+      wp_id: op.wpId || "",
+      jenis_pajak: op.jenisPajak,
+      nama_objek: op.namaObjek,
+      alamat: op.alamat,
+      kelurahan: op.kelurahan || "",
+      kecamatan: op.kecamatan || "",
+      omset_bulanan: op.omsetBulanan || "",
+      tarif_persen: op.tarifPersen || "",
+      pajak_bulanan: op.pajakBulanan || "",
+      rating: op.rating || "",
+      review_count: op.reviewCount || "",
+      detail_pajak: op.detailPajak ? JSON.stringify(op.detailPajak) : "",
+      latitude: op.latitude || "",
+      longitude: op.longitude || "",
+      status: op.status,
+    }));
+    const csv = stringify(rows, { header: true });
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=objek_pajak.csv");
+    res.send(csv);
+  });
+
+  app.post("/api/objek-pajak/import", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "File CSV diperlukan" });
+      }
+      const content = req.file.buffer.toString("utf-8");
+      const records = parse(content, { columns: true, skip_empty_lines: true, trim: true });
+      let success = 0;
+      let failed = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < records.length; i++) {
+        const row = records[i];
+        const opData = {
+          nopd: row.nopd || "",
+          wpId: row.wp_id ? parseInt(row.wp_id) : null,
+          jenisPajak: row.jenis_pajak || "",
+          namaObjek: row.nama_objek || "",
+          alamat: row.alamat || "",
+          kelurahan: row.kelurahan || null,
+          kecamatan: row.kecamatan || null,
+          omsetBulanan: row.omset_bulanan || null,
+          tarifPersen: row.tarif_persen || null,
+          pajakBulanan: row.pajak_bulanan || null,
+          rating: row.rating || null,
+          reviewCount: row.review_count ? parseInt(row.review_count) : null,
+          detailPajak: row.detail_pajak ? JSON.parse(row.detail_pajak) : null,
+          latitude: row.latitude || null,
+          longitude: row.longitude || null,
+          status: row.status || "active",
+        };
+        const parsed = insertObjekPajakSchema.safeParse(opData);
+        if (!parsed.success) {
+          failed++;
+          errors.push(`Baris ${i + 2}: ${parsed.error.issues.map(e => e.message).join(", ")}`);
+          continue;
+        }
+        try {
+          await storage.createObjekPajak(parsed.data);
+          success++;
+        } catch (err: any) {
+          failed++;
+          errors.push(`Baris ${i + 2}: ${err.message}`);
+        }
+      }
+      res.json({ success, failed, total: records.length, errors });
+    } catch (err: any) {
+      res.status(400).json({ message: `Gagal parsing CSV: ${err.message}` });
+    }
   });
 
   app.get("/api/objek-pajak/:id", async (req, res) => {

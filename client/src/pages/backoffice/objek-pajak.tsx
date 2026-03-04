@@ -3,8 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Plus, Building2, MapPin, Trash2, Search, Star, Navigation, DollarSign, Percent, Tag, Edit, X, Crosshair, Music } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { Plus, Building2, MapPin, Trash2, Search, Edit, Crosshair, Tag, Music, DollarSign, Percent, Download, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +12,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Form,
@@ -30,10 +28,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ObjekPajak, WajibPajak } from "@shared/schema";
 import { JENIS_PAJAK_OPTIONS } from "@shared/schema";
+import BackofficeLayout from "./layout";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -58,6 +65,15 @@ const opFormSchema = z.object({
 
 type OPFormValues = z.infer<typeof opFormSchema>;
 
+function jenisPajakColor(jenis: string) {
+  if (jenis.includes("Makanan")) return "bg-[#FF6B00] text-white";
+  if (jenis.includes("Perhotelan")) return "bg-blue-600 text-white";
+  if (jenis.includes("Reklame")) return "bg-purple-600 text-white";
+  if (jenis.includes("Parkir")) return "bg-green-600 text-white";
+  if (jenis.includes("Hiburan") || jenis.includes("Kesenian")) return "bg-pink-600 text-white";
+  return "bg-gray-600 text-white";
+}
+
 function DetailFieldsPBJTMakanan({ form }: { form: any }) {
   const detail = form.watch("detailPajak") || {};
   const update = (key: string, value: any) => {
@@ -72,7 +88,7 @@ function DetailFieldsPBJTMakanan({ form }: { form: any }) {
         <div>
           <label className="font-mono text-[10px] font-bold text-black block mb-1">JENIS USAHA</label>
           <Select onValueChange={(v) => update("jenisUsaha", v)} value={detail.jenisUsaha || ""}>
-            <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm h-9" data-testid="select-jenis-usaha">
+            <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="select-jenis-usaha">
               <SelectValue placeholder="Pilih" />
             </SelectTrigger>
             <SelectContent className="rounded-none border-[2px] border-black">
@@ -92,7 +108,7 @@ function DetailFieldsPBJTMakanan({ form }: { form: any }) {
             value={detail.kapasitasTempat || ""}
             onChange={(e) => update("kapasitasTempat", e.target.value ? parseInt(e.target.value) : null)}
             placeholder="Jumlah kursi"
-            className="rounded-none border-[2px] border-black font-mono text-sm h-9"
+            className="rounded-none border-[2px] border-black font-mono text-sm"
             data-testid="input-kapasitas-tempat"
           />
         </div>
@@ -103,7 +119,7 @@ function DetailFieldsPBJTMakanan({ form }: { form: any }) {
           value={detail.jamOperasi || ""}
           onChange={(e) => update("jamOperasi", e.target.value)}
           placeholder="08:00 - 22:00"
-          className="rounded-none border-[2px] border-black font-mono text-sm h-9"
+          className="rounded-none border-[2px] border-black font-mono text-sm"
           data-testid="input-jam-operasi"
         />
       </div>
@@ -129,14 +145,14 @@ function DetailFieldsPBJTHotel({ form }: { form: any }) {
             value={detail.jumlahKamar || ""}
             onChange={(e) => update("jumlahKamar", e.target.value ? parseInt(e.target.value) : null)}
             placeholder="Jumlah kamar"
-            className="rounded-none border-[2px] border-black font-mono text-sm h-9"
+            className="rounded-none border-[2px] border-black font-mono text-sm"
             data-testid="input-jumlah-kamar"
           />
         </div>
         <div>
           <label className="font-mono text-[10px] font-bold text-black block mb-1">KLASIFIKASI</label>
           <Select onValueChange={(v) => update("klasifikasi", v)} value={detail.klasifikasi || ""}>
-            <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm h-9" data-testid="select-klasifikasi">
+            <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="select-klasifikasi">
               <SelectValue placeholder="Pilih" />
             </SelectTrigger>
             <SelectContent className="rounded-none border-[2px] border-black">
@@ -156,7 +172,7 @@ function DetailFieldsPBJTHotel({ form }: { form: any }) {
           value={detail.fasilitasTambahan || ""}
           onChange={(e) => update("fasilitasTambahan", e.target.value)}
           placeholder="Kolam renang, restoran, dll"
-          className="rounded-none border-[2px] border-black font-mono text-sm h-9"
+          className="rounded-none border-[2px] border-black font-mono text-sm"
           data-testid="input-fasilitas"
         />
       </div>
@@ -178,7 +194,7 @@ function DetailFieldsPajakReklame({ form }: { form: any }) {
         <div>
           <label className="font-mono text-[10px] font-bold text-black block mb-1">JENIS REKLAME</label>
           <Select onValueChange={(v) => update("jenisReklame", v)} value={detail.jenisReklame || ""}>
-            <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm h-9" data-testid="select-jenis-reklame">
+            <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="select-jenis-reklame">
               <SelectValue placeholder="Pilih" />
             </SelectTrigger>
             <SelectContent className="rounded-none border-[2px] border-black">
@@ -197,7 +213,7 @@ function DetailFieldsPajakReklame({ form }: { form: any }) {
             value={detail.masaBerlaku || ""}
             onChange={(e) => update("masaBerlaku", e.target.value)}
             placeholder="1 tahun, 6 bulan"
-            className="rounded-none border-[2px] border-black font-mono text-sm h-9"
+            className="rounded-none border-[2px] border-black font-mono text-sm"
             data-testid="input-masa-berlaku"
           />
         </div>
@@ -211,7 +227,7 @@ function DetailFieldsPajakReklame({ form }: { form: any }) {
               value={detail.ukuranPanjang || ""}
               onChange={(e) => update("ukuranPanjang", e.target.value ? parseFloat(e.target.value) : null)}
               placeholder="P"
-              className="rounded-none border-[2px] border-black font-mono text-sm h-9"
+              className="rounded-none border-[2px] border-black font-mono text-sm"
               data-testid="input-ukuran-panjang"
             />
             <Input
@@ -219,7 +235,7 @@ function DetailFieldsPajakReklame({ form }: { form: any }) {
               value={detail.ukuranLebar || ""}
               onChange={(e) => update("ukuranLebar", e.target.value ? parseFloat(e.target.value) : null)}
               placeholder="L"
-              className="rounded-none border-[2px] border-black font-mono text-sm h-9"
+              className="rounded-none border-[2px] border-black font-mono text-sm"
               data-testid="input-ukuran-lebar"
             />
           </div>
@@ -230,7 +246,7 @@ function DetailFieldsPajakReklame({ form }: { form: any }) {
             value={detail.lokasiPenempatan || ""}
             onChange={(e) => update("lokasiPenempatan", e.target.value)}
             placeholder="Tepi jalan, atap gedung"
-            className="rounded-none border-[2px] border-black font-mono text-sm h-9"
+            className="rounded-none border-[2px] border-black font-mono text-sm"
             data-testid="input-lokasi-penempatan"
           />
         </div>
@@ -253,7 +269,7 @@ function DetailFieldsPBJTParkir({ form }: { form: any }) {
         <div>
           <label className="font-mono text-[10px] font-bold text-black block mb-1">JENIS LOKASI</label>
           <Select onValueChange={(v) => update("jenisLokasi", v)} value={detail.jenisLokasi || ""}>
-            <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm h-9" data-testid="select-jenis-lokasi">
+            <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="select-jenis-lokasi">
               <SelectValue placeholder="Pilih" />
             </SelectTrigger>
             <SelectContent className="rounded-none border-[2px] border-black">
@@ -272,7 +288,7 @@ function DetailFieldsPBJTParkir({ form }: { form: any }) {
             value={detail.kapasitasKendaraan || ""}
             onChange={(e) => update("kapasitasKendaraan", e.target.value ? parseInt(e.target.value) : null)}
             placeholder="Jumlah kendaraan"
-            className="rounded-none border-[2px] border-black font-mono text-sm h-9"
+            className="rounded-none border-[2px] border-black font-mono text-sm"
             data-testid="input-kapasitas-kendaraan"
           />
         </div>
@@ -283,7 +299,7 @@ function DetailFieldsPBJTParkir({ form }: { form: any }) {
           value={detail.tarifParkir || ""}
           onChange={(e) => update("tarifParkir", e.target.value)}
           placeholder="Motor: 2000, Mobil: 5000"
-          className="rounded-none border-[2px] border-black font-mono text-sm h-9"
+          className="rounded-none border-[2px] border-black font-mono text-sm"
           data-testid="input-tarif-parkir"
         />
       </div>
@@ -305,7 +321,7 @@ function DetailFieldsPBJTHiburan({ form }: { form: any }) {
         <div>
           <label className="font-mono text-[10px] font-bold text-black block mb-1">JENIS HIBURAN</label>
           <Select onValueChange={(v) => update("jenisHiburan", v)} value={detail.jenisHiburan || ""}>
-            <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm h-9" data-testid="select-jenis-hiburan">
+            <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="select-jenis-hiburan">
               <SelectValue placeholder="Pilih" />
             </SelectTrigger>
             <SelectContent className="rounded-none border-[2px] border-black">
@@ -325,7 +341,7 @@ function DetailFieldsPBJTHiburan({ form }: { form: any }) {
             value={detail.kapasitasPenonton || ""}
             onChange={(e) => update("kapasitasPenonton", e.target.value ? parseInt(e.target.value) : null)}
             placeholder="Jumlah orang"
-            className="rounded-none border-[2px] border-black font-mono text-sm h-9"
+            className="rounded-none border-[2px] border-black font-mono text-sm"
             data-testid="input-kapasitas-penonton"
           />
         </div>
@@ -336,7 +352,7 @@ function DetailFieldsPBJTHiburan({ form }: { form: any }) {
           value={detail.frekuensi || ""}
           onChange={(e) => update("frekuensi", e.target.value)}
           placeholder="Harian, Mingguan, Bulanan"
-          className="rounded-none border-[2px] border-black font-mono text-sm h-9"
+          className="rounded-none border-[2px] border-black font-mono text-sm"
           data-testid="input-frekuensi"
         />
       </div>
@@ -351,6 +367,140 @@ function DetailFieldsByJenis({ jenisPajak, form }: { jenisPajak: string; form: a
   if (jenisPajak.includes("Parkir")) return <DetailFieldsPBJTParkir form={form} />;
   if (jenisPajak.includes("Hiburan") || jenisPajak.includes("Kesenian")) return <DetailFieldsPBJTHiburan form={form} />;
   return null;
+}
+
+const PICKER_LAYERS = {
+  osm: {
+    name: "OSM",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: "&copy; OSM",
+    maxZoom: 19,
+  },
+  google: {
+    name: "Google",
+    url: "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+    attribution: "&copy; Google",
+    maxZoom: 20,
+  },
+  esri: {
+    name: "ESRI",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: "&copy; Esri",
+    maxZoom: 18,
+  },
+};
+
+type PickerLayerKey = keyof typeof PICKER_LAYERS;
+
+function MapPickerEmbed({
+  lat,
+  lng,
+  onSelect,
+}: {
+  lat: string;
+  lng: string;
+  onSelect: (lat: number, lng: number) => void;
+}) {
+  const [marker, setMarker] = useState<{ lat: number; lng: number } | null>(
+    lat && lng ? { lat: parseFloat(lat), lng: parseFloat(lng) } : null
+  );
+  const [activeLayer, setActiveLayer] = useState<PickerLayerKey>("osm");
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+
+  const mapRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+    if ((node as any)._leafletMap) return;
+
+    const initLat = lat ? parseFloat(lat) : -4.5250;
+    const initLng = lng ? parseFloat(lng) : 104.0270;
+    const map = L.map(node, {
+      center: [initLat, initLng],
+      zoom: lat ? 17 : 15,
+      zoomControl: true,
+    });
+
+    const layer = L.tileLayer(PICKER_LAYERS.osm.url, {
+      attribution: PICKER_LAYERS.osm.attribution,
+      maxZoom: PICKER_LAYERS.osm.maxZoom,
+    }).addTo(map);
+
+    tileLayerRef.current = layer;
+    mapInstanceRef.current = map;
+
+    let currentMarker: L.Marker | null = null;
+    if (lat && lng) {
+      currentMarker = L.marker([parseFloat(lat), parseFloat(lng)]).addTo(map);
+    }
+
+    map.on("click", (e: L.LeafletMouseEvent) => {
+      const { lat: clickLat, lng: clickLng } = e.latlng;
+      if (currentMarker) {
+        currentMarker.setLatLng([clickLat, clickLng]);
+      } else {
+        currentMarker = L.marker([clickLat, clickLng]).addTo(map);
+      }
+      setMarker({ lat: clickLat, lng: clickLng });
+      onSelect(clickLat, clickLng);
+    });
+
+    (node as any)._leafletMap = map;
+
+    setTimeout(() => map.invalidateSize(), 100);
+  }, []);
+
+  const switchLayer = (key: PickerLayerKey) => {
+    setActiveLayer(key);
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    if (tileLayerRef.current) {
+      map.removeLayer(tileLayerRef.current);
+    }
+    const cfg = PICKER_LAYERS[key];
+    tileLayerRef.current = L.tileLayer(cfg.url, {
+      attribution: cfg.attribution,
+      maxZoom: cfg.maxZoom,
+    }).addTo(map);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-1">
+        {(Object.keys(PICKER_LAYERS) as PickerLayerKey[]).map((key) => (
+          <button
+            key={key}
+            type="button"
+            className={`font-mono text-[10px] font-bold px-2 py-1 border-[2px] border-black transition-colors ${
+              activeLayer === key
+                ? "bg-black text-[#FFFF00]"
+                : "bg-white text-black hover:bg-gray-100"
+            }`}
+            onClick={() => switchLayer(key)}
+            data-testid={`picker-layer-${key}`}
+          >
+            {PICKER_LAYERS[key].name}
+          </button>
+        ))}
+      </div>
+      <div
+        ref={mapRef}
+        className="w-full h-[200px] border-[2px] border-black"
+        data-testid="map-picker"
+      />
+      {marker && (
+        <div className="font-mono text-[10px] text-gray-500 flex items-center gap-1">
+          <MapPin className="w-3 h-3" />
+          Klik peta untuk menandai lokasi: {marker.lat.toFixed(7)}, {marker.lng.toFixed(7)}
+        </div>
+      )}
+      {!marker && (
+        <div className="font-mono text-[10px] text-gray-400 flex items-center gap-1">
+          <Crosshair className="w-3 h-3" />
+          Klik pada peta untuk menandai lokasi objek pajak
+        </div>
+      )}
+    </div>
+  );
 }
 
 function OPFormDialog({
@@ -467,10 +617,7 @@ function OPFormDialog({
           </DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(handleSubmit)}
-            className="p-4 space-y-4"
-          >
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="p-4 space-y-4">
             <FormField
               control={form.control}
               name="jenisPajak"
@@ -634,7 +781,7 @@ function OPFormDialog({
                 <Button
                   type="button"
                   size="sm"
-                  className="rounded-none border-[2px] border-black bg-[#FFFF00] text-black font-mono text-xs h-7 no-default-hover-elevate no-default-active-elevate"
+                  className="rounded-none border-[2px] border-black bg-[#FFFF00] text-black font-mono text-xs no-default-hover-elevate no-default-active-elevate"
                   onClick={() => setShowMapPicker(!showMapPicker)}
                   data-testid="button-toggle-map-picker"
                 >
@@ -715,145 +862,12 @@ function OPFormDialog({
   );
 }
 
-const PICKER_LAYERS = {
-  osm: {
-    name: "OSM",
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    attribution: "&copy; OSM",
-    maxZoom: 19,
-  },
-  google: {
-    name: "Google",
-    url: "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-    attribution: "&copy; Google",
-    maxZoom: 20,
-  },
-  esri: {
-    name: "ESRI",
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    attribution: "&copy; Esri",
-    maxZoom: 18,
-  },
-};
-
-type PickerLayerKey = keyof typeof PICKER_LAYERS;
-
-function MapPickerEmbed({
-  lat,
-  lng,
-  onSelect,
-}: {
-  lat: string;
-  lng: string;
-  onSelect: (lat: number, lng: number) => void;
-}) {
-  const [marker, setMarker] = useState<{ lat: number; lng: number } | null>(
-    lat && lng ? { lat: parseFloat(lat), lng: parseFloat(lng) } : null
-  );
-  const [activeLayer, setActiveLayer] = useState<PickerLayerKey>("osm");
-  const mapInstanceRef = useRef<L.Map | null>(null);
-  const tileLayerRef = useRef<L.TileLayer | null>(null);
-
-  const mapRef = useCallback((node: HTMLDivElement | null) => {
-    if (!node) return;
-    if ((node as any)._leafletMap) return;
-
-    const initLat = lat ? parseFloat(lat) : -4.5250;
-    const initLng = lng ? parseFloat(lng) : 104.0270;
-    const map = L.map(node, {
-      center: [initLat, initLng],
-      zoom: lat ? 17 : 15,
-      zoomControl: true,
-    });
-
-    const layer = L.tileLayer(PICKER_LAYERS.osm.url, {
-      attribution: PICKER_LAYERS.osm.attribution,
-      maxZoom: PICKER_LAYERS.osm.maxZoom,
-    }).addTo(map);
-
-    tileLayerRef.current = layer;
-    mapInstanceRef.current = map;
-
-    let currentMarker: L.Marker | null = null;
-    if (lat && lng) {
-      currentMarker = L.marker([parseFloat(lat), parseFloat(lng)]).addTo(map);
-    }
-
-    map.on("click", (e: L.LeafletMouseEvent) => {
-      const { lat: clickLat, lng: clickLng } = e.latlng;
-      if (currentMarker) {
-        currentMarker.setLatLng([clickLat, clickLng]);
-      } else {
-        currentMarker = L.marker([clickLat, clickLng]).addTo(map);
-      }
-      setMarker({ lat: clickLat, lng: clickLng });
-      onSelect(clickLat, clickLng);
-    });
-
-    (node as any)._leafletMap = map;
-
-    setTimeout(() => map.invalidateSize(), 100);
-  }, []);
-
-  const switchLayer = (key: PickerLayerKey) => {
-    setActiveLayer(key);
-    const map = mapInstanceRef.current;
-    if (!map) return;
-    if (tileLayerRef.current) {
-      map.removeLayer(tileLayerRef.current);
-    }
-    const cfg = PICKER_LAYERS[key];
-    tileLayerRef.current = L.tileLayer(cfg.url, {
-      attribution: cfg.attribution,
-      maxZoom: cfg.maxZoom,
-    }).addTo(map);
-  };
-
-  return (
-    <div className="space-y-2">
-      <div className="flex gap-1">
-        {(Object.keys(PICKER_LAYERS) as PickerLayerKey[]).map((key) => (
-          <button
-            key={key}
-            type="button"
-            className={`font-mono text-[10px] font-bold px-2 py-1 border-[2px] border-black transition-colors ${
-              activeLayer === key
-                ? "bg-black text-[#FFFF00]"
-                : "bg-white text-black hover:bg-gray-100"
-            }`}
-            onClick={() => switchLayer(key)}
-            data-testid={`picker-layer-${key}`}
-          >
-            {PICKER_LAYERS[key].name}
-          </button>
-        ))}
-      </div>
-      <div
-        ref={mapRef}
-        className="w-full h-[200px] border-[2px] border-black"
-        data-testid="map-picker"
-      />
-      {marker && (
-        <div className="font-mono text-[10px] text-gray-500 flex items-center gap-1">
-          <MapPin className="w-3 h-3" />
-          Klik peta untuk menandai lokasi: {marker.lat.toFixed(7)}, {marker.lng.toFixed(7)}
-        </div>
-      )}
-      {!marker && (
-        <div className="font-mono text-[10px] text-gray-400 flex items-center gap-1">
-          <Crosshair className="w-3 h-3" />
-          Klik pada peta untuk menandai lokasi objek pajak
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default function ObjekPajakPage() {
+export default function BackofficeObjekPajak() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editOp, setEditOp] = useState<ObjekPajak | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [, setLocation] = useLocation();
+  const [activeTab, setActiveTab] = useState<string>("all");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: opList = [], isLoading } = useQuery<ObjekPajak[]>({
     queryKey: ["/api/objek-pajak"],
@@ -865,6 +879,32 @@ export default function ObjekPajakPage() {
 
   const { toast } = useToast();
 
+  const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await fetch("/api/objek-pajak/import", { method: "POST", body: formData });
+      const result = await res.json();
+      if (!res.ok) {
+        toast({ title: "Gagal", description: result.message, variant: "destructive" });
+      } else {
+        toast({
+          title: "Import Selesai",
+          description: `${result.success} berhasil, ${result.failed} gagal dari ${result.total} data`,
+        });
+        if (result.errors?.length > 0) {
+          console.log("Import errors:", result.errors);
+        }
+        queryClient.invalidateQueries({ queryKey: ["/api/objek-pajak"] });
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       await apiRequest("DELETE", `/api/objek-pajak/${id}`);
@@ -875,99 +915,151 @@ export default function ObjekPajakPage() {
     },
   });
 
-  const filtered = searchQuery
-    ? opList.filter(
-        (op) =>
-          op.namaObjek.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          op.nopd.includes(searchQuery) ||
-          op.jenisPajak.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          op.alamat.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : opList;
+  const wpMap = new Map(wpList.map((wp) => [wp.id, wp]));
 
-  const navigateToMap = (lat: string, lng: string) => {
-    setLocation(`/?lat=${lat}&lng=${lng}&zoom=17`);
-  };
+  const filtered = opList.filter((op) => {
+    const matchesTab = activeTab === "all" || op.jenisPajak === activeTab;
+    const q = searchQuery.toLowerCase();
+    const matchesSearch = !searchQuery ||
+      op.namaObjek.toLowerCase().includes(q) ||
+      op.nopd.toLowerCase().includes(q) ||
+      op.jenisPajak.toLowerCase().includes(q) ||
+      op.alamat.toLowerCase().includes(q) ||
+      (op.kecamatan && op.kecamatan.toLowerCase().includes(q));
+    return matchesTab && matchesSearch;
+  });
 
-  const jenisPajakColor = (jenis: string) => {
-    if (jenis.includes("Makanan")) return "bg-[#FF6B00] text-white";
-    if (jenis.includes("Perhotelan")) return "bg-blue-600 text-white";
-    if (jenis.includes("Reklame")) return "bg-purple-600 text-white";
-    if (jenis.includes("Parkir")) return "bg-green-600 text-white";
-    return "bg-gray-600 text-white";
+  const jenisCounts = JENIS_PAJAK_OPTIONS.reduce((acc, jp) => {
+    acc[jp] = opList.filter((op) => op.jenisPajak === jp).length;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const shortLabel = (jenis: string) => {
+    if (jenis.includes("Makanan")) return "MKN";
+    if (jenis.includes("Perhotelan")) return "HTL";
+    if (jenis.includes("Parkir")) return "PKR";
+    if (jenis.includes("Kesenian") || jenis.includes("Hiburan")) return "HBR";
+    if (jenis.includes("Listrik")) return "LST";
+    if (jenis.includes("Reklame")) return "RKL";
+    if (jenis.includes("Air")) return "AIR";
+    if (jenis.includes("Walet")) return "WLT";
+    if (jenis.includes("MBLB")) return "MBLB";
+    return jenis.substring(0, 3).toUpperCase();
   };
 
   return (
-    <div className="min-h-screen bg-white" data-testid="op-page">
-      <header className="border-b-[4px] border-[#FFFF00] bg-black p-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+    <BackofficeLayout>
+      <div className="p-6" data-testid="backoffice-op-page">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          className="hidden"
+          onChange={handleImportCSV}
+          data-testid="input-import-op-file"
+        />
+        <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
           <div className="flex items-center gap-3">
-            <Link href="/">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="rounded-none w-10 h-10 bg-[#FFFF00] border-[3px] border-[#FFFF00] text-black no-default-hover-elevate no-default-active-elevate"
-                data-testid="button-back"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            </Link>
-            <div className="flex items-center gap-2">
-              <div className="bg-[#FFFF00] w-10 h-10 flex items-center justify-center">
-                <Building2 className="w-6 h-6 text-black" />
-              </div>
-              <div>
-                <h1 className="font-serif text-2xl font-black text-[#FFFF00] leading-none" data-testid="text-page-title">
-                  OBJEK PAJAK DAERAH
-                </h1>
-                <p className="font-mono text-[10px] text-white/60 tracking-widest uppercase">
-                  Data OP Pajak Daerah OKU Selatan
-                </p>
-              </div>
+            <div className="bg-black w-10 h-10 flex items-center justify-center border-[2px] border-[#FFFF00]">
+              <Building2 className="w-5 h-5 text-[#FFFF00]" />
+            </div>
+            <div>
+              <h1 className="font-serif text-2xl font-black text-black leading-none" data-testid="text-page-title">
+                OBJEK PAJAK
+              </h1>
+              <p className="font-mono text-[10px] text-gray-500 tracking-widest uppercase">
+                Kelola Data Objek Pajak Daerah
+              </p>
             </div>
           </div>
-          <Button
-            className="rounded-none border-[3px] border-[#FFFF00] bg-[#FFFF00] text-black font-mono font-bold no-default-hover-elevate no-default-active-elevate"
-            onClick={() => setIsCreateOpen(true)}
-            data-testid="button-add-op"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            TAMBAH OP
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              className="rounded-none border-[3px] border-black bg-white text-black font-mono font-bold text-xs no-default-hover-elevate no-default-active-elevate"
+              onClick={() => window.open("/api/objek-pajak/export", "_blank")}
+              data-testid="button-export-op"
+            >
+              <Download className="w-4 h-4 mr-1" />
+              EXPORT CSV
+            </Button>
+            <Button
+              variant="outline"
+              className="rounded-none border-[3px] border-black bg-white text-black font-mono font-bold text-xs no-default-hover-elevate no-default-active-elevate"
+              onClick={() => fileInputRef.current?.click()}
+              data-testid="button-import-op"
+            >
+              <Upload className="w-4 h-4 mr-1" />
+              IMPORT CSV
+            </Button>
+            <Button
+              className="rounded-none border-[3px] border-[#FFFF00] bg-black text-[#FFFF00] font-mono font-bold no-default-hover-elevate no-default-active-elevate"
+              onClick={() => setIsCreateOpen(true)}
+              data-testid="button-add-op"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              TAMBAH OP
+            </Button>
+          </div>
         </div>
-      </header>
 
-      <OPFormDialog
-        mode="create"
-        wpList={wpList}
-        isOpen={isCreateOpen}
-        onOpenChange={setIsCreateOpen}
-      />
-
-      <OPFormDialog
-        mode="edit"
-        editOp={editOp}
-        wpList={wpList}
-        isOpen={!!editOp}
-        onOpenChange={(open) => { if (!open) setEditOp(null); }}
-      />
-
-      <div className="max-w-6xl mx-auto p-6">
-        <div className="mb-6 flex items-center gap-3">
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari nama objek, NOPD, jenis pajak..."
+              placeholder="Cari nama objek, NOPD, jenis pajak, alamat..."
               className="pl-9 rounded-none border-[3px] border-black font-mono text-sm"
               data-testid="input-search-op"
             />
           </div>
-          <Badge className="rounded-none border-[2px] border-black bg-black text-[#FFFF00] font-mono text-xs">
+          <Badge className="rounded-none border-[2px] border-black bg-black text-[#FFFF00] font-mono text-xs no-default-hover-elevate no-default-active-elevate">
             {filtered.length} OP
           </Badge>
         </div>
+
+        <div className="flex gap-1 mb-4 overflow-x-auto pb-1 flex-wrap">
+          <button
+            className={`font-mono text-[10px] font-bold px-3 py-1.5 border-[2px] border-black transition-colors whitespace-nowrap ${
+              activeTab === "all"
+                ? "bg-black text-[#FFFF00]"
+                : "bg-white text-black"
+            }`}
+            onClick={() => setActiveTab("all")}
+            data-testid="tab-all"
+          >
+            SEMUA ({opList.length})
+          </button>
+          {JENIS_PAJAK_OPTIONS.map((jp) => (
+            <button
+              key={jp}
+              className={`font-mono text-[10px] font-bold px-3 py-1.5 border-[2px] border-black transition-colors whitespace-nowrap ${
+                activeTab === jp
+                  ? "bg-black text-[#FFFF00]"
+                  : "bg-white text-black"
+              }`}
+              onClick={() => setActiveTab(jp)}
+              data-testid={`tab-${shortLabel(jp).toLowerCase()}`}
+            >
+              {shortLabel(jp)} ({jenisCounts[jp] || 0})
+            </button>
+          ))}
+        </div>
+
+        <OPFormDialog
+          mode="create"
+          wpList={wpList}
+          isOpen={isCreateOpen}
+          onOpenChange={setIsCreateOpen}
+        />
+
+        <OPFormDialog
+          mode="edit"
+          editOp={editOp}
+          wpList={wpList}
+          isOpen={!!editOp}
+          onOpenChange={(open) => { if (!open) setEditOp(null); }}
+        />
 
         {isLoading ? (
           <div className="flex items-center justify-center h-64" data-testid="loading-op">
@@ -985,118 +1077,113 @@ export default function ObjekPajakPage() {
             <p className="font-mono text-xs text-gray-500 mt-1">Klik tombol TAMBAH OP untuk memulai</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((op) => (
-              <div
-                key={op.id}
-                className="border-[3px] border-black bg-white p-4 space-y-3 relative group cursor-pointer hover:border-[#FFFF00] hover:shadow-[4px_4px_0px_0px_#000] transition-all"
-                data-testid={`card-op-${op.id}`}
-                onClick={() => {
-                  if (op.latitude && op.longitude) {
-                    navigateToMap(op.latitude, op.longitude);
-                  }
-                }}
-              >
-                <div className="absolute top-2 right-2 flex gap-1">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="w-7 h-7 rounded-none bg-white border-[2px] border-black opacity-0 group-hover:opacity-100 transition-opacity no-default-hover-elevate no-default-active-elevate"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditOp(op);
-                    }}
-                    data-testid={`button-edit-op-${op.id}`}
-                  >
-                    <Edit className="w-3.5 h-3.5 text-black" />
-                  </Button>
-                  {op.latitude && op.longitude && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="w-7 h-7 rounded-none bg-[#FFFF00] border-[2px] border-black no-default-hover-elevate no-default-active-elevate"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigateToMap(op.latitude!, op.longitude!);
-                      }}
-                      data-testid={`button-locate-op-${op.id}`}
+          <div className="border-[3px] border-black overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-black border-b-[2px] border-[#FFFF00]">
+                  <TableHead className="font-mono text-[10px] font-bold text-[#FFFF00] whitespace-nowrap">NOPD</TableHead>
+                  <TableHead className="font-mono text-[10px] font-bold text-[#FFFF00] whitespace-nowrap">NAMA OBJEK</TableHead>
+                  <TableHead className="font-mono text-[10px] font-bold text-[#FFFF00] whitespace-nowrap">JENIS PAJAK</TableHead>
+                  <TableHead className="font-mono text-[10px] font-bold text-[#FFFF00] whitespace-nowrap">WAJIB PAJAK</TableHead>
+                  <TableHead className="font-mono text-[10px] font-bold text-[#FFFF00] whitespace-nowrap">ALAMAT</TableHead>
+                  <TableHead className="font-mono text-[10px] font-bold text-[#FFFF00] whitespace-nowrap">PAJAK/BLN</TableHead>
+                  <TableHead className="font-mono text-[10px] font-bold text-[#FFFF00] whitespace-nowrap">STATUS</TableHead>
+                  <TableHead className="font-mono text-[10px] font-bold text-[#FFFF00] whitespace-nowrap">DETAIL</TableHead>
+                  <TableHead className="font-mono text-[10px] font-bold text-[#FFFF00] whitespace-nowrap">AKSI</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((op) => {
+                  const wp = op.wpId ? wpMap.get(op.wpId) : null;
+                  const hasDetail = op.detailPajak !== null && op.detailPajak !== undefined && Object.keys(op.detailPajak as object || {}).length > 0;
+                  return (
+                    <TableRow
+                      key={op.id}
+                      className="border-b-[1px] border-gray-200 hover:bg-gray-50"
+                      data-testid={`row-op-${op.id}`}
                     >
-                      <Navigation className="w-3.5 h-3.5 text-black" />
-                    </Button>
-                  )}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="w-7 h-7 rounded-none opacity-0 group-hover:opacity-100 transition-opacity no-default-hover-elevate no-default-active-elevate"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteMutation.mutate(op.id);
-                    }}
-                    data-testid={`button-delete-op-${op.id}`}
-                  >
-                    <Trash2 className="w-4 h-4 text-red-600" />
-                  </Button>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="bg-black w-10 h-10 flex items-center justify-center flex-shrink-0 border-[2px] border-[#FFFF00]">
-                    <Building2 className="w-5 h-5 text-[#FFFF00]" />
-                  </div>
-                  <div className="min-w-0 pr-20">
-                    <h3 className="font-serif font-black text-base text-black truncate" data-testid={`text-op-nama-${op.id}`}>
-                      {op.namaObjek}
-                    </h3>
-                    <p className="font-mono text-xs text-gray-500">{op.nopd}</p>
-                  </div>
-                </div>
-                {op.rating && (
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 bg-[#FFFF00] border-[2px] border-black px-2 py-0.5">
-                      <Star className="w-3 h-3 text-black fill-black" />
-                      <span className="font-mono text-xs font-bold text-black">{Number(op.rating).toFixed(1)}</span>
-                    </div>
-                    {op.reviewCount && (
-                      <span className="font-mono text-xs text-gray-500">({op.reviewCount} ulasan)</span>
-                    )}
-                  </div>
-                )}
-                <div className="font-mono text-xs text-gray-600 space-y-1">
-                  <div className="flex items-start gap-1">
-                    <MapPin className="w-3 h-3 mt-0.5 flex-shrink-0 text-black" />
-                    <span>{op.alamat}</span>
-                  </div>
-                  {op.omsetBulanan && (
-                    <div className="flex items-center gap-1">
-                      <DollarSign className="w-3 h-3 flex-shrink-0 text-black" />
-                      <span>Omset: Rp {Number(op.omsetBulanan).toLocaleString("id-ID")}/bln</span>
-                    </div>
-                  )}
-                  {op.pajakBulanan && (
-                    <div className="flex items-center gap-1">
-                      <Percent className="w-3 h-3 flex-shrink-0 text-black" />
-                      <span className="font-bold">Pajak: Rp {Number(op.pajakBulanan).toLocaleString("id-ID")}/bln</span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge
-                    className={`rounded-none border-[2px] border-black font-mono text-[10px] ${jenisPajakColor(op.jenisPajak)}`}
-                  >
-                    <Tag className="w-3 h-3 mr-1" />
-                    {op.jenisPajak}
-                  </Badge>
-                  <Badge
-                    className={`rounded-none border-[2px] border-black font-mono text-[10px] ${
-                      op.status === "active" ? "bg-[#FFFF00] text-black" : "bg-gray-200 text-gray-600"
-                    }`}
-                  >
-                    {op.status.toUpperCase()}
-                  </Badge>
-                </div>
-              </div>
-            ))}
+                      <TableCell className="font-mono text-xs text-black" data-testid={`text-nopd-${op.id}`}>
+                        {op.nopd}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs font-bold text-black max-w-[200px] truncate" data-testid={`text-nama-objek-${op.id}`}>
+                        {op.namaObjek}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className={`rounded-none border-[2px] border-black font-mono text-[10px] no-default-hover-elevate no-default-active-elevate ${jenisPajakColor(op.jenisPajak)}`}
+                          data-testid={`badge-jenis-${op.id}`}
+                        >
+                          {shortLabel(op.jenisPajak)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-gray-600 max-w-[150px] truncate" data-testid={`text-wp-${op.id}`}>
+                        {wp ? wp.nama : "-"}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-gray-600 max-w-[200px] truncate">
+                        <div className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{op.alamat}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-black whitespace-nowrap">
+                        {op.pajakBulanan ? (
+                          <div className="flex items-center gap-1">
+                            <DollarSign className="w-3 h-3" />
+                            <span>Rp {Number(op.pajakBulanan).toLocaleString("id-ID")}</span>
+                          </div>
+                        ) : "-"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className={`rounded-none border-[2px] border-black font-mono text-[10px] no-default-hover-elevate no-default-active-elevate ${
+                            op.status === "active" ? "bg-[#FFFF00] text-black" : "bg-gray-200 text-gray-600"
+                          }`}
+                          data-testid={`badge-status-${op.id}`}
+                        >
+                          {op.status.toUpperCase()}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {hasDetail ? (
+                          <Badge className="rounded-none border-[2px] border-green-600 bg-green-100 text-green-800 font-mono text-[10px] no-default-hover-elevate no-default-active-elevate" data-testid={`badge-detail-ok-${op.id}`}>
+                            LENGKAP
+                          </Badge>
+                        ) : (
+                          <Badge className="rounded-none border-[2px] border-orange-500 bg-orange-100 text-orange-700 font-mono text-[10px] no-default-hover-elevate no-default-active-elevate" data-testid={`badge-detail-pending-${op.id}`}>
+                            BELUM
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="rounded-none border-[2px] border-black no-default-hover-elevate no-default-active-elevate"
+                            onClick={() => setEditOp(op)}
+                            data-testid={`button-edit-op-${op.id}`}
+                          >
+                            <Edit className="w-3.5 h-3.5 text-black" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="rounded-none no-default-hover-elevate no-default-active-elevate"
+                            onClick={() => deleteMutation.mutate(op.id)}
+                            data-testid={`button-delete-op-${op.id}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>
-    </div>
+    </BackofficeLayout>
   );
 }

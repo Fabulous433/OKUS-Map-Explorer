@@ -27,6 +27,7 @@ export interface IStorage {
   getAllWajibPajak(): Promise<WajibPajak[]>;
   getWajibPajak(id: number): Promise<WajibPajak | undefined>;
   createWajibPajak(wp: InsertWajibPajak): Promise<WajibPajak>;
+  updateWajibPajak(id: number, wp: Partial<InsertWajibPajak>): Promise<WajibPajak>;
   deleteWajibPajak(id: number): Promise<void>;
 
   getAllObjekPajak(): Promise<ObjekPajak[]>;
@@ -64,6 +65,11 @@ export class DatabaseStorage implements IStorage {
   async createWajibPajak(wp: InsertWajibPajak): Promise<WajibPajak> {
     const [created] = await db.insert(wajibPajak).values(wp).returning();
     return created;
+  }
+
+  async updateWajibPajak(id: number, wp: Partial<InsertWajibPajak>): Promise<WajibPajak> {
+    const [updated] = await db.update(wajibPajak).set(wp).where(eq(wajibPajak.id, id)).returning();
+    return updated;
   }
 
   async deleteWajibPajak(id: number): Promise<void> {

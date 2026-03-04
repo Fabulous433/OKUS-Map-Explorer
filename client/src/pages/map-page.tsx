@@ -1,14 +1,14 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
 import { useQuery } from "@tanstack/react-query";
 import { useSearch } from "wouter";
-import { Loader2, MapPin, Search, ZoomIn, ZoomOut, Crosshair, Layers, Users, Building2, Info, X, ExternalLink, Navigation, Star, Tag, DollarSign, BarChart3 } from "lucide-react";
+import { MapPin, Search, ZoomIn, ZoomOut, Crosshair, Layers, X, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
-import type { WikiLandmark, WajibPajak, ObjekPajak } from "@shared/schema";
+import type { WajibPajak, ObjekPajak } from "@shared/schema";
 import "leaflet/dist/leaflet.css";
 
 const OKU_SELATAN_CENTER: [number, number] = [-4.5250, 104.0270];
@@ -43,45 +43,57 @@ const BASE_MAPS = {
 
 type BaseMapKey = keyof typeof BASE_MAPS;
 
-const landmarkIcon = new L.DivIcon({
-  className: "landmark-marker",
-  html: `<div style="width:32px;height:32px;background:#FFFF00;border:3px solid #000;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;font-family:'Space Grotesk',sans-serif;">W</div>`,
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32],
-});
+const JENIS_PAJAK_COLORS: Record<string, { bg: string; label: string }> = {
+  "Makanan": { bg: "#FF6B00", label: "MKN" },
+  "Perhotelan": { bg: "#2563EB", label: "HTL" },
+  "Reklame": { bg: "#9333EA", label: "RKL" },
+  "Parkir": { bg: "#16A34A", label: "PKR" },
+  "Hiburan": { bg: "#DB2777", label: "HBR" },
+  "Kesenian": { bg: "#DB2777", label: "HBR" },
+  "Listrik": { bg: "#EA580C", label: "LST" },
+  "Air Tanah": { bg: "#0891B2", label: "AIR" },
+  "Walet": { bg: "#78716C", label: "WLT" },
+  "MBLB": { bg: "#57534E", label: "MBL" },
+};
 
-const wpIcon = new L.DivIcon({
-  className: "wp-marker",
-  html: `<div style="width:32px;height:32px;background:#FF6B00;border:3px solid #000;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;color:#fff;font-family:'Space Grotesk',sans-serif;">WP</div>`,
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32],
-});
+function getJenisConfig(jenisPajak: string) {
+  for (const [key, config] of Object.entries(JENIS_PAJAK_COLORS)) {
+    if (jenisPajak.includes(key)) return config;
+  }
+  return { bg: "#6B7280", label: "OTH" };
+}
 
-const opIcon = new L.DivIcon({
-  className: "op-marker",
-  html: `<div style="width:32px;height:32px;background:#000;border:3px solid #FFFF00;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;color:#FFFF00;font-family:'Space Grotesk',sans-serif;">OP</div>`,
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32],
-});
+function getJenisPajakIcon(jenisPajak: string, type: "wp" | "op") {
+  const config = getJenisConfig(jenisPajak);
+  const borderColor = type === "wp" ? "#000" : config.bg;
+  const bgColor = type === "wp" ? config.bg : "#000";
+  const textColor = type === "wp" ? "#fff" : config.bg;
+  const typeBg = type === "wp" ? "#000" : config.bg;
+  const typeColor = type === "wp" ? config.bg : "#fff";
 
-function MapEventHandler({ onBoundsChange }: { onBoundsChange: (bounds: L.LatLngBounds) => void }) {
-  const map = useMapEvents({
-    moveend: () => {
-      onBoundsChange(map.getBounds());
-    },
-    zoomend: () => {
-      onBoundsChange(map.getBounds());
-    },
+  return new L.DivIcon({
+    className: "custom-marker",
+    html: `<div style="position:relative;width:40px;height:40px;">
+      <div style="width:40px;height:40px;background:${bgColor};border:3px solid ${borderColor};display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;color:${textColor};font-family:'Space Grotesk',monospace;letter-spacing:-0.5px;">${config.label}</div>
+      <div style="position:absolute;top:-6px;right:-6px;background:${typeBg};color:${typeColor};font-size:8px;font-weight:900;font-family:monospace;padding:1px 3px;border:2px solid #000;line-height:1;">${type.toUpperCase()}</div>
+    </div>`,
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
+    popupAnchor: [0, -40],
   });
+}
 
-  useEffect(() => {
-    onBoundsChange(map.getBounds());
-  }, []);
-
-  return null;
+function getClusterIcon(count: number) {
+  return new L.DivIcon({
+    className: "cluster-marker",
+    html: `<div style="width:44px;height:44px;background:#FFFF00;border:3px solid #000;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:monospace;">
+      <div style="font-weight:900;font-size:16px;color:#000;line-height:1;">${count}</div>
+      <div style="font-size:7px;font-weight:700;color:#000;line-height:1;">OBJEK</div>
+    </div>`,
+    iconSize: [44, 44],
+    iconAnchor: [22, 44],
+    popupAnchor: [0, -44],
+  });
 }
 
 function FlyToHandler({ lat, lng, zoom }: { lat: number | null; lng: number | null; zoom: number }) {
@@ -184,68 +196,81 @@ function BaseMapSwitcher({ activeMap, onChange }: { activeMap: BaseMapKey; onCha
   );
 }
 
-function LandmarkDetail({ landmark, onClose }: { landmark: WikiLandmark; onClose: () => void }) {
+function Legend() {
+  const [isOpen, setIsOpen] = useState(false);
+  const items = [
+    { label: "Makanan & Minuman", short: "MKN", color: "#FF6B00" },
+    { label: "Jasa Perhotelan", short: "HTL", color: "#2563EB" },
+    { label: "Pajak Reklame", short: "RKL", color: "#9333EA" },
+    { label: "Jasa Parkir", short: "PKR", color: "#16A34A" },
+    { label: "Kesenian & Hiburan", short: "HBR", color: "#DB2777" },
+    { label: "Tenaga Listrik", short: "LST", color: "#EA580C" },
+    { label: "Air Tanah", short: "AIR", color: "#0891B2" },
+    { label: "Sarang Burung Walet", short: "WLT", color: "#78716C" },
+    { label: "MBLB", short: "MBL", color: "#57534E" },
+  ];
+
   return (
-    <div
-      className="absolute bottom-4 left-4 z-[1000] w-[380px] max-w-[calc(100vw-2rem)] bg-white border-[4px] border-black"
-      data-testid="landmark-detail"
-    >
-      <div className="flex items-start justify-between gap-2 p-4 border-b-[3px] border-black bg-[#FFFF00]">
-        <div className="flex items-center gap-2 min-w-0">
-          <MapPin className="w-5 h-5 flex-shrink-0 text-black" />
-          <h3 className="font-serif text-lg font-black text-black truncate" data-testid="text-landmark-title">
-            {landmark.title}
-          </h3>
-        </div>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="flex-shrink-0 w-8 h-8 rounded-none no-default-hover-elevate no-default-active-elevate"
-          onClick={onClose}
-          data-testid="button-close-detail"
-        >
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
-      {landmark.thumbnail && (
-        <div className="border-b-[3px] border-black">
-          <img
-            src={landmark.thumbnail}
-            alt={landmark.title}
-            className="w-full h-48 object-cover"
-            data-testid="img-landmark-thumbnail"
-          />
+    <div className="absolute bottom-4 left-4 z-[1000]" data-testid="legend-panel">
+      <Button
+        size="sm"
+        variant="outline"
+        className={`rounded-none border-[3px] border-black font-mono text-xs h-9 no-default-hover-elevate no-default-active-elevate ${
+          isOpen ? "bg-[#FFFF00] text-black" : "bg-white text-black"
+        }`}
+        onClick={() => setIsOpen(!isOpen)}
+        data-testid="button-toggle-legend"
+      >
+        <MapPin className="w-3 h-3 mr-1" />
+        LEGENDA
+      </Button>
+      {isOpen && (
+        <div className="absolute bottom-11 left-0 bg-white border-[3px] border-black p-3 min-w-[220px]" data-testid="legend-content">
+          <div className="font-mono text-xs font-bold text-black mb-2 pb-1 border-b-[2px] border-black">JENIS PAJAK</div>
+          <div className="space-y-1.5">
+            {items.map((item) => (
+              <div key={item.short} className="flex items-center gap-2">
+                <div
+                  className="w-7 h-5 border-[2px] border-black flex items-center justify-center"
+                  style={{ background: item.color }}
+                >
+                  <span className="font-mono text-[8px] font-bold text-white">{item.short}</span>
+                </div>
+                <span className="font-mono text-[10px] text-black">{item.label}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 pt-1 border-t-[2px] border-black space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-5 border-[2px] border-black bg-[#FF6B00] flex items-center justify-center">
+                <span className="font-mono text-[7px] font-bold text-white">WP</span>
+              </div>
+              <span className="font-mono text-[10px] text-black">Wajib Pajak</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-5 border-[2px] border-black bg-black flex items-center justify-center">
+                <span className="font-mono text-[7px] font-bold text-[#FF6B00]">OP</span>
+              </div>
+              <span className="font-mono text-[10px] text-black">Objek Pajak</span>
+            </div>
+          </div>
         </div>
       )}
-      <div className="p-4 space-y-3">
-        {landmark.extract && (
-          <p className="text-sm font-mono leading-relaxed text-black" data-testid="text-landmark-extract">
-            {landmark.extract}
-          </p>
-        )}
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge className="rounded-none border-[2px] border-black bg-black text-white font-mono text-xs">
-            {landmark.lat.toFixed(4)}, {landmark.lon.toFixed(4)}
-          </Badge>
-          {landmark.dist !== undefined && (
-            <Badge className="rounded-none border-[2px] border-black bg-[#FFFF00] text-black font-mono text-xs">
-              {(landmark.dist / 1000).toFixed(1)} km
-            </Badge>
-          )}
-        </div>
-        <a
-          href={`https://en.wikipedia.org/?curid=${landmark.pageid}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-sm font-mono font-bold text-black underline decoration-[2px] underline-offset-4"
-          data-testid="link-wikipedia"
-        >
-          Wikipedia <ExternalLink className="w-3 h-3" />
-        </a>
-      </div>
     </div>
   );
 }
+
+type SearchResult = {
+  type: "wp" | "op";
+  id: number;
+  name: string;
+  jenisPajak: string;
+  alamat: string;
+  lat: string | null;
+  lng: string | null;
+  opCount?: number;
+  wpId?: number | null;
+};
 
 export default function MapPage() {
   const searchString = useSearch();
@@ -254,70 +279,152 @@ export default function MapPage() {
   const focusLng = params.get("lng") ? parseFloat(params.get("lng")!) : null;
   const focusZoom = params.get("zoom") ? parseInt(params.get("zoom")!) : 17;
 
-  const [bounds, setBounds] = useState<{ north: number; south: number; east: number; west: number } | null>(null);
-  const [selectedLandmark, setSelectedLandmark] = useState<WikiLandmark | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showLayers, setShowLayers] = useState({ landmarks: true, wp: true, op: true });
-  const [sidePanel, setSidePanel] = useState<"none" | "wp" | "op">("none");
   const [activeBaseMap, setActiveBaseMap] = useState<BaseMapKey>("osm");
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
-  const [debouncedBounds, setDebouncedBounds] = useState(bounds);
-
-  const handleBoundsChange = useCallback((newBounds: L.LatLngBounds) => {
-    const b = {
-      north: newBounds.getNorth(),
-      south: newBounds.getSouth(),
-      east: newBounds.getEast(),
-      west: newBounds.getWest(),
-    };
-    setBounds(b);
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      setDebouncedBounds(b);
-    }, 500);
-  }, []);
-
-  const { data: landmarks = [], isLoading: landmarksLoading } = useQuery<WikiLandmark[]>({
-    queryKey: ["/api/landmarks", debouncedBounds?.north, debouncedBounds?.south, debouncedBounds?.east, debouncedBounds?.west],
-    queryFn: async () => {
-      if (!debouncedBounds) return [];
-      const params = new URLSearchParams({
-        north: debouncedBounds.north.toString(),
-        south: debouncedBounds.south.toString(),
-        east: debouncedBounds.east.toString(),
-        west: debouncedBounds.west.toString(),
-      });
-      const res = await fetch(`/api/landmarks?${params}`);
-      if (!res.ok) throw new Error("Failed to fetch landmarks");
-      return res.json();
-    },
-    enabled: !!debouncedBounds && showLayers.landmarks,
-  });
+  const [selectedWpId, setSelectedWpId] = useState<number | null>(null);
+  const [highlightedOpId, setHighlightedOpId] = useState<number | null>(null);
+  const [showResults, setShowResults] = useState(false);
+  const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
 
   const { data: wpList = [] } = useQuery<WajibPajak[]>({
     queryKey: ["/api/wajib-pajak"],
-    enabled: showLayers.wp,
   });
 
   const { data: opList = [] } = useQuery<ObjekPajak[]>({
     queryKey: ["/api/objek-pajak"],
-    enabled: showLayers.op,
   });
 
-  const filteredLandmarks = searchQuery
-    ? landmarks.filter((l) => l.title.toLowerCase().includes(searchQuery.toLowerCase()))
-    : landmarks;
+  const searchResults = useMemo<SearchResult[]>(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    const results: SearchResult[] = [];
+
+    wpList.forEach((wp) => {
+      if (
+        wp.nama.toLowerCase().includes(q) ||
+        wp.npwpd.toLowerCase().includes(q) ||
+        (wp.namaUsaha && wp.namaUsaha.toLowerCase().includes(q)) ||
+        wp.jenisPajak.toLowerCase().includes(q) ||
+        wp.alamat.toLowerCase().includes(q)
+      ) {
+        const opCount = opList.filter((op) => op.wpId === wp.id).length;
+        results.push({
+          type: "wp",
+          id: wp.id,
+          name: wp.nama,
+          jenisPajak: wp.jenisPajak,
+          alamat: wp.alamat,
+          lat: wp.latitude,
+          lng: wp.longitude,
+          opCount,
+        });
+      }
+    });
+
+    opList.forEach((op) => {
+      if (
+        op.namaObjek.toLowerCase().includes(q) ||
+        op.nopd.toLowerCase().includes(q) ||
+        op.jenisPajak.toLowerCase().includes(q) ||
+        op.alamat.toLowerCase().includes(q)
+      ) {
+        results.push({
+          type: "op",
+          id: op.id,
+          name: op.namaObjek,
+          jenisPajak: op.jenisPajak,
+          alamat: op.alamat,
+          lat: op.latitude,
+          lng: op.longitude,
+          wpId: op.wpId,
+        });
+      }
+    });
+
+    return results;
+  }, [searchQuery, wpList, opList]);
+
+  const handleSelectResult = (result: SearchResult) => {
+    setShowResults(false);
+    if (result.type === "wp") {
+      setSelectedWpId(result.id);
+      setHighlightedOpId(null);
+      const relatedOps = opList.filter((op) => op.wpId === result.id && op.latitude && op.longitude);
+      if (relatedOps.length > 0) {
+        setFlyTarget({
+          lat: parseFloat(relatedOps[0].latitude!),
+          lng: parseFloat(relatedOps[0].longitude!),
+          zoom: 16,
+        });
+      } else if (result.lat && result.lng) {
+        setFlyTarget({ lat: parseFloat(result.lat), lng: parseFloat(result.lng), zoom: 16 });
+      }
+    } else {
+      setSelectedWpId(null);
+      setHighlightedOpId(result.id);
+      if (result.lat && result.lng) {
+        setFlyTarget({ lat: parseFloat(result.lat), lng: parseFloat(result.lng), zoom: 17 });
+      }
+    }
+  };
+
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSelectedWpId(null);
+    setHighlightedOpId(null);
+    setShowResults(false);
+  };
+
+  const locationGroups = useMemo(() => {
+    const groups: Record<string, ObjekPajak[]> = {};
+    opList
+      .filter((op) => op.latitude && op.longitude)
+      .forEach((op) => {
+        const key = `${parseFloat(op.latitude!).toFixed(5)},${parseFloat(op.longitude!).toFixed(5)}`;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(op);
+      });
+    return groups;
+  }, [opList]);
+
+  const visibleWP = useMemo(() => {
+    if (selectedWpId) {
+      return wpList.filter((wp) => wp.id === selectedWpId && wp.latitude && wp.longitude);
+    }
+    if (highlightedOpId) return [];
+    return wpList.filter((wp) => wp.latitude && wp.longitude);
+  }, [wpList, selectedWpId, highlightedOpId]);
+
+  const visibleOP = useMemo(() => {
+    if (selectedWpId) {
+      return opList.filter((op) => op.wpId === selectedWpId && op.latitude && op.longitude);
+    }
+    if (highlightedOpId) {
+      return opList.filter((op) => op.id === highlightedOpId && op.latitude && op.longitude);
+    }
+    return opList.filter((op) => op.latitude && op.longitude);
+  }, [opList, selectedWpId, highlightedOpId]);
+
+  const visibleLocationGroups = useMemo(() => {
+    const groups: Record<string, ObjekPajak[]> = {};
+    visibleOP.forEach((op) => {
+      const key = `${parseFloat(op.latitude!).toFixed(5)},${parseFloat(op.longitude!).toFixed(5)}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(op);
+    });
+    return groups;
+  }, [visibleOP]);
 
   const currentBaseMap = BASE_MAPS[activeBaseMap];
 
-  const jenisPajakColor = (jenis: string) => {
-    if (jenis.includes("Makanan")) return "bg-[#FF6B00] text-white";
-    if (jenis.includes("Perhotelan")) return "bg-blue-600 text-white";
-    if (jenis.includes("Reklame")) return "bg-purple-600 text-white";
-    if (jenis.includes("Parkir")) return "bg-green-600 text-white";
-    return "bg-gray-600 text-white";
+  const jenisPajakBadgeColor = (jenis: string) => {
+    const config = getJenisConfig(jenis);
+    return config.bg;
   };
+
+  const effectiveFlyLat = flyTarget?.lat ?? focusLat;
+  const effectiveFlyLng = flyTarget?.lng ?? focusLng;
+  const effectiveFlyZoom = flyTarget?.zoom ?? focusZoom;
 
   return (
     <div className="h-screen w-screen relative bg-white overflow-hidden" data-testid="map-page">
@@ -336,108 +443,114 @@ export default function MapPage() {
           </div>
         </div>
 
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari landmark..."
-              className="pl-9 h-10 bg-white border-[3px] border-black rounded-none font-mono text-sm placeholder:text-gray-400 focus-visible:ring-[#FFFF00] focus-visible:ring-2"
-              data-testid="input-search"
-            />
+        <div className="relative">
+          <div className="relative flex gap-1">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setShowResults(true);
+                  if (!e.target.value.trim()) {
+                    setSelectedWpId(null);
+                    setHighlightedOpId(null);
+                  }
+                }}
+                onFocus={() => searchQuery.trim() && setShowResults(true)}
+                placeholder="Cari WP / Objek Pajak..."
+                className="pl-9 h-10 bg-white border-[3px] border-black rounded-none font-mono text-sm placeholder:text-gray-400 focus-visible:ring-[#FFFF00] focus-visible:ring-2 w-[300px]"
+                data-testid="input-search"
+              />
+            </div>
+            {(searchQuery || selectedWpId || highlightedOpId) && (
+              <Button
+                size="icon"
+                variant="outline"
+                className="bg-white border-[3px] border-black rounded-none w-10 h-10 flex-shrink-0 no-default-hover-elevate no-default-active-elevate"
+                onClick={clearSearch}
+                data-testid="button-clear-search"
+              >
+                <X className="w-4 h-4 text-black" />
+              </Button>
+            )}
           </div>
+
+          {showResults && searchResults.length > 0 && (
+            <div className="absolute top-12 left-0 w-[340px] bg-white border-[3px] border-black max-h-[400px] overflow-y-auto" data-testid="search-results">
+              <div className="p-2 border-b-[2px] border-black bg-gray-50">
+                <span className="font-mono text-[10px] font-bold text-gray-500">{searchResults.length} HASIL DITEMUKAN</span>
+              </div>
+              {searchResults.map((result) => (
+                <div
+                  key={`${result.type}-${result.id}`}
+                  className="p-3 border-b border-gray-200 cursor-pointer hover:bg-[#FFFF00]/20 transition-colors"
+                  onClick={() => handleSelectResult(result)}
+                  data-testid={`search-result-${result.type}-${result.id}`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge
+                      className="rounded-none border-[2px] border-black font-mono text-[9px] px-1.5 py-0"
+                      style={{
+                        background: result.type === "wp" ? "#FF6B00" : "#000",
+                        color: result.type === "wp" ? "#fff" : "#FFFF00",
+                      }}
+                    >
+                      {result.type.toUpperCase()}
+                    </Badge>
+                    <span className="font-serif font-black text-sm text-black truncate">{result.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge
+                      className="rounded-none border border-black/30 font-mono text-[9px] px-1.5 py-0 text-white"
+                      style={{ background: jenisPajakBadgeColor(result.jenisPajak) }}
+                    >
+                      {result.jenisPajak}
+                    </Badge>
+                    {result.type === "wp" && result.opCount !== undefined && result.opCount > 0 && (
+                      <span className="font-mono text-[10px] text-gray-500">({result.opCount} objek pajak)</span>
+                    )}
+                  </div>
+                  <div className="font-mono text-[10px] text-gray-500 mt-1 truncate">{result.alamat}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="flex gap-1 flex-wrap">
-          <Button
-            size="sm"
-            variant={showLayers.landmarks ? "default" : "outline"}
-            className={`rounded-none border-[2px] border-black font-mono text-xs h-8 no-default-hover-elevate no-default-active-elevate ${
-              showLayers.landmarks ? "bg-[#FFFF00] text-black" : "bg-white text-black"
-            }`}
-            onClick={() => setShowLayers((s) => ({ ...s, landmarks: !s.landmarks }))}
-            data-testid="button-toggle-landmarks"
-          >
-            <Layers className="w-3 h-3 mr-1" />
-            Wiki
-          </Button>
-          <Button
-            size="sm"
-            variant={showLayers.wp ? "default" : "outline"}
-            className={`rounded-none border-[2px] border-black font-mono text-xs h-8 no-default-hover-elevate no-default-active-elevate ${
-              showLayers.wp ? "bg-[#FF6B00] text-white" : "bg-white text-black"
-            }`}
-            onClick={() => setShowLayers((s) => ({ ...s, wp: !s.wp }))}
-            data-testid="button-toggle-wp"
-          >
-            <Users className="w-3 h-3 mr-1" />
-            WP
-          </Button>
-          <Button
-            size="sm"
-            variant={showLayers.op ? "default" : "outline"}
-            className={`rounded-none border-[2px] border-black font-mono text-xs h-8 no-default-hover-elevate no-default-active-elevate ${
-              showLayers.op ? "bg-black text-[#FFFF00]" : "bg-white text-black"
-            }`}
-            onClick={() => setShowLayers((s) => ({ ...s, op: !s.op }))}
-            data-testid="button-toggle-op"
-          >
-            <Building2 className="w-3 h-3 mr-1" />
-            OP
-          </Button>
-        </div>
+        {(selectedWpId || highlightedOpId) && (
+          <div className="bg-[#FFFF00] border-[3px] border-black px-3 py-2 flex items-center gap-2 max-w-[340px]">
+            <span className="font-mono text-xs font-bold text-black flex-1 truncate">
+              {selectedWpId
+                ? `WP: ${wpList.find((wp) => wp.id === selectedWpId)?.nama} (${visibleOP.length} OP)`
+                : `OP: ${opList.find((op) => op.id === highlightedOpId)?.namaObjek}`}
+            </span>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="w-6 h-6 rounded-none no-default-hover-elevate no-default-active-elevate flex-shrink-0"
+              onClick={clearSearch}
+              data-testid="button-clear-filter"
+            >
+              <X className="w-3 h-3 text-black" />
+            </Button>
+          </div>
+        )}
       </div>
 
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] flex gap-2">
+      <Link href="/backoffice">
         <Button
           size="sm"
           variant="outline"
-          className={`rounded-none border-[3px] border-black font-mono text-xs h-9 no-default-hover-elevate no-default-active-elevate ${
-            sidePanel === "wp" ? "bg-[#FF6B00] text-white border-[#FF6B00]" : "bg-white text-black"
-          }`}
-          onClick={() => setSidePanel(sidePanel === "wp" ? "none" : "wp")}
-          data-testid="button-panel-wp"
+          className="absolute top-4 right-[120px] z-[1000] rounded-none border-[3px] border-black font-mono text-xs h-10 bg-[#FFFF00] text-black no-default-hover-elevate no-default-active-elevate"
+          data-testid="button-backoffice"
         >
-          <Users className="w-4 h-4 mr-1" />
-          Wajib Pajak
+          <Settings className="w-4 h-4 mr-1" />
+          Backoffice
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className={`rounded-none border-[3px] border-black font-mono text-xs h-9 no-default-hover-elevate no-default-active-elevate ${
-            sidePanel === "op" ? "bg-black text-[#FFFF00] border-black" : "bg-white text-black"
-          }`}
-          onClick={() => setSidePanel(sidePanel === "op" ? "none" : "op")}
-          data-testid="button-panel-op"
-        >
-          <Building2 className="w-4 h-4 mr-1" />
-          Objek Pajak
-        </Button>
-        <Link href="/dashboard">
-          <Button
-            size="sm"
-            variant="outline"
-            className="rounded-none border-[3px] border-black font-mono text-xs h-9 bg-[#FFFF00] text-black border-[#FFFF00] no-default-hover-elevate no-default-active-elevate"
-            data-testid="button-dashboard"
-          >
-            <BarChart3 className="w-4 h-4 mr-1" />
-            Dashboard
-          </Button>
-        </Link>
-      </div>
-
-      {landmarksLoading && (
-        <div className="absolute top-20 right-4 z-[1000] bg-[#FFFF00] border-[3px] border-black p-2 flex items-center gap-2" data-testid="loading-indicator">
-          <Loader2 className="w-4 h-4 animate-spin text-black" />
-          <span className="font-mono text-xs font-bold text-black">LOADING...</span>
-        </div>
-      )}
+      </Link>
 
       <div className="absolute bottom-4 right-4 z-[1000] flex gap-3" data-testid="map-stats">
-        <div className="bg-[#FFFF00] border-[3px] border-black px-3 py-1.5 font-mono text-xs font-bold text-black">
-          <span data-testid="text-landmark-count">{filteredLandmarks.length}</span> WIKI
-        </div>
         <div className="bg-[#FF6B00] border-[3px] border-black px-3 py-1.5 font-mono text-xs font-bold text-white">
           <span data-testid="text-wp-count">{wpList.length}</span> WP
         </div>
@@ -446,22 +559,7 @@ export default function MapPage() {
         </div>
       </div>
 
-      {sidePanel !== "none" && (
-        <SidePanel
-          type={sidePanel}
-          wpList={wpList}
-          opList={opList}
-          onClose={() => setSidePanel("none")}
-        />
-      )}
-
-      {selectedLandmark && (
-        <LandmarkDetail
-          landmark={selectedLandmark}
-          onClose={() => setSelectedLandmark(null)}
-        />
-      )}
-
+      <Legend />
       <BaseMapSwitcher activeMap={activeBaseMap} onChange={setActiveBaseMap} />
 
       <MapContainer
@@ -477,222 +575,83 @@ export default function MapPage() {
           url={currentBaseMap.url}
           maxZoom={currentBaseMap.maxZoom}
         />
-        <MapEventHandler onBoundsChange={handleBoundsChange} />
         <MapControls />
-        <FlyToHandler lat={focusLat} lng={focusLng} zoom={focusZoom} />
+        <FlyToHandler lat={effectiveFlyLat} lng={effectiveFlyLng} zoom={effectiveFlyZoom} />
 
-        {showLayers.landmarks &&
-          filteredLandmarks.map((landmark) => (
-            <Marker
-              key={`wiki-${landmark.pageid}`}
-              position={[landmark.lat, landmark.lon]}
-              icon={landmarkIcon}
-              eventHandlers={{
-                click: () => setSelectedLandmark(landmark),
-              }}
-            >
-              <Popup className="brutalist-popup">
-                <div className="font-mono text-xs font-bold">{landmark.title}</div>
-              </Popup>
-            </Marker>
-          ))}
+        {visibleWP.map((wp) => (
+          <Marker
+            key={`wp-${wp.id}`}
+            position={[parseFloat(wp.latitude!), parseFloat(wp.longitude!)]}
+            icon={getJenisPajakIcon(wp.jenisPajak, "wp")}
+          >
+            <Popup>
+              <div className="font-mono text-xs space-y-1 min-w-[180px]">
+                <div className="font-bold text-sm">{wp.nama}</div>
+                {wp.namaUsaha && <div className="text-gray-600">{wp.namaUsaha}</div>}
+                <div>NPWPD: {wp.npwpd}</div>
+                <div className="inline-block px-1.5 py-0.5 text-white text-[10px] font-bold" style={{ background: jenisPajakBadgeColor(wp.jenisPajak) }}>
+                  {wp.jenisPajak}
+                </div>
+                <div>{wp.alamat}</div>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
 
-        {showLayers.wp &&
-          wpList
-            .filter((wp) => wp.latitude && wp.longitude)
-            .map((wp) => (
-              <Marker
-                key={`wp-${wp.id}`}
-                position={[parseFloat(wp.latitude!), parseFloat(wp.longitude!)]}
-                icon={wpIcon}
-              >
-                <Popup>
-                  <div className="font-mono text-xs space-y-1">
-                    <div className="font-bold text-sm">{wp.nama}</div>
-                    {wp.namaUsaha && <div className="text-gray-600">{wp.namaUsaha}</div>}
-                    <div>NPWPD: {wp.npwpd}</div>
-                    <div className="font-bold text-[#FF6B00]">{wp.jenisPajak}</div>
-                    <div>{wp.alamat}</div>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
-
-        {showLayers.op &&
-          opList
-            .filter((op) => op.latitude && op.longitude)
-            .map((op) => (
+        {Object.entries(visibleLocationGroups).map(([key, ops]) => {
+          if (ops.length === 1) {
+            const op = ops[0];
+            return (
               <Marker
                 key={`op-${op.id}`}
                 position={[parseFloat(op.latitude!), parseFloat(op.longitude!)]}
-                icon={opIcon}
+                icon={getJenisPajakIcon(op.jenisPajak, "op")}
               >
                 <Popup>
-                  <div className="font-mono text-xs space-y-1">
+                  <div className="font-mono text-xs space-y-1 min-w-[180px]">
                     <div className="font-bold text-sm">{op.namaObjek}</div>
-                    <div className="font-bold text-[#FF6B00]">{op.jenisPajak}</div>
+                    <div className="inline-block px-1.5 py-0.5 text-white text-[10px] font-bold" style={{ background: jenisPajakBadgeColor(op.jenisPajak) }}>
+                      {op.jenisPajak}
+                    </div>
                     <div>NOPD: {op.nopd}</div>
                     <div>{op.alamat}</div>
-                    {op.rating && (
-                      <div className="flex items-center gap-1">
-                        <span>Rating: {Number(op.rating).toFixed(1)}</span>
-                        {op.reviewCount && <span>({op.reviewCount} ulasan)</span>}
-                      </div>
-                    )}
                     {op.pajakBulanan && (
                       <div className="font-bold">Pajak: Rp {Number(op.pajakBulanan).toLocaleString("id-ID")}/bln</div>
                     )}
                   </div>
                 </Popup>
               </Marker>
-            ))}
-      </MapContainer>
-    </div>
-  );
-}
+            );
+          }
 
-function SidePanel({
-  type,
-  wpList,
-  opList,
-  onClose,
-}: {
-  type: "wp" | "op";
-  wpList: WajibPajak[];
-  opList: ObjekPajak[];
-  onClose: () => void;
-}) {
-  const isWP = type === "wp";
-  const items = isWP ? wpList : opList;
-
-  const jenisPajakColor = (jenis: string) => {
-    if (jenis.includes("Makanan")) return "bg-[#FF6B00] text-white";
-    if (jenis.includes("Perhotelan")) return "bg-blue-600 text-white";
-    if (jenis.includes("Reklame")) return "bg-purple-600 text-white";
-    if (jenis.includes("Parkir")) return "bg-green-600 text-white";
-    return "bg-gray-600 text-white";
-  };
-
-  return (
-    <div
-      className={`absolute top-0 right-0 z-[1001] h-full w-[420px] max-w-full border-l-[4px] flex flex-col ${
-        isWP ? "bg-white border-[#FF6B00]" : "bg-white border-black"
-      }`}
-      data-testid={`panel-${type}`}
-    >
-      <div
-        className={`flex items-center justify-between gap-2 p-4 border-b-[4px] ${
-          isWP ? "bg-[#FF6B00] border-black" : "bg-black border-[#FFFF00]"
-        }`}
-      >
-        <div className="flex items-center gap-2">
-          {isWP ? (
-            <Users className="w-5 h-5 text-white" />
-          ) : (
-            <Building2 className="w-5 h-5 text-[#FFFF00]" />
-          )}
-          <h2
-            className={`font-serif text-xl font-black ${isWP ? "text-white" : "text-[#FFFF00]"}`}
-            data-testid={`text-panel-title-${type}`}
-          >
-            {isWP ? "WAJIB PAJAK" : "OBJEK PAJAK"}
-          </h2>
-        </div>
-        <Button
-          size="icon"
-          variant="ghost"
-          className={`rounded-none w-8 h-8 no-default-hover-elevate no-default-active-elevate ${
-            isWP ? "text-white" : "text-[#FFFF00]"
-          }`}
-          onClick={onClose}
-          data-testid={`button-close-panel-${type}`}
-        >
-          <X className="w-5 h-5" />
-        </Button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-center" data-testid={`empty-state-${type}`}>
-            <div className={`w-16 h-16 border-[4px] border-black flex items-center justify-center mb-4 ${isWP ? "bg-[#FF6B00]" : "bg-[#FFFF00]"}`}>
-              {isWP ? <Users className="w-8 h-8 text-white" /> : <Building2 className="w-8 h-8 text-black" />}
-            </div>
-            <p className="font-serif text-lg font-black text-black">BELUM ADA DATA</p>
-            <p className="font-mono text-xs text-gray-500 mt-1">
-              {isWP ? "Tambahkan Wajib Pajak baru" : "Tambahkan Objek Pajak baru"}
-            </p>
-          </div>
-        ) : (
-          items.map((item: any) => (
-            <div
-              key={item.id}
-              className="border-[3px] border-black p-3 space-y-2 bg-white"
-              data-testid={`card-${type}-${item.id}`}
+          const firstOp = ops[0];
+          return (
+            <Marker
+              key={`cluster-${key}`}
+              position={[parseFloat(firstOp.latitude!), parseFloat(firstOp.longitude!)]}
+              icon={getClusterIcon(ops.length)}
             >
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="font-serif font-black text-sm text-black leading-tight">
-                  {isWP ? item.nama : item.namaObjek}
-                </h3>
-                <Badge
-                  className={`rounded-none border-[2px] border-black font-mono text-[10px] flex-shrink-0 ${
-                    item.status === "active" ? "bg-[#FFFF00] text-black" : "bg-gray-200 text-gray-600"
-                  }`}
-                >
-                  {item.status?.toUpperCase()}
-                </Badge>
-              </div>
-              {!isWP && item.namaObjek && (
-                <Badge className={`rounded-none border-[2px] border-black font-mono text-[10px] ${jenisPajakColor(item.jenisPajak)}`}>
-                  <Tag className="w-3 h-3 mr-1" />
-                  {item.jenisPajak}
-                </Badge>
-              )}
-              {isWP && item.jenisPajak && (
-                <Badge className={`rounded-none border-[2px] border-black font-mono text-[10px] ${jenisPajakColor(item.jenisPajak)}`}>
-                  <Tag className="w-3 h-3 mr-1" />
-                  {item.jenisPajak}
-                </Badge>
-              )}
-              <div className="font-mono text-xs text-gray-600 space-y-0.5">
-                <div><span className="font-bold text-black">{isWP ? "NPWPD" : "NOPD"}:</span> {isWP ? item.npwpd : item.nopd}</div>
-                {isWP && item.namaUsaha && <div><span className="font-bold text-black">USAHA:</span> {item.namaUsaha}</div>}
-                <div><span className="font-bold text-black">ALAMAT:</span> {item.alamat}</div>
-                {item.kecamatan && <div><span className="font-bold text-black">KEC:</span> {item.kecamatan}</div>}
-                {!isWP && item.pajakBulanan && (
-                  <div><span className="font-bold text-black">PAJAK:</span> Rp {Number(item.pajakBulanan).toLocaleString("id-ID")}/bln</div>
-                )}
-                {!isWP && item.rating && (
-                  <div className="flex items-center gap-1">
-                    <Star className="w-3 h-3 text-black fill-black" />
-                    <span className="font-bold text-black">{Number(item.rating).toFixed(1)}</span>
-                    {item.reviewCount && <span className="text-gray-400">({item.reviewCount})</span>}
-                  </div>
-                )}
-              </div>
-              {item.latitude && item.longitude && (
-                <div className="flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-black" />
-                  <span className="font-mono text-[10px] text-gray-500">
-                    {Number(item.latitude).toFixed(4)}, {Number(item.longitude).toFixed(4)}
-                  </span>
+              <Popup>
+                <div className="font-mono text-xs space-y-2 min-w-[220px] max-h-[300px] overflow-y-auto">
+                  <div className="font-bold text-sm border-b border-gray-300 pb-1">{ops.length} Objek Pajak di lokasi ini</div>
+                  {ops.map((op) => (
+                    <div key={op.id} className="border-b border-gray-100 pb-1.5">
+                      <div className="font-bold">{op.namaObjek}</div>
+                      <div className="inline-block px-1 py-0 text-white text-[9px] font-bold mt-0.5" style={{ background: jenisPajakBadgeColor(op.jenisPajak) }}>
+                        {op.jenisPajak}
+                      </div>
+                      <div className="text-gray-500">NOPD: {op.nopd}</div>
+                      {op.pajakBulanan && (
+                        <div>Pajak: Rp {Number(op.pajakBulanan).toLocaleString("id-ID")}/bln</div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className={`p-4 border-t-[4px] ${isWP ? "border-[#FF6B00]" : "border-black"}`}>
-        <a
-          href={isWP ? "/wajib-pajak" : "/objek-pajak"}
-          className={`flex items-center justify-center gap-2 w-full h-10 border-[3px] border-black font-mono text-sm font-bold ${
-            isWP ? "bg-[#FF6B00] text-white" : "bg-black text-[#FFFF00]"
-          }`}
-          data-testid={`link-manage-${type}`}
-        >
-          {isWP ? "KELOLA WAJIB PAJAK" : "KELOLA OBJEK PAJAK"}
-        </a>
-      </div>
+              </Popup>
+            </Marker>
+          );
+        })}
+      </MapContainer>
     </div>
   );
 }

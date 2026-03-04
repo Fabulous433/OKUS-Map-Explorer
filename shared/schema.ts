@@ -81,17 +81,6 @@ export type WajibPajak = typeof wajibPajak.$inferSelect;
 export type InsertObjekPajak = z.infer<typeof insertObjekPajakSchema>;
 export type ObjekPajak = typeof objekPajak.$inferSelect;
 
-export type WikiLandmark = {
-  pageid: number;
-  title: string;
-  lat: number;
-  lon: number;
-  dist?: number;
-  description?: string;
-  thumbnail?: string;
-  extract?: string;
-};
-
 export type DetailPBJTMakanan = {
   jenisUsaha?: string;
   kapasitasTempat?: number;
