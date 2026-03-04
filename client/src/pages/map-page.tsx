@@ -21,6 +21,12 @@ const BASE_MAPS = {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom: 19,
   },
+  google: {
+    name: "Google Satellite",
+    url: "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+    attribution: '&copy; Google',
+    maxZoom: 20,
+  },
   esri: {
     name: "ESRI Satellite",
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
