@@ -105,7 +105,7 @@ async function run() {
       assert.equal(wpRestore.response.status, 200);
       assert.equal((wpRestore.body as JsonRecord).npwpd, oldNpwpd);
 
-      const listAfter = await requestJson("/api/objek-pajak");
+      const listAfter = await requestJson("/api/objek-pajak?includeUnverified=true");
       assert.equal(listAfter.response.status, 200);
       assert.ok(Array.isArray(listAfter.body));
       const inserted = (listAfter.body as JsonRecord[]).find((item) => Number(item.id) === createdOpId);

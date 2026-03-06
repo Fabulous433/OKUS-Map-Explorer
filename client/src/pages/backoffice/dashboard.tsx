@@ -48,7 +48,7 @@ export default function BackofficeDashboard() {
   const [expandedJenis, setExpandedJenis] = useState<string | null>(null);
 
   const { data: opList = [], isLoading: opLoading } = useQuery<ObjekPajak[]>({
-    queryKey: ["/api/objek-pajak"],
+    queryKey: ["/api/objek-pajak?includeUnverified=true"],
   });
 
   const { data: wpList = [], isLoading: wpLoading } = useQuery<WajibPajakWithBadanUsaha[]>({

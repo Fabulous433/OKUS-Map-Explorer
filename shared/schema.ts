@@ -3,6 +3,7 @@ import {
   boolean,
   decimal,
   integer,
+  jsonb,
   pgTable,
   serial,
   text,
@@ -18,6 +19,7 @@ export const STATUS_OPTIONS = ["active", "inactive"] as const;
 export const REKLAME_STATUS_OPTIONS = ["baru", "perpanjangan"] as const;
 export const JENIS_WP_OPTIONS = ["orang_pribadi", "badan_usaha"] as const;
 export const PERAN_WP_OPTIONS = ["pemilik", "pengelola"] as const;
+export const VERIFICATION_STATUS_OPTIONS = ["draft", "verified", "rejected"] as const;
 
 export const JENIS_PAJAK_OPTIONS = [
   "PBJT Makanan dan Minuman",
@@ -34,6 +36,7 @@ export const JENIS_PAJAK_OPTIONS = [
 export type JenisPajak = (typeof JENIS_PAJAK_OPTIONS)[number];
 export type JenisWp = (typeof JENIS_WP_OPTIONS)[number];
 export type PeranWp = (typeof PERAN_WP_OPTIONS)[number];
+export type VerificationStatus = (typeof VERIFICATION_STATUS_OPTIONS)[number];
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -151,6 +154,10 @@ export const objekPajak = pgTable(
     latitude: decimal("latitude", { precision: 10, scale: 7 }),
     longitude: decimal("longitude", { precision: 10, scale: 7 }),
     status: varchar("status", { length: 20 }).notNull().default("active"),
+    statusVerifikasi: varchar("status_verifikasi", { length: 20 }).notNull().default("draft"),
+    catatanVerifikasi: text("catatan_verifikasi"),
+    verifiedAt: timestamp("verified_at"),
+    verifiedBy: varchar("verified_by", { length: 120 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -158,6 +165,18 @@ export const objekPajak = pgTable(
     nopdUnique: uniqueIndex("objek_pajak_nopd_unique").on(table.nopd),
   }),
 );
+
+export const auditLog = pgTable("audit_log", {
+  id: serial("id").primaryKey(),
+  entityType: varchar("entity_type", { length: 60 }).notNull(),
+  entityId: varchar("entity_id", { length: 120 }).notNull(),
+  action: varchar("action", { length: 40 }).notNull(),
+  actorName: varchar("actor_name", { length: 120 }).notNull().default("system"),
+  beforeData: jsonb("before_data"),
+  afterData: jsonb("after_data"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
 
 export const opDetailPbjtMakanMinum = pgTable("op_detail_pbjt_makan_minum", {
   opId: integer("op_id")
@@ -554,8 +573,61 @@ export const insertObjekPajakSchema = createInsertSchema(objekPajak)
     kecamatanId: z.string().trim().min(1),
     kelurahanId: z.string().trim().min(1),
     status: z.enum(STATUS_OPTIONS).default("active"),
+    statusVerifikasi: z.enum(VERIFICATION_STATUS_OPTIONS).optional().default("draft"),
+    catatanVerifikasi: z.string().trim().max(1000).nullable().optional(),
+    verifiedAt: z.date().nullable().optional(),
+    verifiedBy: z.string().trim().min(1).max(120).nullable().optional(),
     detailPajak: z.unknown().nullable().optional(),
   });
+
+export const masterKecamatanPayloadSchema = z.object({
+  cpmKecId: z.string().trim().min(1).max(16).optional(),
+  cpmKecamatan: z.string().trim().min(1),
+  cpmKodeKec: z.string().trim().min(1).max(4),
+});
+
+export const masterKelurahanPayloadSchema = z.object({
+  cpmKelId: z.string().trim().min(1).max(16).optional(),
+  cpmKelurahan: z.string().trim().min(1),
+  cpmKodeKec: z.string().trim().min(1).max(4),
+  cpmKodeKel: z.string().trim().min(1).max(4),
+});
+
+export const masterRekeningPayloadSchema = z.object({
+  kodeRekening: z.string().trim().min(1).max(30),
+  namaRekening: z.string().trim().min(1),
+  jenisPajak: z.string().trim().min(1),
+  isActive: z.boolean().optional().default(true),
+});
+
+export const objekPajakVerificationSchema = z
+  .object({
+    statusVerifikasi: z.enum(VERIFICATION_STATUS_OPTIONS),
+    catatanVerifikasi: z.string().trim().max(1000).nullable().optional(),
+    verifierName: z.string().trim().min(1).max(120).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.statusVerifikasi === "rejected") {
+      const note = data.catatanVerifikasi?.trim();
+      if (!note) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["catatanVerifikasi"],
+          message: "Catatan verifikasi wajib diisi saat status rejected",
+        });
+      }
+    }
+  });
+
+export const qualityCheckInputSchema = z.object({
+  nikKtpWp: z.string().trim().max(32).optional(),
+  nikPengelola: z.string().trim().max(32).optional(),
+  npwpBadanUsaha: z.string().trim().max(32).optional(),
+  npwpd: z.string().trim().max(30).optional(),
+  nopd: z.string().trim().max(30).optional(),
+  nama: z.string().trim().max(255).optional(),
+  alamat: z.string().trim().max(500).optional(),
+});
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -574,6 +646,13 @@ export type WajibPajakWithBadanUsaha = WajibPajak & {
 export type MasterKecamatan = typeof masterKecamatan.$inferSelect;
 export type MasterKelurahan = typeof masterKelurahan.$inferSelect;
 export type MasterRekeningPajak = typeof masterRekeningPajak.$inferSelect;
+export type AuditLog = typeof auditLog.$inferSelect;
+
+export type MasterKecamatanPayload = z.infer<typeof masterKecamatanPayloadSchema>;
+export type MasterKelurahanPayload = z.infer<typeof masterKelurahanPayloadSchema>;
+export type MasterRekeningPayload = z.infer<typeof masterRekeningPayloadSchema>;
+export type ObjekPajakVerificationPayload = z.infer<typeof objekPajakVerificationSchema>;
+export type QualityCheckInput = z.infer<typeof qualityCheckInputSchema>;
 
 export type InsertObjekPajak = z.infer<typeof insertObjekPajakSchema>;
 export type ObjekPajakRow = typeof objekPajak.$inferSelect;
@@ -598,6 +677,5 @@ export type OpDetailPbjtTenagaListrik = typeof opDetailPbjtTenagaListrik.$inferS
 export type OpDetailPajakReklame = typeof opDetailPajakReklame.$inferSelect;
 export type OpDetailPajakAirTanah = typeof opDetailPajakAirTanah.$inferSelect;
 export type OpDetailPajakWalet = typeof opDetailPajakWalet.$inferSelect;
-
 
 

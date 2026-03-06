@@ -1,13 +1,26 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { type Server } from "http";
-import { storage } from "./storage";
+import { and, asc, desc, eq, gte, ilike, lte, lt, or, sql } from "drizzle-orm";
+import { db, storage } from "./storage";
 import {
+  auditLog,
   createWajibPajakSchema,
   insertObjekPajakSchema,
+  masterKecamatan,
+  masterKecamatanPayloadSchema,
+  masterKelurahan,
+  masterKelurahanPayloadSchema,
+  masterRekeningPajak,
+  masterRekeningPayloadSchema,
+  objekPajak,
+  objekPajakVerificationSchema,
+  qualityCheckInputSchema,
   STATUS_OPTIONS,
   updateWajibPajakPayloadSchema,
   validateDetailByJenis,
+  wajibPajak,
   wajibPajakResolvedSchema,
+  wpBadanUsaha,
   type WajibPajakWithBadanUsaha,
   type WpBadanUsahaInput,
 } from "@shared/schema";
@@ -99,6 +112,180 @@ const OP_CSV_COLUMNS = [
   "detail_panen_per_tahun",
   "detail_rata2_berat_panen",
 ] as const;
+
+type AuditAction = "create" | "update" | "delete" | "verify" | "reject";
+
+type AuditFilter = {
+  entityType?: string;
+  entityId?: string;
+  action?: string;
+  from?: Date;
+  to?: Date;
+  limit: number;
+  cursor?: number;
+};
+
+type QualityWarning = {
+  level: "info" | "warning" | "critical";
+  code: string;
+  message: string;
+  relatedIds: Array<string | number>;
+};
+
+function getActorName(req: Request) {
+  const raw = req.headers["x-actor-name"];
+  const val = Array.isArray(raw) ? raw[0] : raw;
+  const cleaned = typeof val === "string" ? val.trim() : "";
+  return cleaned.length > 0 ? cleaned : "system";
+}
+
+function parseDate(value: unknown) {
+  if (typeof value !== "string" || value.trim().length === 0) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function parseLimit(value: unknown, fallback = 25) {
+  if (typeof value !== "string") return fallback;
+  const num = Number.parseInt(value, 10);
+  if (!Number.isFinite(num) || num <= 0) return fallback;
+  return Math.min(num, 200);
+}
+
+function parseCursor(value: unknown) {
+  if (typeof value !== "string") return undefined;
+  const num = Number.parseInt(value, 10);
+  return Number.isFinite(num) && num > 0 ? num : undefined;
+}
+
+function generateMasterId(prefix: string) {
+  const millis = Date.now().toString(36).toUpperCase();
+  const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `${prefix}${millis}${rand}`.slice(0, 16);
+}
+
+function pgErrorCode(error: unknown) {
+  if (!error || typeof error !== "object") return null;
+  return (error as { code?: string }).code ?? null;
+}
+
+async function writeAuditLog(params: {
+  entityType: string;
+  entityId: string | number;
+  action: AuditAction;
+  actorName: string;
+  beforeData?: unknown;
+  afterData?: unknown;
+  metadata?: unknown;
+}) {
+  await db.insert(auditLog).values({
+    entityType: params.entityType,
+    entityId: String(params.entityId),
+    action: params.action,
+    actorName: params.actorName,
+    beforeData: (params.beforeData ?? null) as any,
+    afterData: (params.afterData ?? null) as any,
+    metadata: (params.metadata ?? null) as any,
+  });
+}
+
+async function listAuditLogs(filter: AuditFilter) {
+  const conditions = [];
+  if (filter.entityType) conditions.push(eq(auditLog.entityType, filter.entityType));
+  if (filter.entityId) conditions.push(eq(auditLog.entityId, filter.entityId));
+  if (filter.action) conditions.push(eq(auditLog.action, filter.action));
+  if (filter.from) conditions.push(gte(auditLog.createdAt, filter.from));
+  if (filter.to) conditions.push(lte(auditLog.createdAt, filter.to));
+  if (filter.cursor) conditions.push(lt(auditLog.id, filter.cursor));
+
+  const query = db
+    .select()
+    .from(auditLog)
+    .orderBy(desc(auditLog.id))
+    .limit(filter.limit + 1);
+
+  const rows = conditions.length > 0 ? await query.where(and(...conditions)) : await query;
+  const hasMore = rows.length > filter.limit;
+  const data = hasMore ? rows.slice(0, filter.limit) : rows;
+  const nextCursor = hasMore ? data[data.length - 1]?.id ?? null : null;
+
+  return { data, nextCursor, hasMore };
+}
+
+function buildQualityWarnings(input: {
+  candidate: Record<string, string | undefined>;
+  wpMatches: Array<Record<string, unknown>>;
+  opMatches: Array<Record<string, unknown>>;
+}) {
+  const warnings: QualityWarning[] = [];
+  const { candidate, wpMatches, opMatches } = input;
+
+  if (candidate.nopd && opMatches.some((op) => String(op.nopd) === candidate.nopd)) {
+    warnings.push({
+      level: "critical",
+      code: "DUPLICATE_NOPD",
+      message: "NOPD sudah digunakan oleh objek pajak lain",
+      relatedIds: opMatches.filter((op) => String(op.nopd) === candidate.nopd).map((op) => Number(op.id)),
+    });
+  }
+
+  if (candidate.npwpd && wpMatches.some((wp) => String(wp.npwpd || "") === candidate.npwpd)) {
+    warnings.push({
+      level: "critical",
+      code: "DUPLICATE_NPWPD",
+      message: "NPWPD sudah digunakan oleh wajib pajak lain",
+      relatedIds: wpMatches.filter((wp) => String(wp.npwpd || "") === candidate.npwpd).map((wp) => Number(wp.id)),
+    });
+  }
+
+  if (candidate.nikKtpWp && wpMatches.some((wp) => String(wp.nikKtpWp || "") === candidate.nikKtpWp)) {
+    warnings.push({
+      level: "warning",
+      code: "DUPLICATE_NIK_WP",
+      message: "NIK pemilik ditemukan pada wajib pajak lain",
+      relatedIds: wpMatches.filter((wp) => String(wp.nikKtpWp || "") === candidate.nikKtpWp).map((wp) => Number(wp.id)),
+    });
+  }
+
+  if (candidate.nikPengelola && wpMatches.some((wp) => String(wp.nikPengelola || "") === candidate.nikPengelola)) {
+    warnings.push({
+      level: "warning",
+      code: "DUPLICATE_NIK_PENGELOLA",
+      message: "NIK pengelola ditemukan pada wajib pajak lain",
+      relatedIds: wpMatches.filter((wp) => String(wp.nikPengelola || "") === candidate.nikPengelola).map((wp) => Number(wp.id)),
+    });
+  }
+
+  if (candidate.npwpBadanUsaha && wpMatches.some((wp) => String((wp as any).npwpBadanUsaha || "") === candidate.npwpBadanUsaha)) {
+    warnings.push({
+      level: "warning",
+      code: "DUPLICATE_NPWP_BADAN_USAHA",
+      message: "NPWP badan usaha ditemukan pada record lain",
+      relatedIds: wpMatches.filter((wp) => String((wp as any).npwpBadanUsaha || "") === candidate.npwpBadanUsaha).map((wp) => Number(wp.id)),
+    });
+  }
+
+  if (candidate.nama && candidate.alamat) {
+    const normalizedName = candidate.nama.toLowerCase();
+    const normalizedAddr = candidate.alamat.toLowerCase();
+    const fuzzyMatches = opMatches.filter((op) => {
+      const name = String(op.namaOp || "").toLowerCase();
+      const addr = String(op.alamatOp || "").toLowerCase();
+      return name.includes(normalizedName) && addr.includes(normalizedAddr);
+    });
+
+    if (fuzzyMatches.length > 0) {
+      warnings.push({
+        level: "info",
+        code: "SIMILAR_NAME_ADDRESS",
+        message: "Nama + alamat mirip dengan objek pajak yang sudah ada",
+        relatedIds: fuzzyMatches.map((op) => Number(op.id)),
+      });
+    }
+  }
+
+  return warnings;
+}
 
 function hasOwn(payload: Record<string, unknown>, key: string) {
   return Object.prototype.hasOwnProperty.call(payload, key);
@@ -406,7 +593,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ message: parsed.error.message });
     }
 
+    const actorName = getActorName(req);
     const created = await storage.createWajibPajak(parsed.data);
+    await writeAuditLog({
+      entityType: "wajib_pajak",
+      entityId: created.id,
+      action: "create",
+      actorName,
+      beforeData: null,
+      afterData: created,
+      metadata: { source: "api" },
+    });
+
     res.status(201).json(created);
   });
 
@@ -451,12 +649,39 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             : undefined,
     };
 
+    const actorName = getActorName(req);
     const updated = await storage.updateWajibPajak(id, payloadToUpdate);
+    await writeAuditLog({
+      entityType: "wajib_pajak",
+      entityId: id,
+      action: "update",
+      actorName,
+      beforeData: existing,
+      afterData: updated,
+      metadata: { source: "api" },
+    });
+
     res.json(updated);
   });
 
   app.delete("/api/wajib-pajak/:id", async (req, res) => {
-    await storage.deleteWajibPajak(Number.parseInt(req.params.id, 10));
+    const id = Number.parseInt(req.params.id, 10);
+    const existing = await storage.getWajibPajak(id);
+    if (!existing) {
+      return res.status(404).json({ message: "Wajib Pajak tidak ditemukan" });
+    }
+
+    await storage.deleteWajibPajak(id);
+    await writeAuditLog({
+      entityType: "wajib_pajak",
+      entityId: id,
+      action: "delete",
+      actorName: getActorName(req),
+      beforeData: existing,
+      afterData: null,
+      metadata: { source: "api" },
+    });
+
     res.status(204).send();
   });
 
@@ -504,6 +729,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ message: "File CSV diperlukan" });
       }
 
+      const actorName = getActorName(req);
       const content = req.file.buffer.toString("utf-8");
       const records = parse<CsvImportRow>(content, { columns: true, skip_empty_lines: true, trim: true });
 
@@ -554,7 +780,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
 
         try {
-          await storage.createWajibPajak(parsed.data);
+          const created = await storage.createWajibPajak(parsed.data);
+          await writeAuditLog({
+            entityType: "wajib_pajak",
+            entityId: created.id,
+            action: "create",
+            actorName,
+            beforeData: null,
+            afterData: created,
+            metadata: { source: "csv-import", row: i + 2 },
+          });
           success++;
         } catch (err: any) {
           failed++;
@@ -573,24 +808,578 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(data);
   });
 
+  app.post("/api/master/kecamatan", async (req, res) => {
+    const parsed = masterKecamatanPayloadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+
+    const payload = parsed.data;
+    const cpmKecId = payload.cpmKecId ?? generateMasterId("KEC");
+
+    try {
+      const [created] = await db
+        .insert(masterKecamatan)
+        .values({
+          cpmKecId,
+          cpmKecamatan: payload.cpmKecamatan,
+          cpmKodeKec: payload.cpmKodeKec,
+        })
+        .returning();
+
+      await writeAuditLog({
+        entityType: "master_kecamatan",
+        entityId: created.cpmKecId,
+        action: "create",
+        actorName: getActorName(req),
+        beforeData: null,
+        afterData: created,
+        metadata: { source: "api" },
+      });
+
+      res.status(201).json(created);
+    } catch (error) {
+      if (pgErrorCode(error) === "23505") {
+        return res.status(409).json({ message: "Kode kecamatan atau ID sudah terdaftar" });
+      }
+      throw error;
+    }
+  });
+
+  app.patch("/api/master/kecamatan/:id", async (req, res) => {
+    const id = req.params.id;
+    const parsed = masterKecamatanPayloadSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+
+    const beforeRows = await db.select().from(masterKecamatan).where(eq(masterKecamatan.cpmKecId, id)).limit(1);
+    if (beforeRows.length === 0) {
+      return res.status(404).json({ message: "Kecamatan tidak ditemukan" });
+    }
+
+    const payload = parsed.data;
+    if (Object.keys(payload).length === 0) {
+      return res.status(400).json({ message: "Payload update kosong" });
+    }
+
+    const before = beforeRows[0];
+    if (payload.cpmKodeKec && payload.cpmKodeKec !== before.cpmKodeKec) {
+      const [linkedKelurahan] = await db
+        .select({ id: masterKelurahan.cpmKelId })
+        .from(masterKelurahan)
+        .where(eq(masterKelurahan.cpmKodeKec, before.cpmKodeKec))
+        .limit(1);
+      if (linkedKelurahan) {
+        return res.status(409).json({ message: "Kode kecamatan tidak dapat diubah karena sudah dipakai kelurahan" });
+      }
+    }
+
+    try {
+      const [updated] = await db
+        .update(masterKecamatan)
+        .set({
+          ...payload,
+          updatedAt: new Date(),
+        })
+        .where(eq(masterKecamatan.cpmKecId, id))
+        .returning();
+
+      await writeAuditLog({
+        entityType: "master_kecamatan",
+        entityId: id,
+        action: "update",
+        actorName: getActorName(req),
+        beforeData: before,
+        afterData: updated,
+        metadata: { source: "api" },
+      });
+
+      res.json(updated);
+    } catch (error) {
+      if (pgErrorCode(error) === "23505") {
+        return res.status(409).json({ message: "Kode kecamatan sudah digunakan" });
+      }
+      throw error;
+    }
+  });
+
+  app.delete("/api/master/kecamatan/:id", async (req, res) => {
+    const id = req.params.id;
+    const rows = await db.select().from(masterKecamatan).where(eq(masterKecamatan.cpmKecId, id)).limit(1);
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Kecamatan tidak ditemukan" });
+    }
+
+    const existing = rows[0];
+    const [linkedOp] = await db
+      .select({ id: objekPajak.id })
+      .from(objekPajak)
+      .where(eq(objekPajak.kecamatanId, id))
+      .limit(1);
+    if (linkedOp) {
+      return res.status(409).json({ message: "Kecamatan tidak dapat dihapus karena masih direferensikan OP" });
+    }
+
+    const [linkedKel] = await db
+      .select({ id: masterKelurahan.cpmKelId })
+      .from(masterKelurahan)
+      .where(eq(masterKelurahan.cpmKodeKec, existing.cpmKodeKec))
+      .limit(1);
+    if (linkedKel) {
+      return res.status(409).json({ message: "Kecamatan tidak dapat dihapus karena masih memiliki kelurahan" });
+    }
+
+    await db.delete(masterKecamatan).where(eq(masterKecamatan.cpmKecId, id));
+    await writeAuditLog({
+      entityType: "master_kecamatan",
+      entityId: id,
+      action: "delete",
+      actorName: getActorName(req),
+      beforeData: existing,
+      afterData: null,
+      metadata: { source: "api" },
+    });
+
+    res.status(204).send();
+  });
+
   app.get("/api/master/kelurahan", async (req, res) => {
     const kecamatanId = typeof req.query.kecamatanId === "string" ? req.query.kecamatanId : undefined;
     const data = await storage.getMasterKelurahan(kecamatanId);
     res.json(data);
   });
 
-  app.get("/api/master/rekening-pajak", async (_req, res) => {
-    const data = await storage.getAllMasterRekeningPajak();
+  app.post("/api/master/kelurahan", async (req, res) => {
+    const parsed = masterKelurahanPayloadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+
+    const payload = parsed.data;
+    const [kecamatanExists] = await db
+      .select({ id: masterKecamatan.cpmKecId })
+      .from(masterKecamatan)
+      .where(eq(masterKecamatan.cpmKodeKec, payload.cpmKodeKec))
+      .limit(1);
+
+    if (!kecamatanExists) {
+      return res.status(400).json({ message: "Kode kecamatan tidak valid" });
+    }
+
+    try {
+      const cpmKelId = payload.cpmKelId ?? generateMasterId("KEL");
+      const [created] = await db
+        .insert(masterKelurahan)
+        .values({
+          cpmKelId,
+          cpmKelurahan: payload.cpmKelurahan,
+          cpmKodeKec: payload.cpmKodeKec,
+          cpmKodeKel: payload.cpmKodeKel,
+        })
+        .returning();
+
+      await writeAuditLog({
+        entityType: "master_kelurahan",
+        entityId: created.cpmKelId,
+        action: "create",
+        actorName: getActorName(req),
+        beforeData: null,
+        afterData: created,
+        metadata: { source: "api" },
+      });
+
+      res.status(201).json(created);
+    } catch (error) {
+      if (pgErrorCode(error) === "23505") {
+        return res.status(409).json({ message: "Kode kelurahan pada kecamatan ini sudah digunakan" });
+      }
+      throw error;
+    }
+  });
+
+  app.patch("/api/master/kelurahan/:id", async (req, res) => {
+    const id = req.params.id;
+    const parsed = masterKelurahanPayloadSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+
+    const payload = parsed.data;
+    if (Object.keys(payload).length === 0) {
+      return res.status(400).json({ message: "Payload update kosong" });
+    }
+
+    const rows = await db.select().from(masterKelurahan).where(eq(masterKelurahan.cpmKelId, id)).limit(1);
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Kelurahan tidak ditemukan" });
+    }
+
+    if (payload.cpmKodeKec) {
+      const [kecamatanExists] = await db
+        .select({ id: masterKecamatan.cpmKecId })
+        .from(masterKecamatan)
+        .where(eq(masterKecamatan.cpmKodeKec, payload.cpmKodeKec))
+        .limit(1);
+      if (!kecamatanExists) {
+        return res.status(400).json({ message: "Kode kecamatan tidak valid" });
+      }
+    }
+
+    try {
+      const [updated] = await db
+        .update(masterKelurahan)
+        .set({
+          ...payload,
+          updatedAt: new Date(),
+        })
+        .where(eq(masterKelurahan.cpmKelId, id))
+        .returning();
+
+      await writeAuditLog({
+        entityType: "master_kelurahan",
+        entityId: id,
+        action: "update",
+        actorName: getActorName(req),
+        beforeData: rows[0],
+        afterData: updated,
+        metadata: { source: "api" },
+      });
+
+      res.json(updated);
+    } catch (error) {
+      if (pgErrorCode(error) === "23505") {
+        return res.status(409).json({ message: "Kode kelurahan pada kecamatan ini sudah digunakan" });
+      }
+      throw error;
+    }
+  });
+
+  app.delete("/api/master/kelurahan/:id", async (req, res) => {
+    const id = req.params.id;
+    const rows = await db.select().from(masterKelurahan).where(eq(masterKelurahan.cpmKelId, id)).limit(1);
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Kelurahan tidak ditemukan" });
+    }
+
+    const [linkedOp] = await db
+      .select({ id: objekPajak.id })
+      .from(objekPajak)
+      .where(eq(objekPajak.kelurahanId, id))
+      .limit(1);
+    if (linkedOp) {
+      return res.status(409).json({ message: "Kelurahan tidak dapat dihapus karena masih direferensikan OP" });
+    }
+
+    await db.delete(masterKelurahan).where(eq(masterKelurahan.cpmKelId, id));
+    await writeAuditLog({
+      entityType: "master_kelurahan",
+      entityId: id,
+      action: "delete",
+      actorName: getActorName(req),
+      beforeData: rows[0],
+      afterData: null,
+      metadata: { source: "api" },
+    });
+
+    res.status(204).send();
+  });
+
+  app.get("/api/master/rekening-pajak", async (req, res) => {
+    const includeInactive = typeof req.query.includeInactive === "string" && req.query.includeInactive === "true";
+    const data = includeInactive
+      ? await db.select().from(masterRekeningPajak).orderBy(asc(masterRekeningPajak.kodeRekening))
+      : await storage.getAllMasterRekeningPajak();
     res.json(data);
+  });
+
+  app.post("/api/master/rekening-pajak", async (req, res) => {
+    const parsed = masterRekeningPayloadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+
+    try {
+      const [created] = await db
+        .insert(masterRekeningPajak)
+        .values({
+          ...parsed.data,
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      await writeAuditLog({
+        entityType: "master_rekening_pajak",
+        entityId: created.id,
+        action: "create",
+        actorName: getActorName(req),
+        beforeData: null,
+        afterData: created,
+        metadata: { source: "api" },
+      });
+
+      res.status(201).json(created);
+    } catch (error) {
+      if (pgErrorCode(error) === "23505") {
+        return res.status(409).json({ message: "Kode rekening sudah terdaftar" });
+      }
+      throw error;
+    }
+  });
+
+  app.patch("/api/master/rekening-pajak/:id", async (req, res) => {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ message: "ID rekening tidak valid" });
+    }
+
+    const parsed = masterRekeningPayloadSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+
+    const payload = parsed.data;
+    if (Object.keys(payload).length === 0) {
+      return res.status(400).json({ message: "Payload update kosong" });
+    }
+
+    const rows = await db.select().from(masterRekeningPajak).where(eq(masterRekeningPajak.id, id)).limit(1);
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Rekening pajak tidak ditemukan" });
+    }
+
+    try {
+      const [updated] = await db
+        .update(masterRekeningPajak)
+        .set({
+          ...payload,
+          updatedAt: new Date(),
+        })
+        .where(eq(masterRekeningPajak.id, id))
+        .returning();
+
+      await writeAuditLog({
+        entityType: "master_rekening_pajak",
+        entityId: id,
+        action: "update",
+        actorName: getActorName(req),
+        beforeData: rows[0],
+        afterData: updated,
+        metadata: { source: "api" },
+      });
+
+      res.json(updated);
+    } catch (error) {
+      if (pgErrorCode(error) === "23505") {
+        return res.status(409).json({ message: "Kode rekening sudah terdaftar" });
+      }
+      throw error;
+    }
+  });
+
+  app.delete("/api/master/rekening-pajak/:id", async (req, res) => {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ message: "ID rekening tidak valid" });
+    }
+
+    const rows = await db.select().from(masterRekeningPajak).where(eq(masterRekeningPajak.id, id)).limit(1);
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Rekening pajak tidak ditemukan" });
+    }
+
+    const [linkedOp] = await db
+      .select({ id: objekPajak.id })
+      .from(objekPajak)
+      .where(eq(objekPajak.rekPajakId, id))
+      .limit(1);
+    if (linkedOp) {
+      return res.status(409).json({ message: "Rekening pajak tidak dapat dihapus karena masih direferensikan OP" });
+    }
+
+    await db.delete(masterRekeningPajak).where(eq(masterRekeningPajak.id, id));
+    await writeAuditLog({
+      entityType: "master_rekening_pajak",
+      entityId: id,
+      action: "delete",
+      actorName: getActorName(req),
+      beforeData: rows[0],
+      afterData: null,
+      metadata: { source: "api" },
+    });
+
+    res.status(204).send();
+  });
+
+  app.get("/api/audit-log", async (req, res) => {
+    const fromRaw = typeof req.query.from === "string" ? req.query.from : undefined;
+    const toRaw = typeof req.query.to === "string" ? req.query.to : undefined;
+    const from = parseDate(fromRaw);
+    const to = parseDate(toRaw);
+
+    if (fromRaw && !from) {
+      return res.status(400).json({ message: "Format query 'from' tidak valid" });
+    }
+
+    if (toRaw && !to) {
+      return res.status(400).json({ message: "Format query 'to' tidak valid" });
+    }
+
+    const entityType = typeof req.query.entityType === "string" ? req.query.entityType : undefined;
+    const entityId = typeof req.query.entityId === "string" ? req.query.entityId : undefined;
+    const action = typeof req.query.action === "string" ? req.query.action : undefined;
+    const limit = parseLimit(req.query.limit, 25);
+    const cursor = parseCursor(req.query.cursor);
+
+    const result = await listAuditLogs({ entityType, entityId, action, from, to, limit, cursor });
+    res.json(result);
+  });
+
+  app.post("/api/quality/check", async (req, res) => {
+    const parsed = qualityCheckInputSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+
+    const candidate = parsed.data;
+    const wpRows = await db
+      .select({
+        id: wajibPajak.id,
+        npwpd: wajibPajak.npwpd,
+        nikKtpWp: wajibPajak.nikKtpWp,
+        nikPengelola: wajibPajak.nikPengelola,
+        npwpBadanUsaha: wpBadanUsaha.npwpBadanUsaha,
+      })
+      .from(wajibPajak)
+      .leftJoin(wpBadanUsaha, eq(wajibPajak.id, wpBadanUsaha.wpId));
+    const opRows = await db
+      .select({
+        id: objekPajak.id,
+        nopd: objekPajak.nopd,
+        namaOp: objekPajak.namaOp,
+        alamatOp: objekPajak.alamatOp,
+      })
+      .from(objekPajak);
+
+    const wpMatches = wpRows.filter((row) => {
+      if (candidate.npwpd && row.npwpd === candidate.npwpd) return true;
+      if (candidate.nikKtpWp && row.nikKtpWp === candidate.nikKtpWp) return true;
+      if (candidate.nikPengelola && row.nikPengelola === candidate.nikPengelola) return true;
+      if (candidate.npwpBadanUsaha && row.npwpBadanUsaha === candidate.npwpBadanUsaha) return true;
+      return false;
+    });
+
+    const opMatches = opRows.filter((row) => {
+      if (candidate.nopd && row.nopd === candidate.nopd) return true;
+      if (candidate.nama && String(row.namaOp || "").toLowerCase().includes(candidate.nama.toLowerCase())) return true;
+      if (candidate.alamat && String(row.alamatOp || "").toLowerCase().includes(candidate.alamat.toLowerCase())) return true;
+      return false;
+    });
+
+    const warnings = buildQualityWarnings({
+      candidate,
+      wpMatches: wpMatches as Array<Record<string, unknown>>,
+      opMatches: opMatches as Array<Record<string, unknown>>,
+    });
+
+    res.json({ warnings });
+  });
+
+  app.get("/api/quality/report", async (_req, res) => {
+    const wpRows = await db
+      .select({
+        id: wajibPajak.id,
+        npwpd: wajibPajak.npwpd,
+        nikKtpWp: wajibPajak.nikKtpWp,
+        nikPengelola: wajibPajak.nikPengelola,
+        npwpBadanUsaha: wpBadanUsaha.npwpBadanUsaha,
+      })
+      .from(wajibPajak)
+      .leftJoin(wpBadanUsaha, eq(wajibPajak.id, wpBadanUsaha.wpId));
+    const opRows = await db
+      .select({
+        id: objekPajak.id,
+        nopd: objekPajak.nopd,
+        wpId: objekPajak.wpId,
+        rekPajakId: objekPajak.rekPajakId,
+        namaOp: objekPajak.namaOp,
+        alamatOp: objekPajak.alamatOp,
+        latitude: objekPajak.latitude,
+        longitude: objekPajak.longitude,
+      })
+      .from(objekPajak);
+
+    const countDuplicates = (values: Array<string | null | undefined>) => {
+      const map = new Map<string, number>();
+      for (const value of values) {
+        const key = String(value ?? "").trim();
+        if (!key) continue;
+        map.set(key, (map.get(key) ?? 0) + 1);
+      }
+      return Array.from(map.values()).filter((count) => count > 1).length;
+    };
+
+    const invalidGeoRows = opRows.filter((row) => {
+      const lat = row.latitude === null || row.latitude === undefined ? null : Number(row.latitude);
+      const lng = row.longitude === null || row.longitude === undefined ? null : Number(row.longitude);
+      if (lat === null || lng === null) return false;
+      return lat < -90 || lat > 90 || lng < -180 || lng > 180;
+    });
+
+    const missingCriticalRows = opRows.filter((row) => {
+      const nama = String(row.namaOp ?? "").trim();
+      const alamat = String(row.alamatOp ?? "").trim();
+      return !row.wpId || !row.rekPajakId || nama.length === 0 || alamat.length === 0;
+    });
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      totals: {
+        wajibPajak: wpRows.length,
+        objekPajak: opRows.length,
+      },
+      duplicateIndicators: {
+        npwpd: countDuplicates(wpRows.map((row) => row.npwpd)),
+        nopd: countDuplicates(opRows.map((row) => row.nopd)),
+        nikKtpWp: countDuplicates(wpRows.map((row) => row.nikKtpWp)),
+        nikPengelola: countDuplicates(wpRows.map((row) => row.nikPengelola)),
+        npwpBadanUsaha: countDuplicates(wpRows.map((row) => row.npwpBadanUsaha)),
+      },
+      missingCriticalFields: {
+        count: missingCriticalRows.length,
+        relatedIds: missingCriticalRows.map((row) => row.id),
+      },
+      invalidGeoRange: {
+        count: invalidGeoRows.length,
+        relatedIds: invalidGeoRows.map((row) => row.id),
+      },
+    });
   });
 
   app.get("/api/objek-pajak", async (req, res) => {
     const jenisPajak = typeof req.query.jenisPajak === "string" ? req.query.jenisPajak : undefined;
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
     const kecamatanId = typeof req.query.kecamatanId === "string" ? req.query.kecamatanId : undefined;
+    const statusVerifikasi = typeof req.query.statusVerifikasi === "string" ? req.query.statusVerifikasi : undefined;
+    const includeUnverified = typeof req.query.includeUnverified === "string" && req.query.includeUnverified === "true";
+
+    if (
+      statusVerifikasi &&
+      statusVerifikasi !== "draft" &&
+      statusVerifikasi !== "verified" &&
+      statusVerifikasi !== "rejected"
+    ) {
+      return res.status(400).json({ message: "statusVerifikasi tidak valid" });
+    }
 
     const data = await storage.getAllObjekPajak({ jenisPajak, status, kecamatanId });
-    res.json(data);
+    const filtered = statusVerifikasi
+      ? data.filter((item) => item.statusVerifikasi === statusVerifikasi)
+      : includeUnverified
+        ? data
+        : data.filter((item) => item.statusVerifikasi === "verified");
+
+    res.json(filtered);
   });
 
   app.get("/api/objek-pajak/export", async (_req, res) => {
@@ -629,6 +1418,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ message: "File CSV diperlukan" });
       }
 
+      const actorName = getActorName(req);
       const content = req.file.buffer.toString("utf-8");
       const records = parse<CsvImportRow>(content, { columns: true, skip_empty_lines: true, trim: true });
 
@@ -674,7 +1464,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             continue;
           }
 
-          await storage.createObjekPajak({ ...parsed.data, detailPajak: detailParsed.data });
+          const created = await storage.createObjekPajak({
+            ...parsed.data,
+            statusVerifikasi: "draft",
+            catatanVerifikasi: null,
+            verifiedAt: null,
+            verifiedBy: null,
+            detailPajak: detailParsed.data,
+          });
+          await writeAuditLog({
+            entityType: "objek_pajak",
+            entityId: created.id,
+            action: "create",
+            actorName,
+            beforeData: null,
+            afterData: created,
+            metadata: { source: "csv-import", row: i + 2 },
+          });
           success++;
         } catch (err: any) {
           failed++;
@@ -686,6 +1492,68 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err: any) {
       res.status(400).json({ message: `Gagal parsing CSV: ${err.message}` });
     }
+  });
+
+  app.patch("/api/objek-pajak/:id/verification", async (req, res) => {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ message: "ID objek pajak tidak valid" });
+    }
+
+    const existing = await storage.getObjekPajak(id);
+    if (!existing) {
+      return res.status(404).json({ message: "Objek Pajak tidak ditemukan" });
+    }
+
+    const parsed = objekPajakVerificationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.message });
+    }
+
+    const actorName = parsed.data.verifierName?.trim() || getActorName(req);
+    const now = new Date();
+    const verificationPatch =
+      parsed.data.statusVerifikasi === "verified"
+        ? {
+            statusVerifikasi: "verified" as const,
+            catatanVerifikasi: null,
+            verifiedAt: now,
+            verifiedBy: actorName,
+            updatedAt: now,
+          }
+        : parsed.data.statusVerifikasi === "rejected"
+          ? {
+              statusVerifikasi: "rejected" as const,
+              catatanVerifikasi: parsed.data.catatanVerifikasi?.trim() || null,
+              verifiedAt: null,
+              verifiedBy: actorName,
+              updatedAt: now,
+            }
+          : {
+              statusVerifikasi: "draft" as const,
+              catatanVerifikasi: null,
+              verifiedAt: null,
+              verifiedBy: null,
+              updatedAt: now,
+            };
+
+    await db.update(objekPajak).set(verificationPatch).where(eq(objekPajak.id, id));
+    const updated = await storage.getObjekPajak(id);
+    if (!updated) {
+      return res.status(500).json({ message: "Gagal memuat data OP setelah verifikasi" });
+    }
+
+    await writeAuditLog({
+      entityType: "objek_pajak",
+      entityId: id,
+      action: parsed.data.statusVerifikasi === "rejected" ? "reject" : "verify",
+      actorName,
+      beforeData: existing,
+      afterData: updated,
+      metadata: { source: "api", statusVerifikasi: parsed.data.statusVerifikasi },
+    });
+
+    res.json(updated);
   });
 
   app.get("/api/objek-pajak/:id", async (req, res) => {
@@ -709,7 +1577,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ message: detailParsed.error.message });
     }
 
-    const created = await storage.createObjekPajak({ ...parsed.data, detailPajak: detailParsed.data });
+    const created = await storage.createObjekPajak({
+      ...parsed.data,
+      statusVerifikasi: "draft",
+      catatanVerifikasi: null,
+      verifiedAt: null,
+      verifiedBy: null,
+      detailPajak: detailParsed.data,
+    });
+    await writeAuditLog({
+      entityType: "objek_pajak",
+      entityId: created.id,
+      action: "create",
+      actorName: getActorName(req),
+      beforeData: null,
+      afterData: created,
+      metadata: { source: "api" },
+    });
     res.status(201).json(created);
   });
 
@@ -738,12 +1622,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       parsed.data.detailPajak = detailParsed.data;
     }
 
+    delete (parsed.data as Record<string, unknown>).statusVerifikasi;
+    delete (parsed.data as Record<string, unknown>).catatanVerifikasi;
+    delete (parsed.data as Record<string, unknown>).verifiedAt;
+    delete (parsed.data as Record<string, unknown>).verifiedBy;
+
     const updated = await storage.updateObjekPajak(id, parsed.data);
+    await writeAuditLog({
+      entityType: "objek_pajak",
+      entityId: id,
+      action: "update",
+      actorName: getActorName(req),
+      beforeData: existing,
+      afterData: updated,
+      metadata: { source: "api" },
+    });
     res.json(updated);
   });
 
   app.delete("/api/objek-pajak/:id", async (req, res) => {
-    await storage.deleteObjekPajak(Number.parseInt(req.params.id, 10));
+    const id = Number.parseInt(req.params.id, 10);
+    const existing = await storage.getObjekPajak(id);
+    if (!existing) {
+      return res.status(404).json({ message: "Objek Pajak tidak ditemukan" });
+    }
+
+    await storage.deleteObjekPajak(id);
+    await writeAuditLog({
+      entityType: "objek_pajak",
+      entityId: id,
+      action: "delete",
+      actorName: getActorName(req),
+      beforeData: existing,
+      afterData: null,
+      metadata: { source: "api" },
+    });
     res.status(204).send();
   });
 

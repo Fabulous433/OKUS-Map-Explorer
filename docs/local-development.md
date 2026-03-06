@@ -10,52 +10,78 @@
 npm run db:up
 ```
 
-Service yang berjalan:
+Service:
 - PostgreSQL: `localhost:55432`
 - Adminer: `http://localhost:8080`
 
-Kredensial default:
+Credential default Adminer:
 - System: `PostgreSQL`
 - Server: `postgres`
 - Username: `okus_dev`
 - Password: `okus_dev`
 - Database: `okus_map_explorer`
 
-## 2) Setup environment
+## 2) Environment
 ```bash
 Copy-Item .env.example .env.local
 ```
 
-`server/env.ts` memuat `.env.local` terlebih dahulu, lalu fallback ke `.env`.
-
-## 3) Install dependency dan push schema
+## 3) Install dependency
 ```bash
 npm install
+```
+
+## 4) Apply schema
+Prioritas:
+```bash
 npm run db:push
 ```
 
-## 4) Jalankan aplikasi
+Catatan:
+- Jika `drizzle-kit push` terhenti di prompt interaktif constraint, jalankan fallback SQL:
+```bash
+docker exec -i okus-postgres psql -U okus_dev -d okus_map_explorer < script/phase-1.7-governance-quality.sql
+```
+
+## 5) Jalankan app
 ```bash
 npm run dev
 ```
-
 Aplikasi: `http://localhost:5000`
+
+---
+
+## Runbook Migrasi (Phase 1.7)
+
+### Backup penuh sebelum perubahan destruktif
+```bash
+docker exec -t okus-postgres pg_dump -U okus_dev -d okus_map_explorer > backups/pre-phase-1.7.sql
+```
+
+### Rollback manual
+```bash
+cat backups/pre-phase-1.7.sql | docker exec -i okus-postgres psql -U okus_dev -d okus_map_explorer
+```
+
+### Smoke test pasca migrasi
+```bash
+npm run check
+npm run test:integration
+```
+
+Verifikasi endpoint cepat:
+- `GET /api/master/rekening-pajak?includeInactive=true`
+- `GET /api/objek-pajak?includeUnverified=true`
+- `GET /api/audit-log?limit=5`
+- `GET /api/quality/report`
+
+---
 
 ## Operasional DB
 ```bash
-npm run db:logs    # Lihat log postgres + adminer
-npm run db:down    # Stop container
-npm run db:reset   # Hapus volume lalu start ulang (destructive)
+npm run db:logs
+npm run db:down
+npm run db:reset
 ```
 
-## Backup / Restore dasar
-Backup:
-```bash
-docker exec -t okus-postgres pg_dump -U okus_dev -d okus_map_explorer > backup.sql
-```
-
-Restore:
-```bash
-cat backup.sql | docker exec -i okus-postgres psql -U okus_dev -d okus_map_explorer
-```
-
+`db:reset` bersifat destruktif (hapus volume).

@@ -150,7 +150,7 @@ async function run() {
     assert.equal(importBody.success, 1);
     assert.equal(importBody.failed, 0);
 
-    const listAfter = await requestJson("/api/objek-pajak");
+    const listAfter = await requestJson("/api/objek-pajak?includeUnverified=true");
     assert.equal(listAfter.response.status, 200);
     assert.ok(Array.isArray(listAfter.body));
 

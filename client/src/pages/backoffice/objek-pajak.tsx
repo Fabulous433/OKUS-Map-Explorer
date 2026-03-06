@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Building2, MapPin, Trash2, Search, Edit, Crosshair, Tag, Music, DollarSign, Percent, Download, Upload } from "lucide-react";
+import { Plus, Building2, MapPin, Trash2, Search, Edit, Crosshair, Tag, Music, DollarSign, Percent, Download, Upload, History, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +41,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { MasterKecamatan, MasterKelurahan, MasterRekeningPajak, ObjekPajak, WajibPajakWithBadanUsaha } from "@shared/schema";
 import { JENIS_PAJAK_OPTIONS } from "@shared/schema";
 import BackofficeLayout from "./layout";
+import AuditHistoryDialog from "@/components/audit-history-dialog";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -65,6 +66,7 @@ const opFormSchema = z.object({
 type OPFormValues = z.infer<typeof opFormSchema>;
 type OPDetailValue = string | number | null;
 type OPDetailRecord = Record<string, OPDetailValue>;
+type QualityWarning = { level: string; code: string; message: string; relatedIds: Array<string | number> };
 
 function getDetailRecord(form: UseFormReturn<OPFormValues>): OPDetailRecord {
   const detail = form.watch("detailPajak");
@@ -182,6 +184,8 @@ function normalizeOpPayload(
     detailPajak: Object.keys(cleanDetail).length > 0 ? cleanDetail : null,
   };
 }
+
+type NormalizedOpPayload = ReturnType<typeof normalizeOpPayload>;
 
 function invalidateObjekPajakQueries() {
   queryClient.invalidateQueries({
@@ -651,6 +655,7 @@ function OPFormDialog({
 }) {
   const { toast } = useToast();
   const [showMapPicker, setShowMapPicker] = useState(false);
+  const [qualityWarnings, setQualityWarnings] = useState<QualityWarning[]>([]);
 
   const form = useForm<OPFormValues>({
     resolver: zodResolver(opFormSchema),
@@ -673,6 +678,7 @@ function OPFormDialog({
   });
 
   useEffect(() => {
+    setQualityWarnings([]);
     if (mode === "edit" && editOp) {
       form.reset({
         nopd: editOp.nopd,
@@ -696,14 +702,15 @@ function OPFormDialog({
   }, [mode, editOp, form]);
 
   const createMutation = useMutation({
-    mutationFn: async (data: OPFormValues) => {
-      const res = await apiRequest("POST", "/api/objek-pajak", normalizeOpPayload(data, rekeningList));
+    mutationFn: async (payload: NormalizedOpPayload) => {
+      const res = await apiRequest("POST", "/api/objek-pajak", payload);
       return res.json();
     },
     onSuccess: () => {
       invalidateObjekPajakQueries();
       onOpenChange(false);
       form.reset();
+      setQualityWarnings([]);
       toast({ title: "Berhasil", description: "Objek Pajak berhasil ditambahkan" });
     },
     onError: (err: Error) => {
@@ -712,13 +719,14 @@ function OPFormDialog({
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: OPFormValues) => {
-      const res = await apiRequest("PATCH", `/api/objek-pajak/${editOp!.id}`, normalizeOpPayload(data, rekeningList));
+    mutationFn: async (payload: NormalizedOpPayload) => {
+      const res = await apiRequest("PATCH", `/api/objek-pajak/${editOp!.id}`, payload);
       return res.json();
     },
     onSuccess: () => {
       invalidateObjekPajakQueries();
       onOpenChange(false);
+      setQualityWarnings([]);
       toast({ title: "Berhasil", description: "Objek Pajak berhasil diperbarui" });
     },
     onError: (err: Error) => {
@@ -735,12 +743,32 @@ function OPFormDialog({
     ? kelurahanList.filter((item) => item.cpmKodeKec === selectedKecamatanKode)
     : [];
 
-  const handleSubmit = (data: OPFormValues) => {
-    if (mode === "edit") {
-      updateMutation.mutate(data);
-    } else {
-      createMutation.mutate(data);
+  const runQualityCheck = async (payload: NormalizedOpPayload) => {
+    const candidate = {
+      nopd: payload.nopd,
+      nama: payload.namaOp,
+      alamat: payload.alamatOp,
+    };
+    const res = await apiRequest("POST", "/api/quality/check", candidate);
+    const body = (await res.json()) as { warnings?: QualityWarning[] };
+    const warnings = body.warnings ?? [];
+    setQualityWarnings(warnings);
+    return warnings;
+  };
+
+  const handleSubmit = async (data: OPFormValues) => {
+    const payload = normalizeOpPayload(data, rekeningList);
+    const warnings = await runQualityCheck(payload);
+    if (warnings.length > 0) {
+      const proceed = window.confirm(`Ditemukan ${warnings.length} warning data quality. Lanjutkan simpan?`);
+      if (!proceed) return;
     }
+
+    if (mode === "edit") {
+      updateMutation.mutate(payload);
+      return;
+    }
+    createMutation.mutate(payload);
   };
 
   return (
@@ -1019,6 +1047,16 @@ function OPFormDialog({
                 </FormItem>
               )}
             />
+            {qualityWarnings.length > 0 && (
+              <div className="border-[2px] border-orange-500 bg-orange-50 p-3 space-y-1">
+                <p className="font-mono text-xs font-bold text-orange-900">Warning Data Quality</p>
+                {qualityWarnings.map((item) => (
+                  <p key={item.code} className="font-mono text-[11px] text-orange-800">
+                    {item.code}: {item.message}
+                  </p>
+                ))}
+              </div>
+            )}
             <Button
               type="submit"
               disabled={isPending}
@@ -1037,15 +1075,21 @@ function OPFormDialog({
 export default function BackofficeObjekPajak() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editOp, setEditOp] = useState<ObjekPajak | null>(null);
+  const [auditTarget, setAuditTarget] = useState<ObjekPajak | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [verificationFilter, setVerificationFilter] = useState<string>("all");
   const [kecamatanFilterId, setKecamatanFilterId] = useState<string>("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const baseParams = new URLSearchParams();
+  baseParams.set("includeUnverified", "true");
   if (statusFilter !== "all") {
     baseParams.set("status", statusFilter);
+  }
+  if (verificationFilter !== "all") {
+    baseParams.set("statusVerifikasi", verificationFilter);
   }
   if (kecamatanFilterId !== "all") {
     baseParams.set("kecamatanId", kecamatanFilterId);
@@ -1126,6 +1170,24 @@ export default function BackofficeObjekPajak() {
     onSuccess: () => {
       invalidateObjekPajakQueries();
       toast({ title: "Berhasil", description: "Objek Pajak berhasil dihapus" });
+    },
+  });
+
+  const verificationMutation = useMutation({
+    mutationFn: async (payload: { id: number; statusVerifikasi: "verified" | "rejected"; catatanVerifikasi?: string }) => {
+      const res = await apiRequest("PATCH", `/api/objek-pajak/${payload.id}/verification`, {
+        statusVerifikasi: payload.statusVerifikasi,
+        catatanVerifikasi: payload.catatanVerifikasi ?? null,
+        verifierName: "backoffice",
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      invalidateObjekPajakQueries();
+      toast({ title: "Berhasil", description: "Status verifikasi diperbarui" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Gagal", description: err.message, variant: "destructive" });
     },
   });
 
@@ -1241,6 +1303,17 @@ export default function BackofficeObjekPajak() {
               <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={verificationFilter} onValueChange={setVerificationFilter}>
+            <SelectTrigger className="w-[210px] rounded-none border-[2px] border-black font-mono text-xs" data-testid="select-filter-verification-op">
+              <SelectValue placeholder="Filter verifikasi" />
+            </SelectTrigger>
+            <SelectContent className="rounded-none border-[2px] border-black">
+              <SelectItem value="all">Semua Verifikasi</SelectItem>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="verified">Verified</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={kecamatanFilterId} onValueChange={setKecamatanFilterId}>
             <SelectTrigger className="w-[220px] rounded-none border-[2px] border-black font-mono text-xs" data-testid="select-filter-kecamatan-op">
               <SelectValue placeholder="Filter kecamatan" />
@@ -1254,13 +1327,14 @@ export default function BackofficeObjekPajak() {
               ))}
             </SelectContent>
           </Select>
-          {(statusFilter !== "all" || kecamatanFilterId !== "all") && (
+          {(statusFilter !== "all" || verificationFilter !== "all" || kecamatanFilterId !== "all") && (
             <Button
               variant="outline"
               size="sm"
               className="rounded-none border-[2px] border-black font-mono text-xs"
               onClick={() => {
                 setStatusFilter("all");
+                setVerificationFilter("all");
                 setKecamatanFilterId("all");
               }}
               data-testid="button-reset-filter-op"
@@ -1345,6 +1419,7 @@ export default function BackofficeObjekPajak() {
                   <TableHead className="font-mono text-[10px] font-bold text-[#FFFF00] whitespace-nowrap">ALAMAT</TableHead>
                   <TableHead className="font-mono text-[10px] font-bold text-[#FFFF00] whitespace-nowrap">PAJAK/BLN</TableHead>
                   <TableHead className="font-mono text-[10px] font-bold text-[#FFFF00] whitespace-nowrap">STATUS</TableHead>
+                  <TableHead className="font-mono text-[10px] font-bold text-[#FFFF00] whitespace-nowrap">VERIFIKASI</TableHead>
                   <TableHead className="font-mono text-[10px] font-bold text-[#FFFF00] whitespace-nowrap">DETAIL</TableHead>
                   <TableHead className="font-mono text-[10px] font-bold text-[#FFFF00] whitespace-nowrap">AKSI</TableHead>
                 </TableRow>
@@ -1401,6 +1476,19 @@ export default function BackofficeObjekPajak() {
                         </Badge>
                       </TableCell>
                       <TableCell>
+                        <Badge
+                          className={`rounded-none border-[2px] border-black font-mono text-[10px] no-default-hover-elevate no-default-active-elevate ${
+                            op.statusVerifikasi === "verified"
+                              ? "bg-green-100 text-green-800 border-green-700"
+                              : op.statusVerifikasi === "rejected"
+                                ? "bg-red-100 text-red-800 border-red-700"
+                                : "bg-yellow-100 text-yellow-800 border-yellow-700"
+                          }`}
+                        >
+                          {op.statusVerifikasi.toUpperCase()}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
                         {hasDetail ? (
                           <Badge className="rounded-none border-[2px] border-green-600 bg-green-100 text-green-800 font-mono text-[10px] no-default-hover-elevate no-default-active-elevate" data-testid={`badge-detail-ok-${op.id}`}>
                             LENGKAP
@@ -1425,6 +1513,37 @@ export default function BackofficeObjekPajak() {
                           <Button
                             size="icon"
                             variant="ghost"
+                            className="rounded-none border-[2px] border-green-700 no-default-hover-elevate no-default-active-elevate"
+                            onClick={() => verificationMutation.mutate({ id: op.id, statusVerifikasi: "verified" })}
+                            data-testid={`button-verify-op-${op.id}`}
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 text-green-700" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="rounded-none border-[2px] border-red-700 no-default-hover-elevate no-default-active-elevate"
+                            onClick={() => {
+                              const note = window.prompt("Masukkan catatan penolakan:");
+                              if (!note) return;
+                              verificationMutation.mutate({ id: op.id, statusVerifikasi: "rejected", catatanVerifikasi: note });
+                            }}
+                            data-testid={`button-reject-op-${op.id}`}
+                          >
+                            <XCircle className="w-3.5 h-3.5 text-red-700" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="rounded-none border-[2px] border-black no-default-hover-elevate no-default-active-elevate"
+                            onClick={() => setAuditTarget(op)}
+                            data-testid={`button-audit-op-${op.id}`}
+                          >
+                            <History className="w-3.5 h-3.5 text-black" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
                             className="rounded-none no-default-hover-elevate no-default-active-elevate"
                             onClick={() => deleteMutation.mutate(op.id)}
                             data-testid={`button-delete-op-${op.id}`}
@@ -1440,6 +1559,13 @@ export default function BackofficeObjekPajak() {
             </Table>
           </div>
         )}
+        <AuditHistoryDialog
+          open={!!auditTarget}
+          onOpenChange={(open) => !open && setAuditTarget(null)}
+          entityType="objek_pajak"
+          entityId={auditTarget?.id ?? null}
+          title="Riwayat Perubahan Objek Pajak"
+        />
       </div>
     </BackofficeLayout>
   );
