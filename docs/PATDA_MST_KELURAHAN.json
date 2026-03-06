@@ -1,0 +1,1562 @@
+[
+  {
+    "CPM_KEL_ID": "1609001001",
+    "CPM_KELURAHAN": "Pulau Kemiling",
+    "CPM_KODE_KEC": "01",
+    "CPM_KODE_KEL": "01"
+  },
+  {
+    "CPM_KEL_ID": "1609001002",
+    "CPM_KELURAHAN": "Siring Alam",
+    "CPM_KODE_KEC": "01",
+    "CPM_KODE_KEL": "02"
+  },
+  {
+    "CPM_KEL_ID": "1609001003",
+    "CPM_KELURAHAN": "Pengandonan",
+    "CPM_KODE_KEC": "01",
+    "CPM_KODE_KEL": "03"
+  },
+  {
+    "CPM_KEL_ID": "1609001004",
+    "CPM_KELURAHAN": "Pius",
+    "CPM_KODE_KEC": "01",
+    "CPM_KODE_KEL": "04"
+  },
+  {
+    "CPM_KEL_ID": "1609001005",
+    "CPM_KELURAHAN": "Keban Agung",
+    "CPM_KODE_KEC": "01",
+    "CPM_KODE_KEL": "05"
+  },
+  {
+    "CPM_KEL_ID": "1609001006",
+    "CPM_KELURAHAN": "Muara Sindang",
+    "CPM_KODE_KEC": "01",
+    "CPM_KODE_KEL": "06"
+  },
+  {
+    "CPM_KEL_ID": "1609001007",
+    "CPM_KELURAHAN": "Simpang Campang",
+    "CPM_KODE_KEC": "01",
+    "CPM_KODE_KEL": "07"
+  },
+  {
+    "CPM_KEL_ID": "1609001070",
+    "CPM_KELURAHAN": "Campang Jaya",
+    "CPM_KODE_KEC": "01",
+    "CPM_KODE_KEL": "70"
+  },
+  {
+    "CPM_KEL_ID": "1609001071",
+    "CPM_KELURAHAN": "Tanjung Jati",
+    "CPM_KODE_KEC": "01",
+    "CPM_KODE_KEL": "71"
+  },
+  {
+    "CPM_KEL_ID": "1609002001",
+    "CPM_KELURAHAN": "Kota Batu",
+    "CPM_KODE_KEC": "02",
+    "CPM_KODE_KEL": "01"
+  },
+  {
+    "CPM_KEL_ID": "1609002002",
+    "CPM_KELURAHAN": "Sukajaya",
+    "CPM_KODE_KEC": "02",
+    "CPM_KODE_KEL": "02"
+  },
+  {
+    "CPM_KEL_ID": "1609002003",
+    "CPM_KELURAHAN": "Tanjung Jati",
+    "CPM_KODE_KEC": "02",
+    "CPM_KODE_KEL": "03"
+  },
+  {
+    "CPM_KEL_ID": "1609002004",
+    "CPM_KELURAHAN": "Pagar Dewa",
+    "CPM_KODE_KEC": "02",
+    "CPM_KODE_KEL": "04"
+  },
+  {
+    "CPM_KEL_ID": "1609002005",
+    "CPM_KELURAHAN": "Pilla",
+    "CPM_KODE_KEC": "02",
+    "CPM_KODE_KEL": "05"
+  },
+  {
+    "CPM_KEL_ID": "1609002006",
+    "CPM_KELURAHAN": "Gunung Aji",
+    "CPM_KODE_KEC": "02",
+    "CPM_KODE_KEL": "06"
+  },
+  {
+    "CPM_KEL_ID": "1609002008",
+    "CPM_KELURAHAN": "Gunung Raya",
+    "CPM_KODE_KEC": "02",
+    "CPM_KODE_KEL": "08"
+  },
+  {
+    "CPM_KEL_ID": "1609002009",
+    "CPM_KELURAHAN": "Remanam Jaya",
+    "CPM_KODE_KEC": "02",
+    "CPM_KODE_KEL": "09"
+  },
+  {
+    "CPM_KEL_ID": "1609002010",
+    "CPM_KELURAHAN": "Mekar Sari",
+    "CPM_KODE_KEC": "02",
+    "CPM_KODE_KEL": "10"
+  },
+  {
+    "CPM_KEL_ID": "1609002011",
+    "CPM_KELURAHAN": "Kiwis Raya",
+    "CPM_KODE_KEC": "02",
+    "CPM_KODE_KEL": "11"
+  },
+  {
+    "CPM_KEL_ID": "1609002013",
+    "CPM_KELURAHAN": "Segigok Raya",
+    "CPM_KODE_KEC": "02",
+    "CPM_KODE_KEL": "13"
+  },
+  {
+    "CPM_KEL_ID": "1609002014",
+    "CPM_KELURAHAN": "Bumi Agung",
+    "CPM_KODE_KEC": "02",
+    "CPM_KODE_KEL": "14"
+  },
+  {
+    "CPM_KEL_ID": "1609002015",
+    "CPM_KELURAHAN": "Gedung Ranau",
+    "CPM_KODE_KEC": "02",
+    "CPM_KODE_KEL": "15"
+  },
+  {
+    "CPM_KEL_ID": "1609002016",
+    "CPM_KELURAHAN": "Bedeng Tiga",
+    "CPM_KODE_KEC": "02",
+    "CPM_KODE_KEL": "16"
+  },
+  {
+    "CPM_KEL_ID": "1609002017",
+    "CPM_KELURAHAN": "Tanjung Baru Warkuk",
+    "CPM_KODE_KEC": "02",
+    "CPM_KODE_KEL": "17"
+  },
+  {
+    "CPM_KEL_ID": "1609002018",
+    "CPM_KELURAHAN": "Way Wangi Seminung",
+    "CPM_KODE_KEC": "02",
+    "CPM_KODE_KEL": "18"
+  },
+  {
+    "CPM_KEL_ID": "1609003001",
+    "CPM_KELURAHAN": "Air Baru",
+    "CPM_KODE_KEC": "03",
+    "CPM_KODE_KEL": "01"
+  },
+  {
+    "CPM_KEL_ID": "1609003002",
+    "CPM_KELURAHAN": "Merpang",
+    "CPM_KODE_KEC": "03",
+    "CPM_KODE_KEL": "02"
+  },
+  {
+    "CPM_KEL_ID": "1609003003",
+    "CPM_KELURAHAN": "Gedung Wani",
+    "CPM_KODE_KEC": "03",
+    "CPM_KODE_KEL": "03"
+  },
+  {
+    "CPM_KEL_ID": "1609003004",
+    "CPM_KELURAHAN": "Bumi Genap",
+    "CPM_KODE_KEC": "03",
+    "CPM_KODE_KEL": "04"
+  },
+  {
+    "CPM_KEL_ID": "1609003005",
+    "CPM_KELURAHAN": "Penanggungan",
+    "CPM_KODE_KEC": "03",
+    "CPM_KODE_KEL": "05"
+  },
+  {
+    "CPM_KEL_ID": "1609003006",
+    "CPM_KELURAHAN": "Tanjung Kurung",
+    "CPM_KODE_KEC": "03",
+    "CPM_KODE_KEL": "06"
+  },
+  {
+    "CPM_KEL_ID": "1609003007",
+    "CPM_KELURAHAN": "Karang Endah",
+    "CPM_KODE_KEC": "03",
+    "CPM_KODE_KEL": "07"
+  },
+  {
+    "CPM_KEL_ID": "1609003008",
+    "CPM_KELURAHAN": "Gedung Nyawa",
+    "CPM_KODE_KEC": "03",
+    "CPM_KODE_KEL": "08"
+  },
+  {
+    "CPM_KEL_ID": "1609003009",
+    "CPM_KELURAHAN": "Sura",
+    "CPM_KODE_KEC": "03",
+    "CPM_KODE_KEL": "09"
+  },
+  {
+    "CPM_KEL_ID": "1609004001",
+    "CPM_KELURAHAN": "Simpang Luas",
+    "CPM_KODE_KEC": "04",
+    "CPM_KODE_KEL": "01"
+  },
+  {
+    "CPM_KEL_ID": "1609004010",
+    "CPM_KELURAHAN": "Pulau Kemuning",
+    "CPM_KODE_KEC": "04",
+    "CPM_KODE_KEL": "10"
+  },
+  {
+    "CPM_KEL_ID": "1609004011",
+    "CPM_KELURAHAN": "Cukoh Nau",
+    "CPM_KODE_KEC": "04",
+    "CPM_KODE_KEL": "11"
+  },
+  {
+    "CPM_KEL_ID": "1609004012",
+    "CPM_KELURAHAN": "Ujan Mas",
+    "CPM_KODE_KEC": "04",
+    "CPM_KODE_KEL": "12"
+  },
+  {
+    "CPM_KEL_ID": "1609004013",
+    "CPM_KELURAHAN": "Sadau Jaya",
+    "CPM_KODE_KEC": "04",
+    "CPM_KODE_KEL": "13"
+  },
+  {
+    "CPM_KEL_ID": "1609004014",
+    "CPM_KELURAHAN": "Guntung Jaya",
+    "CPM_KODE_KEC": "04",
+    "CPM_KODE_KEL": "14"
+  },
+  {
+    "CPM_KEL_ID": "1609004015",
+    "CPM_KELURAHAN": "Tanah Pilih",
+    "CPM_KODE_KEC": "04",
+    "CPM_KODE_KEL": "15"
+  },
+  {
+    "CPM_KEL_ID": "1609004016",
+    "CPM_KELURAHAN": "Pecah Pinggan",
+    "CPM_KODE_KEC": "04",
+    "CPM_KODE_KEL": "16"
+  },
+  {
+    "CPM_KEL_ID": "1609004018",
+    "CPM_KELURAHAN": "Sebaja",
+    "CPM_KODE_KEC": "04",
+    "CPM_KODE_KEL": "18"
+  },
+  {
+    "CPM_KEL_ID": "1609005001",
+    "CPM_KELURAHAN": "Muara Sindang Ilir",
+    "CPM_KODE_KEC": "05",
+    "CPM_KODE_KEL": "01"
+  },
+  {
+    "CPM_KEL_ID": "1609005002",
+    "CPM_KELURAHAN": "Tanjung Harapan",
+    "CPM_KODE_KEC": "05",
+    "CPM_KODE_KEL": "02"
+  },
+  {
+    "CPM_KEL_ID": "1609005003",
+    "CPM_KELURAHAN": "Ulu Danau",
+    "CPM_KODE_KEC": "05",
+    "CPM_KODE_KEL": "03"
+  },
+  {
+    "CPM_KEL_ID": "1609005004",
+    "CPM_KELURAHAN": "Watas",
+    "CPM_KODE_KEC": "05",
+    "CPM_KODE_KEL": "04"
+  },
+  {
+    "CPM_KEL_ID": "1609005005",
+    "CPM_KELURAHAN": "Tebat Layang",
+    "CPM_KODE_KEC": "05",
+    "CPM_KODE_KEL": "05"
+  },
+  {
+    "CPM_KEL_ID": "1609005017",
+    "CPM_KELURAHAN": "Muara Sindang Tengah",
+    "CPM_KODE_KEC": "05",
+    "CPM_KODE_KEL": "17"
+  },
+  {
+    "CPM_KEL_ID": "1609005018",
+    "CPM_KELURAHAN": "Pematang Danau",
+    "CPM_KODE_KEC": "05",
+    "CPM_KODE_KEL": "18"
+  },
+  {
+    "CPM_KEL_ID": "1609006001",
+    "CPM_KELURAHAN": "Sukabumi",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "01"
+  },
+  {
+    "CPM_KEL_ID": "1609006002",
+    "CPM_KELURAHAN": "Tanjung Sari",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "02"
+  },
+  {
+    "CPM_KEL_ID": "1609006003",
+    "CPM_KELURAHAN": "Padang Ratu",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "03"
+  },
+  {
+    "CPM_KEL_ID": "1609006004",
+    "CPM_KELURAHAN": "Gedung Baru",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "04"
+  },
+  {
+    "CPM_KEL_ID": "1609006005",
+    "CPM_KELURAHAN": "Tanjung Setia",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "05"
+  },
+  {
+    "CPM_KEL_ID": "1609006006",
+    "CPM_KELURAHAN": "Simpang Sender",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "06"
+  },
+  {
+    "CPM_KEL_ID": "1609006007",
+    "CPM_KELURAHAN": "Sumber Mulia",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "07"
+  },
+  {
+    "CPM_KEL_ID": "1609006008",
+    "CPM_KELURAHAN": "Sukarami",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "08"
+  },
+  {
+    "CPM_KEL_ID": "1609006010",
+    "CPM_KELURAHAN": "Hangkusa",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "10"
+  },
+  {
+    "CPM_KEL_ID": "1609006011",
+    "CPM_KELURAHAN": "Jepara",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "11"
+  },
+  {
+    "CPM_KEL_ID": "1609006012",
+    "CPM_KELURAHAN": "Subik",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "12"
+  },
+  {
+    "CPM_KEL_ID": "1609006013",
+    "CPM_KELURAHAN": "Sukamarga",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "13"
+  },
+  {
+    "CPM_KEL_ID": "1609006014",
+    "CPM_KELURAHAN": "Tanjung Kemala",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "14"
+  },
+  {
+    "CPM_KEL_ID": "1609006015",
+    "CPM_KELURAHAN": "Sumber Jaya",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "15"
+  },
+  {
+    "CPM_KEL_ID": "1609006016",
+    "CPM_KELURAHAN": "Wayrelai",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "16"
+  },
+  {
+    "CPM_KEL_ID": "1609006017",
+    "CPM_KELURAHAN": "Tanjung Baru Ranau",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "17"
+  },
+  {
+    "CPM_KEL_ID": "1609006018",
+    "CPM_KELURAHAN": "Simpang Sender Selatan",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "18"
+  },
+  {
+    "CPM_KEL_ID": "1609006019",
+    "CPM_KELURAHAN": "Simpang Sender Utara",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "19"
+  },
+  {
+    "CPM_KEL_ID": "1609006020",
+    "CPM_KELURAHAN": "Simpang Sender Timur",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "20"
+  },
+  {
+    "CPM_KEL_ID": "1609006021",
+    "CPM_KELURAHAN": "Simpang Sender Tengah",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "21"
+  },
+  {
+    "CPM_KEL_ID": "1609006022",
+    "CPM_KELURAHAN": "Serumpun Jaya",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "22"
+  },
+  {
+    "CPM_KEL_ID": "1609006023",
+    "CPM_KELURAHAN": "Pakhda Suka",
+    "CPM_KODE_KEC": "06",
+    "CPM_KODE_KEL": "23"
+  },
+  {
+    "CPM_KEL_ID": "1609010020",
+    "CPM_KELURAHAN": "Way Timah",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "20"
+  },
+  {
+    "CPM_KEL_ID": "1609010021",
+    "CPM_KELURAHAN": "Sipatuhu",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "21"
+  },
+  {
+    "CPM_KEL_ID": "1609010022",
+    "CPM_KELURAHAN": "Banding Agung",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "22"
+  },
+  {
+    "CPM_KEL_ID": "1609010023",
+    "CPM_KELURAHAN": "Surabaya",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "23"
+  },
+  {
+    "CPM_KEL_ID": "1609010024",
+    "CPM_KELURAHAN": "Bandar Agung",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "24"
+  },
+  {
+    "CPM_KEL_ID": "1609010025",
+    "CPM_KELURAHAN": "Suka Negeri",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "25"
+  },
+  {
+    "CPM_KEL_ID": "1609010026",
+    "CPM_KELURAHAN": "Sugih Waras",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "26"
+  },
+  {
+    "CPM_KEL_ID": "1609010027",
+    "CPM_KELURAHAN": "Rantau Nipis",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "27"
+  },
+  {
+    "CPM_KEL_ID": "1609010028",
+    "CPM_KELURAHAN": "Air Rupik",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "28"
+  },
+  {
+    "CPM_KEL_ID": "1609010029",
+    "CPM_KELURAHAN": "Terap Mulia",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "29"
+  },
+  {
+    "CPM_KEL_ID": "1609010030",
+    "CPM_KELURAHAN": "Sipatuhu II",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "30"
+  },
+  {
+    "CPM_KEL_ID": "1609010031",
+    "CPM_KELURAHAN": "Sidodadi",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "31"
+  },
+  {
+    "CPM_KEL_ID": "1609010032",
+    "CPM_KELURAHAN": "Talang Merbau",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "32"
+  },
+  {
+    "CPM_KEL_ID": "1609010033",
+    "CPM_KELURAHAN": "Penantian",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "33"
+  },
+  {
+    "CPM_KEL_ID": "1609010034",
+    "CPM_KELURAHAN": "Sukamaju",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "34"
+  },
+  {
+    "CPM_KEL_ID": "1609010035",
+    "CPM_KELURAHAN": "Surabaya Timur",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "35"
+  },
+  {
+    "CPM_KEL_ID": "1609010036",
+    "CPM_KELURAHAN": "Tangsi Agung",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "36"
+  },
+  {
+    "CPM_KEL_ID": "1609010038",
+    "CPM_KELURAHAN": "Tanjung Agung",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "38"
+  },
+  {
+    "CPM_KEL_ID": "1609010039",
+    "CPM_KELURAHAN": "Sumber Makmur",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "39"
+  },
+  {
+    "CPM_KEL_ID": "1609010040",
+    "CPM_KELURAHAN": "Karang Indah",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "40"
+  },
+  {
+    "CPM_KEL_ID": "1609010041",
+    "CPM_KELURAHAN": "Telanai",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "41"
+  },
+  {
+    "CPM_KEL_ID": "1609010042",
+    "CPM_KELURAHAN": "Tanjung Harapan",
+    "CPM_KODE_KEC": "10",
+    "CPM_KODE_KEL": "42"
+  },
+  {
+    "CPM_KEL_ID": "1609011028",
+    "CPM_KELURAHAN": "Kota Dalam",
+    "CPM_KODE_KEC": "11",
+    "CPM_KODE_KEL": "28"
+  },
+  {
+    "CPM_KEL_ID": "1609011029",
+    "CPM_KELURAHAN": "Teluk Agung",
+    "CPM_KODE_KEC": "11",
+    "CPM_KODE_KEL": "29"
+  },
+  {
+    "CPM_KEL_ID": "1609011030",
+    "CPM_KELURAHAN": "Tanjung Besar",
+    "CPM_KODE_KEC": "11",
+    "CPM_KODE_KEL": "30"
+  },
+  {
+    "CPM_KEL_ID": "1609011031",
+    "CPM_KELURAHAN": "Pulau Duku",
+    "CPM_KODE_KEC": "11",
+    "CPM_KODE_KEL": "31"
+  },
+  {
+    "CPM_KEL_ID": "1609011032",
+    "CPM_KELURAHAN": "Sinar Marga",
+    "CPM_KODE_KEC": "11",
+    "CPM_KODE_KEL": "32"
+  },
+  {
+    "CPM_KEL_ID": "1609011033",
+    "CPM_KELURAHAN": "Kota Baru",
+    "CPM_KODE_KEC": "11",
+    "CPM_KODE_KEL": "33"
+  },
+  {
+    "CPM_KEL_ID": "1609011034",
+    "CPM_KELURAHAN": "Galang Tinggi",
+    "CPM_KODE_KEC": "11",
+    "CPM_KODE_KEL": "34"
+  },
+  {
+    "CPM_KEL_ID": "1609011035",
+    "CPM_KELURAHAN": "Sukaraja",
+    "CPM_KODE_KEC": "11",
+    "CPM_KODE_KEL": "35"
+  },
+  {
+    "CPM_KEL_ID": "1609011036",
+    "CPM_KELURAHAN": "Sri Menanti",
+    "CPM_KODE_KEC": "11",
+    "CPM_KODE_KEL": "36"
+  },
+  {
+    "CPM_KEL_ID": "1609011037",
+    "CPM_KELURAHAN": "Bunut",
+    "CPM_KODE_KEC": "11",
+    "CPM_KODE_KEL": "37"
+  },
+  {
+    "CPM_KEL_ID": "1609011038",
+    "CPM_KELURAHAN": "Kemang Bandung",
+    "CPM_KODE_KEC": "11",
+    "CPM_KODE_KEL": "38"
+  },
+  {
+    "CPM_KEL_ID": "1609011039",
+    "CPM_KELURAHAN": "Kepayang",
+    "CPM_KODE_KEC": "11",
+    "CPM_KODE_KEL": "39"
+  },
+  {
+    "CPM_KEL_ID": "1609011041",
+    "CPM_KELURAHAN": "Perean",
+    "CPM_KODE_KEC": "11",
+    "CPM_KODE_KEL": "41"
+  },
+  {
+    "CPM_KEL_ID": "1609011042",
+    "CPM_KELURAHAN": "Selabung Belimbing Jaya",
+    "CPM_KODE_KEC": "11",
+    "CPM_KODE_KEL": "42"
+  },
+  {
+    "CPM_KEL_ID": "1609011043",
+    "CPM_KELURAHAN": "Air Baru",
+    "CPM_KODE_KEC": "11",
+    "CPM_KODE_KEL": "43"
+  },
+  {
+    "CPM_KEL_ID": "1609020002",
+    "CPM_KELURAHAN": "Pagar Agung",
+    "CPM_KODE_KEC": "20",
+    "CPM_KODE_KEL": "02"
+  },
+  {
+    "CPM_KEL_ID": "1609020003",
+    "CPM_KELURAHAN": "Gunung Batu",
+    "CPM_KODE_KEC": "20",
+    "CPM_KODE_KEL": "03"
+  },
+  {
+    "CPM_KEL_ID": "1609020004",
+    "CPM_KELURAHAN": "Kemu",
+    "CPM_KODE_KEC": "20",
+    "CPM_KODE_KEL": "04"
+  },
+  {
+    "CPM_KEL_ID": "1609020005",
+    "CPM_KELURAHAN": "Simpang Pancur",
+    "CPM_KODE_KEC": "20",
+    "CPM_KODE_KEL": "05"
+  },
+  {
+    "CPM_KEL_ID": "1609020006",
+    "CPM_KELURAHAN": "Tanjung Kari",
+    "CPM_KODE_KEC": "20",
+    "CPM_KODE_KEL": "06"
+  },
+  {
+    "CPM_KEL_ID": "1609020007",
+    "CPM_KELURAHAN": "Aromantai",
+    "CPM_KODE_KEC": "20",
+    "CPM_KODE_KEL": "07"
+  },
+  {
+    "CPM_KEL_ID": "1609020008",
+    "CPM_KELURAHAN": "Pulau Beringin",
+    "CPM_KODE_KEC": "20",
+    "CPM_KODE_KEL": "08"
+  },
+  {
+    "CPM_KEL_ID": "1609020009",
+    "CPM_KELURAHAN": "Tanjung Bulan",
+    "CPM_KODE_KEC": "20",
+    "CPM_KODE_KEL": "09"
+  },
+  {
+    "CPM_KEL_ID": "1609020010",
+    "CPM_KELURAHAN": "Pematang Obar",
+    "CPM_KODE_KEC": "20",
+    "CPM_KODE_KEL": "10"
+  },
+  {
+    "CPM_KEL_ID": "1609020011",
+    "CPM_KELURAHAN": "Pulau Beringin Utara",
+    "CPM_KODE_KEC": "20",
+    "CPM_KODE_KEL": "11"
+  },
+  {
+    "CPM_KEL_ID": "1609020064",
+    "CPM_KELURAHAN": "Kemu Ulu",
+    "CPM_KODE_KEC": "20",
+    "CPM_KODE_KEL": "64"
+  },
+  {
+    "CPM_KEL_ID": "1609020065",
+    "CPM_KELURAHAN": "Anugrah Kemu",
+    "CPM_KODE_KEC": "20",
+    "CPM_KODE_KEL": "65"
+  },
+  {
+    "CPM_KEL_ID": "1609020066",
+    "CPM_KELURAHAN": "Tanjung Bulan Ulu",
+    "CPM_KODE_KEC": "20",
+    "CPM_KODE_KEL": "66"
+  },
+  {
+    "CPM_KEL_ID": "1609030001",
+    "CPM_KELURAHAN": "Lawang Agung",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "01"
+  },
+  {
+    "CPM_KEL_ID": "1609030002",
+    "CPM_KELURAHAN": "Bayur Tengah",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "02"
+  },
+  {
+    "CPM_KEL_ID": "1609030003",
+    "CPM_KELURAHAN": "Tanjung Tebat",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "03"
+  },
+  {
+    "CPM_KEL_ID": "1609030004",
+    "CPM_KELURAHAN": "Sugihan",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "04"
+  },
+  {
+    "CPM_KEL_ID": "1609030005",
+    "CPM_KELURAHAN": "Penyandingan",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "05"
+  },
+  {
+    "CPM_KEL_ID": "1609030006",
+    "CPM_KELURAHAN": "Alun Dua",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "06"
+  },
+  {
+    "CPM_KEL_ID": "1609030007",
+    "CPM_KELURAHAN": "Dusun Tengah",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "07"
+  },
+  {
+    "CPM_KEL_ID": "1609030008",
+    "CPM_KELURAHAN": "Ulak Agung Ilir",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "08"
+  },
+  {
+    "CPM_KEL_ID": "1609030009",
+    "CPM_KELURAHAN": "Bandar Alam Baru",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "09"
+  },
+  {
+    "CPM_KEL_ID": "1609030010",
+    "CPM_KELURAHAN": "Gunung Gare",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "10"
+  },
+  {
+    "CPM_KEL_ID": "1609030018",
+    "CPM_KELURAHAN": "Tanjung Beringin",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "18"
+  },
+  {
+    "CPM_KEL_ID": "1609030019",
+    "CPM_KELURAHAN": "Ulak Agung Ulu",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "19"
+  },
+  {
+    "CPM_KEL_ID": "1609030020",
+    "CPM_KELURAHAN": "Muaradua Kisam",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "20"
+  },
+  {
+    "CPM_KEL_ID": "1609030021",
+    "CPM_KELURAHAN": "Pagar Dewa",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "21"
+  },
+  {
+    "CPM_KEL_ID": "1609030022",
+    "CPM_KELURAHAN": "Sukananti",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "22"
+  },
+  {
+    "CPM_KEL_ID": "1609030029",
+    "CPM_KELURAHAN": "Suka Raja",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "29"
+  },
+  {
+    "CPM_KEL_ID": "1609030030",
+    "CPM_KELURAHAN": "Penantian",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "30"
+  },
+  {
+    "CPM_KEL_ID": "1609030040",
+    "CPM_KELURAHAN": "Simpang Lubuk Dalam",
+    "CPM_KODE_KEC": "30",
+    "CPM_KODE_KEL": "40"
+  },
+  {
+    "CPM_KEL_ID": "1609031001",
+    "CPM_KELURAHAN": "Tenang",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "01"
+  },
+  {
+    "CPM_KEL_ID": "1609031002",
+    "CPM_KELURAHAN": "Balaian",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "02"
+  },
+  {
+    "CPM_KEL_ID": "1609031003",
+    "CPM_KELURAHAN": "Berasang",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "03"
+  },
+  {
+    "CPM_KEL_ID": "1609031004",
+    "CPM_KELURAHAN": "Tebat Gabus",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "04"
+  },
+  {
+    "CPM_KEL_ID": "1609031005",
+    "CPM_KELURAHAN": "Padang Lay",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "05"
+  },
+  {
+    "CPM_KEL_ID": "1609031006",
+    "CPM_KELURAHAN": "Danau Rata",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "06"
+  },
+  {
+    "CPM_KEL_ID": "1609031007",
+    "CPM_KELURAHAN": "Pajar Bulan",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "07"
+  },
+  {
+    "CPM_KEL_ID": "1609031008",
+    "CPM_KELURAHAN": "Bandar Alam Lama",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "08"
+  },
+  {
+    "CPM_KEL_ID": "1609031009",
+    "CPM_KELURAHAN": "Siring Agung",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "09"
+  },
+  {
+    "CPM_KEL_ID": "1609031010",
+    "CPM_KELURAHAN": "Muara Payang",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "10"
+  },
+  {
+    "CPM_KEL_ID": "1609031011",
+    "CPM_KELURAHAN": "Kota Padang",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "11"
+  },
+  {
+    "CPM_KEL_ID": "1609031012",
+    "CPM_KELURAHAN": "Padang Bindu",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "12"
+  },
+  {
+    "CPM_KEL_ID": "1609031013",
+    "CPM_KELURAHAN": "Gunung Megang",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "13"
+  },
+  {
+    "CPM_KEL_ID": "1609031014",
+    "CPM_KELURAHAN": "Ulak Pandan",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "14"
+  },
+  {
+    "CPM_KEL_ID": "1609031015",
+    "CPM_KELURAHAN": "Pulau Panggung",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "15"
+  },
+  {
+    "CPM_KEL_ID": "1609031016",
+    "CPM_KELURAHAN": "Simpang Tiga",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "16"
+  },
+  {
+    "CPM_KEL_ID": "1609031017",
+    "CPM_KELURAHAN": "Air Alun",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "17"
+  },
+  {
+    "CPM_KEL_ID": "1609031018",
+    "CPM_KELURAHAN": "Singa Laga",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "18"
+  },
+  {
+    "CPM_KEL_ID": "1609031019",
+    "CPM_KELURAHAN": "Simpang Empat",
+    "CPM_KODE_KEC": "31",
+    "CPM_KODE_KEL": "19"
+  },
+  {
+    "CPM_KEL_ID": "1609040001",
+    "CPM_KELURAHAN": "Batu Belang Jaya",
+    "CPM_KODE_KEC": "40",
+    "CPM_KODE_KEL": "01"
+  },
+  {
+    "CPM_KEL_ID": "1609040012",
+    "CPM_KELURAHAN": "Suka Banjar",
+    "CPM_KODE_KEC": "40",
+    "CPM_KODE_KEL": "12"
+  },
+  {
+    "CPM_KEL_ID": "1609040013",
+    "CPM_KELURAHAN": "Sukaraja II",
+    "CPM_KODE_KEC": "40",
+    "CPM_KODE_KEL": "13"
+  },
+  {
+    "CPM_KEL_ID": "1609040015",
+    "CPM_KELURAHAN": "Pelangki",
+    "CPM_KODE_KEC": "40",
+    "CPM_KODE_KEL": "15"
+  },
+  {
+    "CPM_KEL_ID": "1609040017",
+    "CPM_KELURAHAN": "Bumi Agung",
+    "CPM_KODE_KEC": "40",
+    "CPM_KODE_KEL": "17"
+  },
+  {
+    "CPM_KEL_ID": "1609040018",
+    "CPM_KELURAHAN": "Gunung Tiga",
+    "CPM_KODE_KEC": "40",
+    "CPM_KODE_KEL": "18"
+  },
+  {
+    "CPM_KEL_ID": "1609040019",
+    "CPM_KELURAHAN": "Gedung Lepihan",
+    "CPM_KODE_KEC": "40",
+    "CPM_KODE_KEL": "19"
+  },
+  {
+    "CPM_KEL_ID": "1609040054",
+    "CPM_KELURAHAN": "Mehanggin",
+    "CPM_KODE_KEC": "40",
+    "CPM_KODE_KEL": "54"
+  },
+  {
+    "CPM_KEL_ID": "1609040055",
+    "CPM_KELURAHAN": "Pendagan",
+    "CPM_KODE_KEC": "40",
+    "CPM_KODE_KEL": "55"
+  },
+  {
+    "CPM_KEL_ID": "1609040057",
+    "CPM_KELURAHAN": "Pancur Pungah",
+    "CPM_KODE_KEC": "40",
+    "CPM_KODE_KEL": "57"
+  },
+  {
+    "CPM_KEL_ID": "1609040058",
+    "CPM_KELURAHAN": "Kisau",
+    "CPM_KODE_KEC": "40",
+    "CPM_KODE_KEL": "58"
+  },
+  {
+    "CPM_KEL_ID": "1609040059",
+    "CPM_KELURAHAN": "Pasar Muaradua",
+    "CPM_KODE_KEC": "40",
+    "CPM_KODE_KEL": "59"
+  },
+  {
+    "CPM_KEL_ID": "1609040063",
+    "CPM_KELURAHAN": "Datar",
+    "CPM_KODE_KEC": "40",
+    "CPM_KODE_KEL": "63"
+  },
+  {
+    "CPM_KEL_ID": "1609040064",
+    "CPM_KELURAHAN": "Batu Belang 2",
+    "CPM_KODE_KEC": "40",
+    "CPM_KODE_KEL": "64"
+  },
+  {
+    "CPM_KEL_ID": "1609041020",
+    "CPM_KELURAHAN": "Gunung Terang",
+    "CPM_KODE_KEC": "41",
+    "CPM_KODE_KEL": "20"
+  },
+  {
+    "CPM_KEL_ID": "1609041021",
+    "CPM_KELURAHAN": "Suka Rame",
+    "CPM_KODE_KEC": "41",
+    "CPM_KODE_KEL": "21"
+  },
+  {
+    "CPM_KEL_ID": "1609041022",
+    "CPM_KELURAHAN": "Tanjung Raya",
+    "CPM_KODE_KEC": "41",
+    "CPM_KODE_KEL": "22"
+  },
+  {
+    "CPM_KEL_ID": "1609041024",
+    "CPM_KELURAHAN": "Tanjung Menang Ilir",
+    "CPM_KODE_KEC": "41",
+    "CPM_KODE_KEL": "24"
+  },
+  {
+    "CPM_KEL_ID": "1609041025",
+    "CPM_KELURAHAN": "Tanjung Menang Ulu",
+    "CPM_KODE_KEC": "41",
+    "CPM_KODE_KEL": "25"
+  },
+  {
+    "CPM_KEL_ID": "1609041026",
+    "CPM_KELURAHAN": "Kenali",
+    "CPM_KODE_KEC": "41",
+    "CPM_KODE_KEL": "26"
+  },
+  {
+    "CPM_KEL_ID": "1609041027",
+    "CPM_KELURAHAN": "Negeri Cahya",
+    "CPM_KODE_KEC": "41",
+    "CPM_KODE_KEL": "27"
+  },
+  {
+    "CPM_KEL_ID": "1609041028",
+    "CPM_KELURAHAN": "Sukaraja I",
+    "CPM_KODE_KEC": "41",
+    "CPM_KODE_KEL": "28"
+  },
+  {
+    "CPM_KEL_ID": "1609041029",
+    "CPM_KELURAHAN": "Tanjung Iman",
+    "CPM_KODE_KEC": "41",
+    "CPM_KODE_KEL": "29"
+  },
+  {
+    "CPM_KEL_ID": "1609041030",
+    "CPM_KELURAHAN": "Lubuk Liku",
+    "CPM_KODE_KEC": "41",
+    "CPM_KODE_KEL": "30"
+  },
+  {
+    "CPM_KEL_ID": "1609041031",
+    "CPM_KELURAHAN": "Bunga Mas",
+    "CPM_KODE_KEC": "41",
+    "CPM_KODE_KEL": "31"
+  },
+  {
+    "CPM_KEL_ID": "1609041050",
+    "CPM_KELURAHAN": "Kota Karang",
+    "CPM_KODE_KEC": "41",
+    "CPM_KODE_KEL": "50"
+  },
+  {
+    "CPM_KEL_ID": "1609041051",
+    "CPM_KELURAHAN": "Negeri Batin",
+    "CPM_KODE_KEC": "41",
+    "CPM_KODE_KEL": "51"
+  },
+  {
+    "CPM_KEL_ID": "1609041052",
+    "CPM_KELURAHAN": "Madura",
+    "CPM_KODE_KEC": "41",
+    "CPM_KODE_KEL": "52"
+  },
+  {
+    "CPM_KEL_ID": "1609041053",
+    "CPM_KELURAHAN": "Negeri Agung",
+    "CPM_KODE_KEC": "41",
+    "CPM_KODE_KEL": "53"
+  },
+  {
+    "CPM_KEL_ID": "1609041054",
+    "CPM_KELURAHAN": "Talang Baru",
+    "CPM_KODE_KEC": "41",
+    "CPM_KODE_KEL": "54"
+  },
+  {
+    "CPM_KEL_ID": "1609042032",
+    "CPM_KELURAHAN": "Sugih Waras",
+    "CPM_KODE_KEC": "42",
+    "CPM_KODE_KEL": "32"
+  },
+  {
+    "CPM_KEL_ID": "1609042033",
+    "CPM_KELURAHAN": "Pandan Sari",
+    "CPM_KODE_KEC": "42",
+    "CPM_KODE_KEL": "33"
+  },
+  {
+    "CPM_KEL_ID": "1609042034",
+    "CPM_KELURAHAN": "Padang Bindu",
+    "CPM_KODE_KEC": "42",
+    "CPM_KODE_KEL": "34"
+  },
+  {
+    "CPM_KEL_ID": "1609042035",
+    "CPM_KELURAHAN": "Saung Naga",
+    "CPM_KODE_KEC": "42",
+    "CPM_KODE_KEL": "35"
+  },
+  {
+    "CPM_KEL_ID": "1609042036",
+    "CPM_KELURAHAN": "Nagar Agung",
+    "CPM_KODE_KEC": "42",
+    "CPM_KODE_KEL": "36"
+  },
+  {
+    "CPM_KEL_ID": "1609042037",
+    "CPM_KELURAHAN": "Negeri Batin Baru",
+    "CPM_KODE_KEC": "42",
+    "CPM_KODE_KEL": "37"
+  },
+  {
+    "CPM_KEL_ID": "1609042038",
+    "CPM_KELURAHAN": "Kota Aman",
+    "CPM_KODE_KEC": "42",
+    "CPM_KODE_KEL": "38"
+  },
+  {
+    "CPM_KEL_ID": "1609042039",
+    "CPM_KELURAHAN": "Peninjauan",
+    "CPM_KODE_KEC": "42",
+    "CPM_KODE_KEL": "39"
+  },
+  {
+    "CPM_KEL_ID": "1609042040",
+    "CPM_KELURAHAN": "Belambangan",
+    "CPM_KODE_KEC": "42",
+    "CPM_KODE_KEL": "40"
+  },
+  {
+    "CPM_KEL_ID": "1609042041",
+    "CPM_KELURAHAN": "Sukajadi Belambangan",
+    "CPM_KODE_KEC": "42",
+    "CPM_KODE_KEL": "41"
+  },
+  {
+    "CPM_KEL_ID": "1609042042",
+    "CPM_KELURAHAN": "Bedeng Belambangan",
+    "CPM_KODE_KEC": "42",
+    "CPM_KODE_KEL": "42"
+  },
+  {
+    "CPM_KEL_ID": "1609042043",
+    "CPM_KELURAHAN": "Kagelang",
+    "CPM_KODE_KEC": "42",
+    "CPM_KODE_KEL": "43"
+  },
+  {
+    "CPM_KEL_ID": "1609042045",
+    "CPM_KELURAHAN": "Perupus Belambangan",
+    "CPM_KODE_KEC": "42",
+    "CPM_KODE_KEL": "45"
+  },
+  {
+    "CPM_KEL_ID": "1609042046",
+    "CPM_KELURAHAN": "Simpang Saga",
+    "CPM_KODE_KEC": "42",
+    "CPM_KODE_KEL": "46"
+  },
+  {
+    "CPM_KEL_ID": "1609043002",
+    "CPM_KELURAHAN": "Gunung Cahya",
+    "CPM_KODE_KEC": "43",
+    "CPM_KODE_KEL": "02"
+  },
+  {
+    "CPM_KEL_ID": "1609043003",
+    "CPM_KELURAHAN": "Pelawi",
+    "CPM_KODE_KEC": "43",
+    "CPM_KODE_KEL": "03"
+  },
+  {
+    "CPM_KEL_ID": "1609043004",
+    "CPM_KELURAHAN": "Pekuwolan",
+    "CPM_KODE_KEC": "43",
+    "CPM_KODE_KEL": "04"
+  },
+  {
+    "CPM_KEL_ID": "1609043005",
+    "CPM_KELURAHAN": "Sukajaya",
+    "CPM_KODE_KEC": "43",
+    "CPM_KODE_KEL": "05"
+  },
+  {
+    "CPM_KEL_ID": "1609043006",
+    "CPM_KELURAHAN": "Majar",
+    "CPM_KODE_KEC": "43",
+    "CPM_KODE_KEL": "06"
+  },
+  {
+    "CPM_KEL_ID": "1609043007",
+    "CPM_KELURAHAN": "Ruos",
+    "CPM_KODE_KEC": "43",
+    "CPM_KODE_KEL": "07"
+  },
+  {
+    "CPM_KEL_ID": "1609043008",
+    "CPM_KELURAHAN": "Bumi Jaya",
+    "CPM_KODE_KEC": "43",
+    "CPM_KODE_KEL": "08"
+  },
+  {
+    "CPM_KEL_ID": "1609043009",
+    "CPM_KELURAHAN": "Banjar Agung",
+    "CPM_KODE_KEC": "43",
+    "CPM_KODE_KEL": "09"
+  },
+  {
+    "CPM_KEL_ID": "1609043010",
+    "CPM_KELURAHAN": "Bumi Agung Jaya",
+    "CPM_KODE_KEC": "43",
+    "CPM_KODE_KEL": "10"
+  },
+  {
+    "CPM_KEL_ID": "1609043014",
+    "CPM_KELURAHAN": "Rantau Panjang",
+    "CPM_KODE_KEC": "43",
+    "CPM_KODE_KEL": "14"
+  },
+  {
+    "CPM_KEL_ID": "1609043060",
+    "CPM_KELURAHAN": "Bendi",
+    "CPM_KODE_KEC": "43",
+    "CPM_KODE_KEL": "60"
+  },
+  {
+    "CPM_KEL_ID": "1609050001",
+    "CPM_KELURAHAN": "Sinar Mulyo",
+    "CPM_KODE_KEC": "50",
+    "CPM_KODE_KEL": "01"
+  },
+  {
+    "CPM_KEL_ID": "1609050003",
+    "CPM_KELURAHAN": "Simpang Agung",
+    "CPM_KODE_KEC": "50",
+    "CPM_KODE_KEL": "03"
+  },
+  {
+    "CPM_KEL_ID": "1609050012",
+    "CPM_KELURAHAN": "Tanjung Sari",
+    "CPM_KODE_KEC": "50",
+    "CPM_KODE_KEL": "12"
+  },
+  {
+    "CPM_KEL_ID": "1609050014",
+    "CPM_KELURAHAN": "Lubar",
+    "CPM_KODE_KEC": "50",
+    "CPM_KODE_KEL": "14"
+  },
+  {
+    "CPM_KEL_ID": "1609050015",
+    "CPM_KELURAHAN": "Karang Agung",
+    "CPM_KODE_KEC": "50",
+    "CPM_KODE_KEL": "15"
+  },
+  {
+    "CPM_KEL_ID": "1609050016",
+    "CPM_KELURAHAN": "Simpangan",
+    "CPM_KODE_KEC": "50",
+    "CPM_KODE_KEL": "16"
+  },
+  {
+    "CPM_KEL_ID": "1609050017",
+    "CPM_KELURAHAN": "Bungin Campang",
+    "CPM_KODE_KEC": "50",
+    "CPM_KODE_KEL": "17"
+  },
+  {
+    "CPM_KEL_ID": "1609051001",
+    "CPM_KELURAHAN": "Sipin",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "01"
+  },
+  {
+    "CPM_KEL_ID": "1609051002",
+    "CPM_KELURAHAN": "Tanjung Durian",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "02"
+  },
+  {
+    "CPM_KEL_ID": "1609051003",
+    "CPM_KELURAHAN": "Kota Way",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "03"
+  },
+  {
+    "CPM_KEL_ID": "1609051004",
+    "CPM_KELURAHAN": "Karet Jaya",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "04"
+  },
+  {
+    "CPM_KEL_ID": "1609051005",
+    "CPM_KELURAHAN": "Sri Menanti",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "05"
+  },
+  {
+    "CPM_KEL_ID": "1609051006",
+    "CPM_KELURAHAN": "Talang Padang",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "06"
+  },
+  {
+    "CPM_KEL_ID": "1609051007",
+    "CPM_KELURAHAN": "Serakat Jaya",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "07"
+  },
+  {
+    "CPM_KEL_ID": "1609051008",
+    "CPM_KELURAHAN": "Danau Jaya",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "08"
+  },
+  {
+    "CPM_KEL_ID": "1609051009",
+    "CPM_KELURAHAN": "Sido Rahayu",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "09"
+  },
+  {
+    "CPM_KEL_ID": "1609051010",
+    "CPM_KELURAHAN": "Kembang Tinggi",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "10"
+  },
+  {
+    "CPM_KEL_ID": "1609051011",
+    "CPM_KELURAHAN": "Sidodadi",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "11"
+  },
+  {
+    "CPM_KEL_ID": "1609051012",
+    "CPM_KELURAHAN": "Sumber Raya",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "12"
+  },
+  {
+    "CPM_KEL_ID": "1609051013",
+    "CPM_KELURAHAN": "Sumber Ringin",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "13"
+  },
+  {
+    "CPM_KEL_ID": "1609051014",
+    "CPM_KELURAHAN": "Durian Sembilan",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "14"
+  },
+  {
+    "CPM_KEL_ID": "1609051015",
+    "CPM_KELURAHAN": "Air Kelian",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "15"
+  },
+  {
+    "CPM_KEL_ID": "1609051016",
+    "CPM_KELURAHAN": "Tanjung Baru",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "16"
+  },
+  {
+    "CPM_KEL_ID": "1609051017",
+    "CPM_KELURAHAN": "Tanjung Menang",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "17"
+  },
+  {
+    "CPM_KEL_ID": "1609051067",
+    "CPM_KELURAHAN": "Tanjung Jaya",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "67"
+  },
+  {
+    "CPM_KEL_ID": "1609051069",
+    "CPM_KELURAHAN": "Tanjung Sari",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "69"
+  },
+  {
+    "CPM_KEL_ID": "1609051070",
+    "CPM_KELURAHAN": "Mekar Jaya",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "70"
+  },
+  {
+    "CPM_KEL_ID": "1609051071",
+    "CPM_KELURAHAN": "Sinar Baru",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "71"
+  },
+  {
+    "CPM_KEL_ID": "1609051072",
+    "CPM_KELURAHAN": "Sinar Napalan",
+    "CPM_KODE_KEC": "51",
+    "CPM_KODE_KEL": "72"
+  },
+  {
+    "CPM_KEL_ID": "1609052001",
+    "CPM_KELURAHAN": "Damar Pura",
+    "CPM_KODE_KEC": "52",
+    "CPM_KODE_KEL": "01"
+  },
+  {
+    "CPM_KEL_ID": "1609052002",
+    "CPM_KELURAHAN": "Bandar",
+    "CPM_KODE_KEC": "52",
+    "CPM_KODE_KEL": "02"
+  },
+  {
+    "CPM_KEL_ID": "1609052003",
+    "CPM_KELURAHAN": "Jaga Raga",
+    "CPM_KODE_KEC": "52",
+    "CPM_KODE_KEL": "03"
+  },
+  {
+    "CPM_KEL_ID": "1609052004",
+    "CPM_KELURAHAN": "Tanjung Beringin",
+    "CPM_KODE_KEC": "52",
+    "CPM_KODE_KEL": "04"
+  },
+  {
+    "CPM_KEL_ID": "1609052005",
+    "CPM_KELURAHAN": "Tekana",
+    "CPM_KODE_KEC": "52",
+    "CPM_KODE_KEL": "05"
+  },
+  {
+    "CPM_KEL_ID": "1609052006",
+    "CPM_KELURAHAN": "Sinar Danau",
+    "CPM_KODE_KEC": "52",
+    "CPM_KODE_KEL": "06"
+  },
+  {
+    "CPM_KEL_ID": "1609052007",
+    "CPM_KELURAHAN": "Tunas Jaya",
+    "CPM_KODE_KEC": "52",
+    "CPM_KODE_KEL": "07"
+  },
+  {
+    "CPM_KEL_ID": "1609052070",
+    "CPM_KELURAHAN": "Gemiung",
+    "CPM_KODE_KEC": "52",
+    "CPM_KODE_KEL": "70"
+  },
+  {
+    "CPM_KEL_ID": "1609053001",
+    "CPM_KELURAHAN": "Peninggiran",
+    "CPM_KODE_KEC": "53",
+    "CPM_KODE_KEL": "01"
+  },
+  {
+    "CPM_KEL_ID": "1609053002",
+    "CPM_KELURAHAN": "Kuripan",
+    "CPM_KODE_KEC": "53",
+    "CPM_KODE_KEL": "02"
+  },
+  {
+    "CPM_KEL_ID": "1609053003",
+    "CPM_KELURAHAN": "Surabaya",
+    "CPM_KODE_KEC": "53",
+    "CPM_KODE_KEL": "03"
+  },
+  {
+    "CPM_KEL_ID": "1609053005",
+    "CPM_KELURAHAN": "Karang Pendeta",
+    "CPM_KODE_KEC": "53",
+    "CPM_KODE_KEL": "05"
+  },
+  {
+    "CPM_KEL_ID": "1609053006",
+    "CPM_KELURAHAN": "Kota Agung",
+    "CPM_KODE_KEC": "53",
+    "CPM_KODE_KEL": "06"
+  },
+  {
+    "CPM_KEL_ID": "1609053007",
+    "CPM_KELURAHAN": "Suka Bumi",
+    "CPM_KODE_KEC": "53",
+    "CPM_KODE_KEL": "07"
+  },
+  {
+    "CPM_KEL_ID": "1609053008",
+    "CPM_KELURAHAN": "Kuripan Ii",
+    "CPM_KODE_KEC": "53",
+    "CPM_KODE_KEL": "08"
+  },
+  {
+    "CPM_KEL_ID": "1609053009",
+    "CPM_KELURAHAN": "Sukarena",
+    "CPM_KODE_KEC": "53",
+    "CPM_KODE_KEL": "09"
+  },
+  {
+    "CPM_KEL_ID": "1609054001",
+    "CPM_KELURAHAN": "Wilayah OKU Selatan",
+    "CPM_KODE_KEC": "54",
+    "CPM_KODE_KEL": "01"
+  }
+]

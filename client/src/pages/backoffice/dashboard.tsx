@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import BackofficeLayout from "./layout";
-import type { ObjekPajak, WajibPajak } from "@shared/schema";
+import type { ObjekPajak, WajibPajakWithBadanUsaha } from "@shared/schema";
 import { JENIS_PAJAK_OPTIONS } from "@shared/schema";
 
 const JENIS_PAJAK_COLORS: Record<string, string> = {
@@ -51,13 +51,13 @@ export default function BackofficeDashboard() {
     queryKey: ["/api/objek-pajak"],
   });
 
-  const { data: wpList = [], isLoading: wpLoading } = useQuery<WajibPajak[]>({
+  const { data: wpList = [], isLoading: wpLoading } = useQuery<WajibPajakWithBadanUsaha[]>({
     queryKey: ["/api/wajib-pajak"],
   });
 
   const isLoading = opLoading || wpLoading;
 
-  const wpMap = new Map<number, WajibPajak>();
+  const wpMap = new Map<number, WajibPajakWithBadanUsaha>();
   wpList.forEach((wp) => wpMap.set(wp.id, wp));
 
   const jenisStats = JENIS_PAJAK_OPTIONS.map((jenis) => {
@@ -199,7 +199,7 @@ export default function BackofficeDashboard() {
                                   <div>
                                     <p className="font-mono text-xs font-bold">{op.namaObjek}</p>
                                     {wp && (
-                                      <p className="font-mono text-[10px] text-muted-foreground">WP: {wp.nama}</p>
+                                      <p className="font-mono text-[10px] text-muted-foreground">WP: {wp.displayName}</p>
                                     )}
                                   </div>
                                 </TableCell>
@@ -238,3 +238,4 @@ export default function BackofficeDashboard() {
     </BackofficeLayout>
   );
 }
+

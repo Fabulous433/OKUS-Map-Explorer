@@ -3,36 +3,55 @@
 ## Diagram
 
 ```
-┌──────────────────────────────────────┐
-│           wajib_pajak                │
-├──────────────────────────────────────┤
-│ id          SERIAL       PK         │
-│ npwpd       VARCHAR(30)  NOT NULL   │
-│ nama        TEXT         NOT NULL   │
-│ nama_usaha  TEXT         NULLABLE   │
-│ alamat      TEXT         NOT NULL   │
-│ kelurahan   TEXT         NULLABLE   │
-│ kecamatan   TEXT         NULLABLE   │
-│ telepon     VARCHAR(20)  NULLABLE   │
-│ email       VARCHAR(255) NULLABLE   │
-│ jenis_pajak TEXT         NOT NULL   │
-│ latitude    DECIMAL(10,7) NULLABLE  │
-│ longitude   DECIMAL(10,7) NULLABLE  │
-│ status      VARCHAR(20)  DEFAULT    │
-│             'active'               │
-│ created_at  TIMESTAMP    DEFAULT    │
-│             NOW()                  │
-└──────────────────────────────────────┘
-           │
-           │ 1:N (wp_id → id)
-           ▼
+┌──────────────────────────────────────────────┐
+│                 wajib_pajak                  │
+├──────────────────────────────────────────────┤
+│ id                    SERIAL PK              │
+│ jenis_wp              VARCHAR(20) NOT NULL   │
+│ peran_wp              VARCHAR(20) NOT NULL   │
+│ npwpd                 VARCHAR(30) NULL       │
+│ status_aktif          VARCHAR(20) DEFAULT    │
+│ nama_wp               TEXT NULL              │
+│ nik_ktp_wp            VARCHAR(32) NULL       │
+│ alamat_wp             TEXT NULL              │
+│ kecamatan_wp          TEXT NULL              │
+│ kelurahan_wp          TEXT NULL              │
+│ telepon_wa_wp         VARCHAR(20) NULL       │
+│ email_wp              VARCHAR(255) NULL      │
+│ nama_pengelola        TEXT NULL              │
+│ nik_pengelola         VARCHAR(32) NULL       │
+│ alamat_pengelola      TEXT NULL              │
+│ kecamatan_pengelola   TEXT NULL              │
+│ kelurahan_pengelola   TEXT NULL              │
+│ telepon_wa_pengelola  VARCHAR(20) NULL       │
+│ created_at            TIMESTAMP DEFAULT NOW()│
+│ updated_at            TIMESTAMP DEFAULT NOW()│
+└──────────────────────────────────────────────┘
+            │ 1:1 (wp_id = id)
+            ▼
+┌──────────────────────────────────────────────┐
+│               wp_badan_usaha                 │
+├──────────────────────────────────────────────┤
+│ wp_id                 INTEGER PK/FK          │
+│ nama_badan_usaha      TEXT NULL              │
+│ npwp_badan_usaha      VARCHAR(32) NULL       │
+│ alamat_badan_usaha    TEXT NULL              │
+│ kecamatan_badan_usaha TEXT NULL              │
+│ kelurahan_badan_usaha TEXT NULL              │
+│ telepon_badan_usaha   VARCHAR(20) NULL       │
+│ email_badan_usaha     VARCHAR(255) NULL      │
+│ created_at            TIMESTAMP DEFAULT NOW()│
+│ updated_at            TIMESTAMP DEFAULT NOW()│
+└──────────────────────────────────────────────┘
+            │
+            │ 1:N (wp_id → id)
+            ▼
 ┌──────────────────────────────────────┐
 │           objek_pajak                │
 ├──────────────────────────────────────┤
 │ id            SERIAL       PK       │
 │ nopd          VARCHAR(30)  NOT NULL │
-│ wp_id         INTEGER      FK →     │
-│               wajib_pajak.id       │
+│ wp_id         INTEGER      FK       │
 │ jenis_pajak   TEXT         NOT NULL │
 │ nama_objek    TEXT         NOT NULL │
 │ alamat        TEXT         NOT NULL │
@@ -47,56 +66,17 @@
 │ latitude      DECIMAL(10,7) NULLABLE│
 │ longitude     DECIMAL(10,7) NULLABLE│
 │ status        VARCHAR(20)  DEFAULT  │
-│               'active'             │
 │ created_at    TIMESTAMP    DEFAULT  │
-│               NOW()                │
-└──────────────────────────────────────┘
-
-┌──────────────────────────────────────┐
-│             users                    │
-├──────────────────────────────────────┤
-│ id        VARCHAR  PK DEFAULT       │
-│           gen_random_uuid()         │
-│ username  TEXT     NOT NULL UNIQUE  │
-│ password  TEXT     NOT NULL         │
 └──────────────────────────────────────┘
 ```
 
 ## Relasi
-| Dari | Ke | Tipe | FK Column | Keterangan |
-|------|----|------|-----------|------------|
-| objek_pajak | wajib_pajak | N:1 | wp_id → wajib_pajak.id | Satu WP memiliki banyak OP |
+| Dari | Ke | Tipe | FK | Keterangan |
+| --- | --- | --- | --- | --- |
+| `wp_badan_usaha` | `wajib_pajak` | 1:1 | `wp_id -> wajib_pajak.id` | Profil badan usaha per WP |
+| `objek_pajak` | `wajib_pajak` | N:1 | `wp_id -> wajib_pajak.id` | Satu WP dapat memiliki banyak OP |
 
-## Kolom JSONB: `detail_pajak`
-
-Kolom `detail_pajak` menyimpan data spesifik per jenis pajak dalam format JSON. Struktur berbeda tergantung `jenis_pajak`:
-
-### DetailPBJTMakanan
-```json
-{ "jenisUsaha": "string", "kapasitasTempat": 0, "jamOperasi": "string" }
-```
-
-### DetailPBJTHotel
-```json
-{ "jumlahKamar": 0, "klasifikasi": "string", "fasilitasTambahan": "string" }
-```
-
-### DetailPajakReklame
-```json
-{ "jenisReklame": "string", "ukuranPanjang": 0, "ukuranLebar": 0, "lokasiPenempatan": "string", "masaBerlaku": "string" }
-```
-
-### DetailPBJTParkir
-```json
-{ "jenisLokasi": "string", "kapasitasKendaraan": 0, "tarifParkir": "string" }
-```
-
-### DetailPBJTHiburan
-```json
-{ "jenisHiburan": "string", "kapasitasPenonton": 0, "frekuensi": "string" }
-```
-
-## Catatan
-- `detail_pajak = NULL` berarti OP belum di-update detail-nya (digunakan dashboard untuk tracking progress)
-- `status` default `"active"`, bisa diubah untuk soft-delete
-- `users` tabel tersedia tapi belum digunakan untuk autentikasi backoffice (future)
+## Constraint Khusus
+- `npwpd` di `wajib_pajak` memakai partial unique index saat nilai tidak null.
+- `npwpd` hanya boleh diisi saat update data WP.
+- Validasi conditional `pemilik/pengelola` dan `badan_usaha` dilakukan di layer Zod + service.

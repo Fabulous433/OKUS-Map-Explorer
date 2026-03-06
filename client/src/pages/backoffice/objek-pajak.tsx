@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus, Building2, MapPin, Trash2, Search, Edit, Crosshair, Tag, Music, DollarSign, Percent, Download, Upload } from "lucide-react";
@@ -38,18 +38,18 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { ObjekPajak, WajibPajak } from "@shared/schema";
+import type { ObjekPajak, WajibPajakWithBadanUsaha } from "@shared/schema";
 import { JENIS_PAJAK_OPTIONS } from "@shared/schema";
 import BackofficeLayout from "./layout";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 const opFormSchema = z.object({
-  nopd: z.string().min(1, "NOPD wajib diisi"),
+  nopd: z.string().trim().min(1, "NOPD wajib diisi"),
   wpId: z.coerce.number().nullable().optional(),
   jenisPajak: z.string().min(1, "Jenis Pajak wajib diisi"),
-  namaObjek: z.string().min(1, "Nama Objek wajib diisi"),
-  alamat: z.string().min(1, "Alamat wajib diisi"),
+  namaObjek: z.string().trim().min(1, "Nama Objek wajib diisi"),
+  alamat: z.string().trim().min(1, "Alamat wajib diisi"),
   kelurahan: z.string().nullable().optional(),
   kecamatan: z.string().nullable().optional(),
   omsetBulanan: z.string().nullable().optional(),
@@ -57,13 +57,65 @@ const opFormSchema = z.object({
   pajakBulanan: z.string().nullable().optional(),
   rating: z.string().nullable().optional(),
   reviewCount: z.coerce.number().nullable().optional(),
-  detailPajak: z.any().nullable().optional(),
+  detailPajak: z.record(z.union([z.string(), z.number(), z.null()])).nullable().optional(),
   latitude: z.string().nullable().optional(),
   longitude: z.string().nullable().optional(),
   status: z.string().default("active"),
 });
 
 type OPFormValues = z.infer<typeof opFormSchema>;
+type OPDetailValue = string | number | null;
+type OPDetailRecord = Record<string, OPDetailValue>;
+
+function getDetailRecord(form: UseFormReturn<OPFormValues>): OPDetailRecord {
+  const detail = form.watch("detailPajak");
+  if (!detail || typeof detail !== "object") {
+    return {};
+  }
+
+  return detail as OPDetailRecord;
+}
+
+function setDetailValue(
+  form: UseFormReturn<OPFormValues>,
+  detail: OPDetailRecord,
+  key: string,
+  value: OPDetailValue,
+) {
+  form.setValue("detailPajak", { ...detail, [key]: value });
+}
+
+function normalizeOptional(value: string | null | undefined) {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeOpPayload(data: OPFormValues): OPFormValues {
+  return {
+    ...data,
+    nopd: data.nopd.trim(),
+    namaObjek: data.namaObjek.trim(),
+    alamat: data.alamat.trim(),
+    kelurahan: normalizeOptional(data.kelurahan),
+    kecamatan: normalizeOptional(data.kecamatan),
+    omsetBulanan: normalizeOptional(data.omsetBulanan),
+    tarifPersen: normalizeOptional(data.tarifPersen),
+    pajakBulanan: normalizeOptional(data.pajakBulanan),
+    rating: normalizeOptional(data.rating),
+    latitude: normalizeOptional(data.latitude),
+    longitude: normalizeOptional(data.longitude),
+  };
+}
+
+function invalidateObjekPajakQueries() {
+  queryClient.invalidateQueries({
+    predicate: (query) => {
+      const [first] = query.queryKey;
+      return typeof first === "string" && first.startsWith("/api/objek-pajak");
+    },
+  });
+}
 
 function jenisPajakColor(jenis: string) {
   if (jenis.includes("Makanan")) return "bg-[#FF6B00] text-white";
@@ -74,10 +126,10 @@ function jenisPajakColor(jenis: string) {
   return "bg-gray-600 text-white";
 }
 
-function DetailFieldsPBJTMakanan({ form }: { form: any }) {
-  const detail = form.watch("detailPajak") || {};
-  const update = (key: string, value: any) => {
-    form.setValue("detailPajak", { ...detail, [key]: value });
+function DetailFieldsPBJTMakanan({ form }: { form: UseFormReturn<OPFormValues> }) {
+  const detail = getDetailRecord(form);
+  const update = (key: string, value: OPDetailValue) => {
+    setDetailValue(form, detail, key, value);
   };
   return (
     <div className="border-[2px] border-[#FF6B00] p-3 space-y-3 bg-orange-50">
@@ -87,7 +139,7 @@ function DetailFieldsPBJTMakanan({ form }: { form: any }) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="font-mono text-[10px] font-bold text-black block mb-1">JENIS USAHA</label>
-          <Select onValueChange={(v) => update("jenisUsaha", v)} value={detail.jenisUsaha || ""}>
+          <Select onValueChange={(v) => update("jenisUsaha", v)} value={String(detail.jenisUsaha ?? "")}>
             <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="select-jenis-usaha">
               <SelectValue placeholder="Pilih" />
             </SelectTrigger>
@@ -127,10 +179,10 @@ function DetailFieldsPBJTMakanan({ form }: { form: any }) {
   );
 }
 
-function DetailFieldsPBJTHotel({ form }: { form: any }) {
-  const detail = form.watch("detailPajak") || {};
-  const update = (key: string, value: any) => {
-    form.setValue("detailPajak", { ...detail, [key]: value });
+function DetailFieldsPBJTHotel({ form }: { form: UseFormReturn<OPFormValues> }) {
+  const detail = getDetailRecord(form);
+  const update = (key: string, value: OPDetailValue) => {
+    setDetailValue(form, detail, key, value);
   };
   return (
     <div className="border-[2px] border-blue-600 p-3 space-y-3 bg-blue-50">
@@ -151,7 +203,7 @@ function DetailFieldsPBJTHotel({ form }: { form: any }) {
         </div>
         <div>
           <label className="font-mono text-[10px] font-bold text-black block mb-1">KLASIFIKASI</label>
-          <Select onValueChange={(v) => update("klasifikasi", v)} value={detail.klasifikasi || ""}>
+          <Select onValueChange={(v) => update("klasifikasi", v)} value={String(detail.klasifikasi ?? "")}>
             <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="select-klasifikasi">
               <SelectValue placeholder="Pilih" />
             </SelectTrigger>
@@ -180,10 +232,10 @@ function DetailFieldsPBJTHotel({ form }: { form: any }) {
   );
 }
 
-function DetailFieldsPajakReklame({ form }: { form: any }) {
-  const detail = form.watch("detailPajak") || {};
-  const update = (key: string, value: any) => {
-    form.setValue("detailPajak", { ...detail, [key]: value });
+function DetailFieldsPajakReklame({ form }: { form: UseFormReturn<OPFormValues> }) {
+  const detail = getDetailRecord(form);
+  const update = (key: string, value: OPDetailValue) => {
+    setDetailValue(form, detail, key, value);
   };
   return (
     <div className="border-[2px] border-purple-600 p-3 space-y-3 bg-purple-50">
@@ -193,7 +245,7 @@ function DetailFieldsPajakReklame({ form }: { form: any }) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="font-mono text-[10px] font-bold text-black block mb-1">JENIS REKLAME</label>
-          <Select onValueChange={(v) => update("jenisReklame", v)} value={detail.jenisReklame || ""}>
+          <Select onValueChange={(v) => update("jenisReklame", v)} value={String(detail.jenisReklame ?? "")}>
             <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="select-jenis-reklame">
               <SelectValue placeholder="Pilih" />
             </SelectTrigger>
@@ -255,10 +307,10 @@ function DetailFieldsPajakReklame({ form }: { form: any }) {
   );
 }
 
-function DetailFieldsPBJTParkir({ form }: { form: any }) {
-  const detail = form.watch("detailPajak") || {};
-  const update = (key: string, value: any) => {
-    form.setValue("detailPajak", { ...detail, [key]: value });
+function DetailFieldsPBJTParkir({ form }: { form: UseFormReturn<OPFormValues> }) {
+  const detail = getDetailRecord(form);
+  const update = (key: string, value: OPDetailValue) => {
+    setDetailValue(form, detail, key, value);
   };
   return (
     <div className="border-[2px] border-green-600 p-3 space-y-3 bg-green-50">
@@ -268,7 +320,7 @@ function DetailFieldsPBJTParkir({ form }: { form: any }) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="font-mono text-[10px] font-bold text-black block mb-1">JENIS LOKASI</label>
-          <Select onValueChange={(v) => update("jenisLokasi", v)} value={detail.jenisLokasi || ""}>
+          <Select onValueChange={(v) => update("jenisLokasi", v)} value={String(detail.jenisLokasi ?? "")}>
             <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="select-jenis-lokasi">
               <SelectValue placeholder="Pilih" />
             </SelectTrigger>
@@ -307,10 +359,10 @@ function DetailFieldsPBJTParkir({ form }: { form: any }) {
   );
 }
 
-function DetailFieldsPBJTHiburan({ form }: { form: any }) {
-  const detail = form.watch("detailPajak") || {};
-  const update = (key: string, value: any) => {
-    form.setValue("detailPajak", { ...detail, [key]: value });
+function DetailFieldsPBJTHiburan({ form }: { form: UseFormReturn<OPFormValues> }) {
+  const detail = getDetailRecord(form);
+  const update = (key: string, value: OPDetailValue) => {
+    setDetailValue(form, detail, key, value);
   };
   return (
     <div className="border-[2px] border-pink-600 p-3 space-y-3 bg-pink-50">
@@ -320,7 +372,7 @@ function DetailFieldsPBJTHiburan({ form }: { form: any }) {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="font-mono text-[10px] font-bold text-black block mb-1">JENIS HIBURAN</label>
-          <Select onValueChange={(v) => update("jenisHiburan", v)} value={detail.jenisHiburan || ""}>
+          <Select onValueChange={(v) => update("jenisHiburan", v)} value={String(detail.jenisHiburan ?? "")}>
             <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="select-jenis-hiburan">
               <SelectValue placeholder="Pilih" />
             </SelectTrigger>
@@ -360,7 +412,7 @@ function DetailFieldsPBJTHiburan({ form }: { form: any }) {
   );
 }
 
-function DetailFieldsByJenis({ jenisPajak, form }: { jenisPajak: string; form: any }) {
+function DetailFieldsByJenis({ jenisPajak, form }: { jenisPajak: string; form: UseFormReturn<OPFormValues> }) {
   if (jenisPajak.includes("Makanan")) return <DetailFieldsPBJTMakanan form={form} />;
   if (jenisPajak.includes("Perhotelan")) return <DetailFieldsPBJTHotel form={form} />;
   if (jenisPajak.includes("Reklame")) return <DetailFieldsPajakReklame form={form} />;
@@ -512,7 +564,7 @@ function OPFormDialog({
 }: {
   mode: "create" | "edit";
   editOp?: ObjekPajak | null;
-  wpList: WajibPajak[];
+  wpList: WajibPajakWithBadanUsaha[];
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -568,11 +620,11 @@ function OPFormDialog({
 
   const createMutation = useMutation({
     mutationFn: async (data: OPFormValues) => {
-      const res = await apiRequest("POST", "/api/objek-pajak", data);
+      const res = await apiRequest("POST", "/api/objek-pajak", normalizeOpPayload(data));
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/objek-pajak"] });
+      invalidateObjekPajakQueries();
       onOpenChange(false);
       form.reset();
       toast({ title: "Berhasil", description: "Objek Pajak berhasil ditambahkan" });
@@ -584,11 +636,11 @@ function OPFormDialog({
 
   const updateMutation = useMutation({
     mutationFn: async (data: OPFormValues) => {
-      const res = await apiRequest("PATCH", `/api/objek-pajak/${editOp!.id}`, data);
+      const res = await apiRequest("PATCH", `/api/objek-pajak/${editOp!.id}`, normalizeOpPayload(data));
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/objek-pajak"] });
+      invalidateObjekPajakQueries();
       onOpenChange(false);
       toast({ title: "Berhasil", description: "Objek Pajak berhasil diperbarui" });
     },
@@ -689,7 +741,7 @@ function OPFormDialog({
                     <SelectContent className="rounded-none border-[2px] border-black">
                       {wpList.map((wp) => (
                         <SelectItem key={wp.id} value={wp.id.toString()}>
-                          {wp.nama} - {wp.npwpd}
+                          {wp.displayName} - {wp.npwpd || "-"}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -867,13 +919,40 @@ export default function BackofficeObjekPajak() {
   const [editOp, setEditOp] = useState<ObjekPajak | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [kecamatanFilter, setKecamatanFilter] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const baseParams = new URLSearchParams();
+  if (statusFilter !== "all") {
+    baseParams.set("status", statusFilter);
+  }
+  if (kecamatanFilter.trim()) {
+    baseParams.set("kecamatan", kecamatanFilter.trim());
+  }
+
+  const baseQueryKey = baseParams.toString()
+    ? `/api/objek-pajak?${baseParams.toString()}`
+    : "/api/objek-pajak";
+
+  const listParams = new URLSearchParams(baseParams);
+  if (activeTab !== "all") {
+    listParams.set("jenisPajak", activeTab);
+  }
+
+  const objekPajakQueryKey = listParams.toString()
+    ? `/api/objek-pajak?${listParams.toString()}`
+    : "/api/objek-pajak";
+
   const { data: opList = [], isLoading } = useQuery<ObjekPajak[]>({
-    queryKey: ["/api/objek-pajak"],
+    queryKey: [objekPajakQueryKey],
   });
 
-  const { data: wpList = [] } = useQuery<WajibPajak[]>({
+  const { data: countBaseList = [] } = useQuery<ObjekPajak[]>({
+    queryKey: [baseQueryKey],
+  });
+
+  const { data: wpList = [] } = useQuery<WajibPajakWithBadanUsaha[]>({
     queryKey: ["/api/wajib-pajak"],
   });
 
@@ -882,8 +961,10 @@ export default function BackofficeObjekPajak() {
   const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     const formData = new FormData();
     formData.append("file", file);
+
     try {
       const res = await fetch("/api/objek-pajak/import", { method: "POST", body: formData });
       const result = await res.json();
@@ -897,11 +978,12 @@ export default function BackofficeObjekPajak() {
         if (result.errors?.length > 0) {
           console.log("Import errors:", result.errors);
         }
-        queryClient.invalidateQueries({ queryKey: ["/api/objek-pajak"] });
+        invalidateObjekPajakQueries();
       }
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     }
+
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -910,7 +992,7 @@ export default function BackofficeObjekPajak() {
       await apiRequest("DELETE", `/api/objek-pajak/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/objek-pajak"] });
+      invalidateObjekPajakQueries();
       toast({ title: "Berhasil", description: "Objek Pajak berhasil dihapus" });
     },
   });
@@ -918,7 +1000,6 @@ export default function BackofficeObjekPajak() {
   const wpMap = new Map(wpList.map((wp) => [wp.id, wp]));
 
   const filtered = opList.filter((op) => {
-    const matchesTab = activeTab === "all" || op.jenisPajak === activeTab;
     const q = searchQuery.toLowerCase();
     const matchesSearch = !searchQuery ||
       op.namaObjek.toLowerCase().includes(q) ||
@@ -926,11 +1007,11 @@ export default function BackofficeObjekPajak() {
       op.jenisPajak.toLowerCase().includes(q) ||
       op.alamat.toLowerCase().includes(q) ||
       (op.kecamatan && op.kecamatan.toLowerCase().includes(q));
-    return matchesTab && matchesSearch;
+    return matchesSearch;
   });
 
   const jenisCounts = JENIS_PAJAK_OPTIONS.reduce((acc, jp) => {
-    acc[jp] = opList.filter((op) => op.jenisPajak === jp).length;
+    acc[jp] = countBaseList.filter((op) => op.jenisPajak === jp).length;
     return acc;
   }, {} as Record<string, number>);
 
@@ -946,7 +1027,6 @@ export default function BackofficeObjekPajak() {
     if (jenis.includes("MBLB")) return "MBLB";
     return jenis.substring(0, 3).toUpperCase();
   };
-
   return (
     <BackofficeLayout>
       <div className="p-6" data-testid="backoffice-op-page">
@@ -1018,6 +1098,39 @@ export default function BackofficeObjekPajak() {
           </Badge>
         </div>
 
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[170px] rounded-none border-[2px] border-black font-mono text-xs" data-testid="select-filter-status-op">
+              <SelectValue placeholder="Filter status" />
+            </SelectTrigger>
+            <SelectContent className="rounded-none border-[2px] border-black">
+              <SelectItem value="all">Semua Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            value={kecamatanFilter}
+            onChange={(e) => setKecamatanFilter(e.target.value)}
+            placeholder="Filter kecamatan"
+            className="w-[220px] rounded-none border-[2px] border-black font-mono text-xs"
+            data-testid="input-filter-kecamatan-op"
+          />
+          {(statusFilter !== "all" || kecamatanFilter.trim().length > 0) && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-none border-[2px] border-black font-mono text-xs"
+              onClick={() => {
+                setStatusFilter("all");
+                setKecamatanFilter("");
+              }}
+              data-testid="button-reset-filter-op"
+            >
+              RESET FILTER
+            </Button>
+          )}
+        </div>
         <div className="flex gap-1 mb-4 overflow-x-auto pb-1 flex-wrap">
           <button
             className={`font-mono text-[10px] font-bold px-3 py-1.5 border-[2px] border-black transition-colors whitespace-nowrap ${
@@ -1028,7 +1141,7 @@ export default function BackofficeObjekPajak() {
             onClick={() => setActiveTab("all")}
             data-testid="tab-all"
           >
-            SEMUA ({opList.length})
+            SEMUA ({countBaseList.length})
           </button>
           {JENIS_PAJAK_OPTIONS.map((jp) => (
             <button
@@ -1117,7 +1230,7 @@ export default function BackofficeObjekPajak() {
                         </Badge>
                       </TableCell>
                       <TableCell className="font-mono text-xs text-gray-600 max-w-[150px] truncate" data-testid={`text-wp-${op.id}`}>
-                        {wp ? wp.nama : "-"}
+                        {wp ? wp.displayName : "-"}
                       </TableCell>
                       <TableCell className="font-mono text-xs text-gray-600 max-w-[200px] truncate">
                         <div className="flex items-center gap-1">
@@ -1187,3 +1300,5 @@ export default function BackofficeObjekPajak() {
     </BackofficeLayout>
   );
 }
+
+

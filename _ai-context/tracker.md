@@ -7,6 +7,12 @@
 
 ---
 
+## Verification Note
+- Label "e2e test passed" merepresentasikan verifikasi historis sesi sebelumnya.
+- Artefak test automation belum tersimpan di repository saat ini.
+
+---
+
 ## Phase 1: Restructuring (Completed)
 
 ### T001: Remove Wikipedia Landmarks
@@ -64,6 +70,11 @@
 - **Acceptance**: README.md lengkap dengan fitur, tech stack, API endpoints, struktur; future-plan.md dengan roadmap Phase 2-7
 - **Verified**: Ya
 
+### T010c: Local Dev Infra Baseline (Docker + Env)
+- **Status**: [x] Selesai
+- **Acceptance**: docker-compose PostgreSQL+Adminer, `.env.local` flow, fail-fast env check, docs local dev tersedia
+- **Verified**: Ya (compose, db:push, smoke API, negative startup test)
+
 ---
 
 ## Phase 2: Enhancements (Backlog)
@@ -87,3 +98,34 @@
 - **Status**: [ ] Belum
 - **Acceptance**: Log setiap perubahan data (siapa, kapan, apa yang berubah)
 - **Priority**: Medium (setelah auth)
+
+
+---
+
+## Phase 2A: Data Alignment Sprint (Internal Pilot)
+
+### T015: WP Data Contract Alignment
+- **Status**: [x] Selesai
+- **Acceptance**:
+  - Mapping WP CSV/header distandarkan (`WP_CSV_COLUMNS`)
+  - Normalisasi + validasi backend ketat sesuai kontrak
+  - Form WP mengirim payload ter-normalisasi
+- **Verified**: Ya (`npm run check` + verifikasi alur import/export pada route)
+
+### T016: OP Hybrid Master+Detail Transition
+- **Status**: [x] Selesai
+- **Acceptance**:
+  - Tabel detail per jenis tersedia di schema
+  - Read path hydrate `detailPajak` dari detail tables dengan fallback legacy JSONB
+  - Write path diarahkan ke detail tables
+  - Migrator legacy JSONB -> detail tables dijalankan saat startup
+- **Verified**: Ya (`npm run check`)
+
+### T017: OP Internal Operational Filters
+- **Status**: [x] Selesai
+- **Acceptance**:
+  - Endpoint `/api/objek-pajak` menerima query `jenisPajak`, `status`, `kecamatan`
+  - UI OP mendukung filter status + kecamatan (server-side query)
+  - Filter jenis tetap via tab dan dikirim ke query endpoint
+- **Verified**: Ya (`npm run check`)
+

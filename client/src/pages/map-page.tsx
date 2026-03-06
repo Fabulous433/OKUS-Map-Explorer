@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
-import type { WajibPajak, ObjekPajak } from "@shared/schema";
+import type { WajibPajakWithBadanUsaha, ObjekPajak } from "@shared/schema";
 import "leaflet/dist/leaflet.css";
 
 const OKU_SELATAN_CENTER: [number, number] = [-4.5250, 104.0270];
@@ -286,7 +286,7 @@ export default function MapPage() {
   const [showResults, setShowResults] = useState(false);
   const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
 
-  const { data: wpList = [] } = useQuery<WajibPajak[]>({
+  const { data: wpList = [] } = useQuery<WajibPajakWithBadanUsaha[]>({
     queryKey: ["/api/wajib-pajak"],
   });
 
@@ -300,22 +300,27 @@ export default function MapPage() {
     const results: SearchResult[] = [];
 
     wpList.forEach((wp) => {
+      const area = [wp.alamatWp, wp.alamatPengelola, wp.badanUsaha?.alamatBadanUsaha]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
       if (
-        wp.nama.toLowerCase().includes(q) ||
-        wp.npwpd.toLowerCase().includes(q) ||
-        (wp.namaUsaha && wp.namaUsaha.toLowerCase().includes(q)) ||
-        wp.jenisPajak.toLowerCase().includes(q) ||
-        wp.alamat.toLowerCase().includes(q)
+        wp.displayName.toLowerCase().includes(q) ||
+        (wp.npwpd || "").toLowerCase().includes(q) ||
+        wp.peranWp.toLowerCase().includes(q) ||
+        wp.jenisWp.toLowerCase().includes(q) ||
+        area.includes(q)
       ) {
         const opCount = opList.filter((op) => op.wpId === wp.id).length;
         results.push({
           type: "wp",
           id: wp.id,
-          name: wp.nama,
-          jenisPajak: wp.jenisPajak,
-          alamat: wp.alamat,
-          lat: wp.latitude,
-          lng: wp.longitude,
+          name: wp.displayName,
+          jenisPajak: "WP",
+          alamat: [wp.alamatWp, wp.alamatPengelola, wp.badanUsaha?.alamatBadanUsaha].find(Boolean) || "-",
+          lat: null,
+          lng: null,
           opCount,
         });
       }
@@ -387,13 +392,7 @@ export default function MapPage() {
     return groups;
   }, [opList]);
 
-  const visibleWP = useMemo(() => {
-    if (selectedWpId) {
-      return wpList.filter((wp) => wp.id === selectedWpId && wp.latitude && wp.longitude);
-    }
-    if (highlightedOpId) return [];
-    return wpList.filter((wp) => wp.latitude && wp.longitude);
-  }, [wpList, selectedWpId, highlightedOpId]);
+  const visibleWP: WajibPajakWithBadanUsaha[] = [];
 
   const visibleOP = useMemo(() => {
     if (selectedWpId) {
@@ -522,7 +521,7 @@ export default function MapPage() {
           <div className="bg-[#FFFF00] border-[3px] border-black px-3 py-2 flex items-center gap-2 max-w-[340px]">
             <span className="font-mono text-xs font-bold text-black flex-1 truncate">
               {selectedWpId
-                ? `WP: ${wpList.find((wp) => wp.id === selectedWpId)?.nama} (${visibleOP.length} OP)`
+                ? `WP: ${wpList.find((wp) => wp.id === selectedWpId)?.displayName} (${visibleOP.length} OP)`
                 : `OP: ${opList.find((op) => op.id === highlightedOpId)?.namaObjek}`}
             </span>
             <Button
@@ -578,27 +577,7 @@ export default function MapPage() {
         <MapControls />
         <FlyToHandler lat={effectiveFlyLat} lng={effectiveFlyLng} zoom={effectiveFlyZoom} />
 
-        {visibleWP.map((wp) => (
-          <Marker
-            key={`wp-${wp.id}`}
-            position={[parseFloat(wp.latitude!), parseFloat(wp.longitude!)]}
-            icon={getJenisPajakIcon(wp.jenisPajak, "wp")}
-          >
-            <Popup>
-              <div className="font-mono text-xs space-y-1 min-w-[180px]">
-                <div className="font-bold text-sm">{wp.nama}</div>
-                {wp.namaUsaha && <div className="text-gray-600">{wp.namaUsaha}</div>}
-                <div>NPWPD: {wp.npwpd}</div>
-                <div className="inline-block px-1.5 py-0.5 text-white text-[10px] font-bold" style={{ background: jenisPajakBadgeColor(wp.jenisPajak) }}>
-                  {wp.jenisPajak}
-                </div>
-                <div>{wp.alamat}</div>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-
-        {Object.entries(visibleLocationGroups).map(([key, ops]) => {
+                {Object.entries(visibleLocationGroups).map(([key, ops]) => {
           if (ops.length === 1) {
             const op = ops[0];
             return (
@@ -655,3 +634,5 @@ export default function MapPage() {
     </div>
   );
 }
+
+

@@ -6,12 +6,12 @@
 ┌─────────────────────────────────────────────────────┐
 │                    Browser                          │
 │  ┌──────────────┐  ┌─────────────────────────────┐  │
-│  │  Peta Publik  │  │   Backoffice (Dashboard,   │  │
-│  │  (Leaflet)    │  │   CRUD WP/OP, CSV)         │  │
+│  │  Peta Publik │  │   Backoffice (Dashboard,   │  │
+│  │  (Leaflet)   │  │   CRUD WP/OP, CSV)         │  │
 │  └──────┬───────┘  └──────────┬──────────────────┘  │
 │         │                     │                     │
 │         └──────────┬──────────┘                     │
-│                    │ HTTP (fetch)                    │
+│                    │ HTTP (fetch)                   │
 └────────────────────┼────────────────────────────────┘
                      │
 ┌────────────────────┼────────────────────────────────┐
@@ -19,8 +19,8 @@
 │                    │                                │
 │  ┌─────────────────▼──────────────────┐             │
 │  │         REST API Routes            │             │
-│  │   /api/wajib-pajak/*              │             │
-│  │   /api/objek-pajak/*              │             │
+│  │   /api/wajib-pajak/*               │             │
+│  │   /api/objek-pajak/*               │             │
 │  └─────────────────┬──────────────────┘             │
 │                    │                                │
 │  ┌─────────────────▼──────────────────┐             │
@@ -36,7 +36,8 @@
                      │
           ┌──────────▼──────────┐
           │   PostgreSQL DB     │
-          │   (Replit managed)  │
+          │ Local Docker (dev)  │
+          │ Managed DB (prod)   │
           └─────────────────────┘
 ```
 
@@ -67,7 +68,7 @@
 ### ADR-002: JSONB untuk detail_pajak
 - **Konteks**: Setiap jenis pajak memiliki field detail yang berbeda
 - **Keputusan**: Gunakan kolom JSONB daripada tabel terpisah per jenis pajak
-- **Konsekuensi**: Fleksibel, mudah di-extend, tapi tidak ada validasi di level database — validasi dilakukan di aplikasi
+- **Konsekuensi**: Fleksibel, mudah di-extend, tapi tidak ada validasi di level database, validasi dilakukan di aplikasi
 
 ### ADR-003: Tanpa autentikasi backoffice
 - **Konteks**: Fase awal, fokus pada fungsi inti
@@ -85,8 +86,9 @@
 - **Konsekuensi**: UI sangat distinctive, mungkin perlu penyesuaian untuk aksesibilitas
 
 ## Security Guidelines
-- Environment variables disimpan sebagai Replit Secrets (`DATABASE_URL`, `SESSION_SECRET`)
+- Environment variables dibaca dari `.env.local` (lokal) atau environment runtime (`DATABASE_URL`, `SESSION_SECRET`)
 - Input validation menggunakan Zod schema di setiap endpoint
 - File upload dibatasi 5MB via multer
-- Tidak ada SQL injection risk — semua query via Drizzle ORM parameterized queries
+- Tidak ada SQL injection risk karena query via Drizzle ORM parameterized queries
 - **TODO**: Tambahkan autentikasi sebelum deploy ke production
+

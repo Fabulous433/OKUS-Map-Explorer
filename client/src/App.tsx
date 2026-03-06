@@ -8,6 +8,7 @@ import MapPage from "@/pages/map-page";
 import BackofficeDashboard from "@/pages/backoffice/dashboard";
 import BackofficeWajibPajak from "@/pages/backoffice/wajib-pajak";
 import BackofficeObjekPajak from "@/pages/backoffice/objek-pajak";
+import BackofficeFormMockup from "@/pages/backoffice/form-mockup";
 
 function Router() {
   return (
@@ -16,6 +17,7 @@ function Router() {
       <Route path="/backoffice" component={BackofficeDashboard} />
       <Route path="/backoffice/wajib-pajak" component={BackofficeWajibPajak} />
       <Route path="/backoffice/objek-pajak" component={BackofficeObjekPajak} />
+      <Route path="/backoffice/mockup-form" component={BackofficeFormMockup} />
       <Route component={NotFound} />
     </Switch>
   );

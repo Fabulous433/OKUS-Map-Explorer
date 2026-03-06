@@ -1,11 +1,45 @@
 # Future Plan — Roadmap Pengembangan
 
+## Phase 1.5: Local DevEx Baseline (Completed)
+**Prioritas: Fondasi eksekusi roadmap**
+
+### Infrastruktur Lokal
+- Docker Compose untuk PostgreSQL + Adminer
+- Persistensi data via named volume
+- Init extension `pgcrypto` untuk `gen_random_uuid()`
+
+### Konfigurasi Environment
+- `.env.local` sebagai default local config
+- Validasi startup wajib: `DATABASE_URL` dan `SESSION_SECRET`
+- Panduan operasional local dev/reset/backup di `docs/local-development.md`
+
+---
+
+
+## Phase 1.6: Data Alignment Sprint (Internal Pilot) (Completed)
+**Prioritas: Kontrak data operasional WP/OP**
+
+### WP Alignment
+- Kontrak import/export CSV WP distandarkan (header + urutan kolom)
+- Normalisasi payload WP diterapkan konsisten di backend dan frontend
+- Matrix mapping WP didokumentasikan di `docs/wp-csv-field-mapping.md`
+
+### OP Hybrid Master+Detail
+- Tabel detail per jenis pajak aktif sebagai sumber utama `detailPajak`
+- Migrasi kompatibilitas legacy JSONB dijalankan saat startup
+- Endpoint tetap kompatibel (`/api/objek-pajak*`), kontrak response tidak di-break
+
+### Operational Filters
+- Query endpoint OP mendukung `jenisPajak`, `status`, `kecamatan`
+- Backoffice OP menyediakan filter status + kecamatan untuk kebutuhan pilot internal
+
+---
 ## Phase 2: Security & Access Control
 **Prioritas: Tinggi — Wajib sebelum production deploy**
 
 ### Autentikasi Backoffice
 - Login page dengan username/password
-- Session management (express-session + SESSION_SECRET sudah tersedia)
+- Session management (express-session + SESSION_SECRET)
 - Proteksi semua route `/backoffice/*` dan API mutasi (POST/PATCH/DELETE)
 - Tabel `users` sudah tersedia di schema, tinggal diaktifkan
 - Role-based access: Admin (full CRUD) vs Viewer (read-only)
@@ -119,17 +153,18 @@
 
 | Phase | Nama | Prioritas | Estimasi |
 |-------|------|-----------|----------|
-| 2 | Security & Access Control | 🔴 Tinggi | 1-2 minggu |
-| 3 | Fitur Peta Lanjutan | 🟡 Sedang | 2-3 minggu |
-| 4 | Dashboard & Reporting | 🟡 Sedang | 2-3 minggu |
-| 5 | Mobile & Field Support | 🟡 Sedang | 3-4 minggu |
-| 6 | Integrasi & Skalabilitas | 🟢 Rendah | 4-6 minggu |
-| 7 | AI & Automation | 🟢 Rendah | 6-8 minggu |
+| 2 | Security & Access Control | Tinggi | 1-2 minggu |
+| 3 | Fitur Peta Lanjutan | Sedang | 2-3 minggu |
+| 4 | Dashboard & Reporting | Sedang | 2-3 minggu |
+| 5 | Mobile & Field Support | Sedang | 3-4 minggu |
+| 6 | Integrasi & Skalabilitas | Rendah | 4-6 minggu |
+| 7 | AI & Automation | Rendah | 6-8 minggu |
 
 ---
 
 ## Catatan
-- Phase 2 (Security) adalah **prasyarat wajib** sebelum deploy ke production
+- Phase 1.5 (Local DevEx Baseline) diselesaikan sebagai fondasi eksekusi tim
+- Phase 2 (Security) tetap prasyarat wajib sebelum deploy ke production
 - Phase 3-4 bisa dikerjakan paralel setelah Phase 2 selesai
-- Phase 5-7 adalah roadmap jangka menengah-panjang
 - Estimasi bersifat indikatif, tergantung kompleksitas implementasi dan resource
+

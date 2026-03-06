@@ -1,10 +1,11 @@
 import { Link, useRoute } from "wouter";
-import { BarChart3, Users, Building2, Map, ChevronRight } from "lucide-react";
+import { BarChart3, Users, Building2, Map, ChevronRight, Sparkles } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/backoffice", label: "Dashboard", icon: BarChart3, match: "/backoffice" },
   { href: "/backoffice/wajib-pajak", label: "Wajib Pajak", icon: Users, match: "/backoffice/wajib-pajak" },
   { href: "/backoffice/objek-pajak", label: "Objek Pajak", icon: Building2, match: "/backoffice/objek-pajak" },
+  { href: "/backoffice/mockup-form", label: "Mockup Form", icon: Sparkles, match: "/backoffice/mockup-form" },
 ];
 
 function NavItem({ href, label, icon: Icon, match }: typeof NAV_ITEMS[0]) {

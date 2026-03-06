@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: okus-postgres
+    restart: unless-stopped
+    ports:
+      - "55432:5432"
+    environment:
+      POSTGRES_DB: okus_map_explorer
+      POSTGRES_USER: okus_dev
+      POSTGRES_PASSWORD: okus_dev
+    volumes:
+      - okus_pg_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U okus_dev -d okus_map_explorer"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  adminer:
+    image: adminer:latest
+    container_name: okus-adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  okus_pg_data:

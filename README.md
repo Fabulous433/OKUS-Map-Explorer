@@ -52,20 +52,28 @@ Aplikasi web interaktif untuk visualisasi dan pengelolaan data **Pajak Daerah** 
 
 ---
 
-## Quick Start
+## Quick Start (Local)
 
 ```bash
-# Install dependencies
+# 1) Start local database (PostgreSQL + Adminer)
+npm run db:up
+
+# 2) Prepare local env
+Copy-Item .env.example .env.local
+
+# 3) Install dependencies
 npm install
 
-# Push database schema
+# 4) Push database schema
 npm run db:push
 
-# Start development server
+# 5) Start development server
 npm run dev
 ```
 
 Aplikasi berjalan di `http://localhost:5000`.
+
+Referensi detail setup/reset/backup: [`docs/local-development.md`](docs/local-development.md)
 
 ---
 
@@ -93,7 +101,9 @@ Aplikasi berjalan di `http://localhost:5000`.
 │   ├── erd.md                       # Database schema
 │   ├── architecture.md              # System design + ADR
 │   ├── api-spec.md                  # API documentation
-│   └── tech-stack.md                # Stack & conventions
+│   ├── tech-stack.md                # Stack & conventions
+│   ├── local-development.md         # Setup Docker lokal + operasi DB
+│   └── wp-csv-field-mapping.md      # Matrix mapping WP CSV <-> API contract
 └── _ai-context/                     # AI session context
     ├── design.md                    # Technical constitution
     ├── scope.md                     # Project charter
@@ -135,3 +145,4 @@ Aplikasi terpusat di area **Muaradua**, ibu kota Kabupaten OKU Selatan, dengan s
 ## Lisensi
 
 MIT
+

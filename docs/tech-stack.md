@@ -13,7 +13,7 @@
 | **Map** | Leaflet + react-leaflet | 1.9.4 + 4.2.1 | Peta interaktif |
 | **Backend** | Express.js | 4.x | REST API |
 | **ORM** | Drizzle ORM | 0.38+ | Type-safe SQL |
-| **Database** | PostgreSQL | 16 | Replit managed |
+| **Database** | PostgreSQL | 16 | Docker lokal (dev), managed service (prod) |
 | **Validation** | Zod + drizzle-zod | 3.x | Schema-based validation |
 | **CSS** | Tailwind CSS | 3.x | Utility-first |
 | **UI Components** | shadcn/ui (Radix) | - | Headless primitives |
@@ -116,3 +116,4 @@ interface IStorage {
 | `npm run start` | Start production server |
 | `npm run db:push` | Push Drizzle schema ke database |
 | `npm run check` | TypeScript type checking |
+

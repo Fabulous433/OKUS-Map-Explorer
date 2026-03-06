@@ -1,0 +1,6 @@
+
+> rest-express@1.0.0 dev
+> cross-env NODE_ENV=development tsx server/index.ts
+
+3:04:07 PM [seed] Seed data already exists, skipping
+3:04:11 PM [express] serving on port 5000
