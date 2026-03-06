@@ -1,0 +1,1130 @@
+--
+-- PostgreSQL database dump
+--
+
+\restrict fI5ztV0X20Ee6UOHXrenUy7OEuPcz7UrfzRimqjcnoY8wOp1aqzDVlXGEWXTmcw
+
+-- Dumped from database version 16.13
+-- Dumped by pg_dump version 16.13
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: pgcrypto; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: 
+--
+
+COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: master_kecamatan; Type: TABLE; Schema: public; Owner: okus_dev
+--
+
+CREATE TABLE public.master_kecamatan (
+    cpm_kec_id character varying(16) NOT NULL,
+    cpm_kecamatan text NOT NULL,
+    cpm_kode_kec character varying(4) NOT NULL,
+    created_at timestamp without time zone DEFAULT now() NOT NULL,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.master_kecamatan OWNER TO okus_dev;
+
+--
+-- Name: master_kelurahan; Type: TABLE; Schema: public; Owner: okus_dev
+--
+
+CREATE TABLE public.master_kelurahan (
+    cpm_kel_id character varying(16) NOT NULL,
+    cpm_kelurahan text NOT NULL,
+    cpm_kode_kec character varying(4) NOT NULL,
+    cpm_kode_kel character varying(4) NOT NULL,
+    created_at timestamp without time zone DEFAULT now() NOT NULL,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.master_kelurahan OWNER TO okus_dev;
+
+--
+-- Name: master_rekening_pajak; Type: TABLE; Schema: public; Owner: okus_dev
+--
+
+CREATE TABLE public.master_rekening_pajak (
+    id integer NOT NULL,
+    kode_rekening character varying(30) NOT NULL,
+    nama_rekening text NOT NULL,
+    jenis_pajak text NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp without time zone DEFAULT now() NOT NULL,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.master_rekening_pajak OWNER TO okus_dev;
+
+--
+-- Name: master_rekening_pajak_id_seq; Type: SEQUENCE; Schema: public; Owner: okus_dev
+--
+
+CREATE SEQUENCE public.master_rekening_pajak_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.master_rekening_pajak_id_seq OWNER TO okus_dev;
+
+--
+-- Name: master_rekening_pajak_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: okus_dev
+--
+
+ALTER SEQUENCE public.master_rekening_pajak_id_seq OWNED BY public.master_rekening_pajak.id;
+
+
+--
+-- Name: objek_pajak; Type: TABLE; Schema: public; Owner: okus_dev
+--
+
+CREATE TABLE public.objek_pajak (
+    id integer NOT NULL,
+    nopd character varying(30) NOT NULL,
+    wp_id integer,
+    jenis_pajak text NOT NULL,
+    nama_objek text NOT NULL,
+    alamat text NOT NULL,
+    kelurahan text,
+    kecamatan text,
+    omset_bulanan numeric(15,2),
+    tarif_persen numeric(5,2),
+    pajak_bulanan numeric(15,2),
+    rating numeric(3,1),
+    review_count integer,
+    detail_pajak jsonb,
+    latitude numeric(10,7),
+    longitude numeric(10,7),
+    status character varying(20) DEFAULT 'active'::character varying NOT NULL,
+    created_at timestamp without time zone DEFAULT now(),
+    rek_pajak_id integer,
+    nama_op text,
+    npwp_op character varying(32),
+    alamat_op text,
+    kecamatan_id character varying(16),
+    kelurahan_id character varying(16),
+    updated_at timestamp without time zone DEFAULT now()
+);
+
+
+ALTER TABLE public.objek_pajak OWNER TO okus_dev;
+
+--
+-- Name: objek_pajak_id_seq; Type: SEQUENCE; Schema: public; Owner: okus_dev
+--
+
+CREATE SEQUENCE public.objek_pajak_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.objek_pajak_id_seq OWNER TO okus_dev;
+
+--
+-- Name: objek_pajak_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: okus_dev
+--
+
+ALTER SEQUENCE public.objek_pajak_id_seq OWNED BY public.objek_pajak.id;
+
+
+--
+-- Name: op_detail_pajak_air_tanah; Type: TABLE; Schema: public; Owner: okus_dev
+--
+
+CREATE TABLE public.op_detail_pajak_air_tanah (
+    op_id integer NOT NULL,
+    jenis_air_tanah text NOT NULL,
+    rata2_ukuran_pemakaian numeric(15,2) NOT NULL,
+    kriteria_air_tanah text,
+    kelompok_usaha text,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.op_detail_pajak_air_tanah OWNER TO okus_dev;
+
+--
+-- Name: op_detail_pajak_reklame; Type: TABLE; Schema: public; Owner: okus_dev
+--
+
+CREATE TABLE public.op_detail_pajak_reklame (
+    op_id integer NOT NULL,
+    jenis_reklame text NOT NULL,
+    ukuran_reklame numeric(15,2) NOT NULL,
+    judul_reklame text,
+    masa_berlaku text,
+    status_reklame character varying(20) NOT NULL,
+    nama_biro_jasa text,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.op_detail_pajak_reklame OWNER TO okus_dev;
+
+--
+-- Name: op_detail_pajak_walet; Type: TABLE; Schema: public; Owner: okus_dev
+--
+
+CREATE TABLE public.op_detail_pajak_walet (
+    op_id integer NOT NULL,
+    jenis_burung_walet text NOT NULL,
+    panen_per_tahun integer NOT NULL,
+    rata2_berat_panen numeric(15,2),
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.op_detail_pajak_walet OWNER TO okus_dev;
+
+--
+-- Name: op_detail_pbjt_hiburan; Type: TABLE; Schema: public; Owner: okus_dev
+--
+
+CREATE TABLE public.op_detail_pbjt_hiburan (
+    op_id integer NOT NULL,
+    jenis_hiburan text NOT NULL,
+    kapasitas integer NOT NULL,
+    jam_operasional text,
+    jumlah_karyawan integer,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.op_detail_pbjt_hiburan OWNER TO okus_dev;
+
+--
+-- Name: op_detail_pbjt_makan_minum; Type: TABLE; Schema: public; Owner: okus_dev
+--
+
+CREATE TABLE public.op_detail_pbjt_makan_minum (
+    op_id integer NOT NULL,
+    jenis_usaha text NOT NULL,
+    kapasitas_tempat integer NOT NULL,
+    jumlah_karyawan integer,
+    rata2_pengunjung integer,
+    jam_buka time without time zone,
+    jam_tutup time without time zone,
+    harga_termurah numeric(15,2),
+    harga_termahal numeric(15,2),
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.op_detail_pbjt_makan_minum OWNER TO okus_dev;
+
+--
+-- Name: op_detail_pbjt_parkir; Type: TABLE; Schema: public; Owner: okus_dev
+--
+
+CREATE TABLE public.op_detail_pbjt_parkir (
+    op_id integer NOT NULL,
+    jenis_lokasi text NOT NULL,
+    kapasitas_kendaraan integer NOT NULL,
+    tarif_parkir numeric(15,2),
+    rata2_pengunjung integer,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.op_detail_pbjt_parkir OWNER TO okus_dev;
+
+--
+-- Name: op_detail_pbjt_perhotelan; Type: TABLE; Schema: public; Owner: okus_dev
+--
+
+CREATE TABLE public.op_detail_pbjt_perhotelan (
+    op_id integer NOT NULL,
+    jenis_usaha text NOT NULL,
+    jumlah_kamar integer NOT NULL,
+    klasifikasi text,
+    fasilitas text,
+    rata2_pengunjung_harian integer,
+    harga_termurah numeric(15,2),
+    harga_termahal numeric(15,2),
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.op_detail_pbjt_perhotelan OWNER TO okus_dev;
+
+--
+-- Name: op_detail_pbjt_tenaga_listrik; Type: TABLE; Schema: public; Owner: okus_dev
+--
+
+CREATE TABLE public.op_detail_pbjt_tenaga_listrik (
+    op_id integer NOT NULL,
+    jenis_tenaga_listrik text NOT NULL,
+    daya_listrik numeric(15,2) NOT NULL,
+    kapasitas numeric(15,2),
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.op_detail_pbjt_tenaga_listrik OWNER TO okus_dev;
+
+--
+-- Name: users; Type: TABLE; Schema: public; Owner: okus_dev
+--
+
+CREATE TABLE public.users (
+    id character varying DEFAULT gen_random_uuid() NOT NULL,
+    username text NOT NULL,
+    password text NOT NULL
+);
+
+
+ALTER TABLE public.users OWNER TO okus_dev;
+
+--
+-- Name: wajib_pajak; Type: TABLE; Schema: public; Owner: okus_dev
+--
+
+CREATE TABLE public.wajib_pajak (
+    id integer NOT NULL,
+    npwpd character varying(30),
+    nama_wp text NOT NULL,
+    alamat_wp text NOT NULL,
+    kelurahan_wp text,
+    kecamatan_wp text,
+    telepon_wa_wp character varying(20),
+    email_wp character varying(255),
+    created_at timestamp without time zone DEFAULT now() NOT NULL,
+    jenis_wp character varying(20) NOT NULL,
+    peran_wp character varying(20) NOT NULL,
+    status_aktif character varying(20) DEFAULT 'active'::character varying NOT NULL,
+    nik_ktp_wp character varying(32),
+    nama_pengelola text,
+    nik_pengelola character varying(32),
+    alamat_pengelola text,
+    kecamatan_pengelola text,
+    kelurahan_pengelola text,
+    telepon_wa_pengelola character varying(20),
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.wajib_pajak OWNER TO okus_dev;
+
+--
+-- Name: wajib_pajak_id_seq; Type: SEQUENCE; Schema: public; Owner: okus_dev
+--
+
+CREATE SEQUENCE public.wajib_pajak_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.wajib_pajak_id_seq OWNER TO okus_dev;
+
+--
+-- Name: wajib_pajak_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: okus_dev
+--
+
+ALTER SEQUENCE public.wajib_pajak_id_seq OWNED BY public.wajib_pajak.id;
+
+
+--
+-- Name: wp_badan_usaha; Type: TABLE; Schema: public; Owner: okus_dev
+--
+
+CREATE TABLE public.wp_badan_usaha (
+    wp_id integer NOT NULL,
+    nama_badan_usaha text,
+    npwp_badan_usaha character varying(32),
+    alamat_badan_usaha text,
+    kecamatan_badan_usaha text,
+    kelurahan_badan_usaha text,
+    telepon_badan_usaha character varying(20),
+    email_badan_usaha character varying(255),
+    created_at timestamp without time zone DEFAULT now() NOT NULL,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.wp_badan_usaha OWNER TO okus_dev;
+
+--
+-- Name: master_rekening_pajak id; Type: DEFAULT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.master_rekening_pajak ALTER COLUMN id SET DEFAULT nextval('public.master_rekening_pajak_id_seq'::regclass);
+
+
+--
+-- Name: objek_pajak id; Type: DEFAULT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.objek_pajak ALTER COLUMN id SET DEFAULT nextval('public.objek_pajak_id_seq'::regclass);
+
+
+--
+-- Name: wajib_pajak id; Type: DEFAULT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.wajib_pajak ALTER COLUMN id SET DEFAULT nextval('public.wajib_pajak_id_seq'::regclass);
+
+
+--
+-- Data for Name: master_kecamatan; Type: TABLE DATA; Schema: public; Owner: okus_dev
+--
+
+COPY public.master_kecamatan (cpm_kec_id, cpm_kecamatan, cpm_kode_kec, created_at, updated_at) FROM stdin;
+1609001	Kisam Ilir	01	2026-03-06 07:29:21.568618	2026-03-06 07:29:21.568618
+1609002	Warkuk Ranau Selatan	02	2026-03-06 07:29:21.575345	2026-03-06 07:29:21.575345
+1609003	Runjung Agung	03	2026-03-06 07:29:21.580359	2026-03-06 07:29:21.580359
+1609004	Sungai Are	04	2026-03-06 07:29:21.583749	2026-03-06 07:29:21.583749
+1609005	Sindang Danau	05	2026-03-06 07:29:21.588105	2026-03-06 07:29:21.588105
+1609006	BPR Ranau Tengah	06	2026-03-06 07:29:21.592433	2026-03-06 07:29:21.592433
+1609010	Banding Agung	10	2026-03-06 07:29:21.596299	2026-03-06 07:29:21.596299
+1609011	Mekakau Ilir	11	2026-03-06 07:29:21.599148	2026-03-06 07:29:21.599148
+1609020	Pulau Beringin	20	2026-03-06 07:29:21.602307	2026-03-06 07:29:21.602307
+1609030	Muaradua Kisam	30	2026-03-06 07:29:21.607669	2026-03-06 07:29:21.607669
+1609031	Kisam Tinggi	31	2026-03-06 07:29:21.611185	2026-03-06 07:29:21.611185
+1609040	Muaradua	40	2026-03-06 07:29:21.613986	2026-03-06 07:29:21.613986
+1609041	Buay Sandang Aji	41	2026-03-06 07:29:21.623854	2026-03-06 07:29:21.623854
+1609042	Buay Runjung	42	2026-03-06 07:29:21.62863	2026-03-06 07:29:21.62863
+1609043	Buay Rawan	43	2026-03-06 07:29:21.632448	2026-03-06 07:29:21.632448
+1609050	Simpang	50	2026-03-06 07:29:21.635164	2026-03-06 07:29:21.635164
+1609051	Buay Pemaca	51	2026-03-06 07:29:21.641852	2026-03-06 07:29:21.641852
+1609052	Buana Pemaca	52	2026-03-06 07:29:21.646146	2026-03-06 07:29:21.646146
+1609053	Tiga Dihaji	53	2026-03-06 07:29:21.649185	2026-03-06 07:29:21.649185
+1609054	Wilayah OKU Selatan	54	2026-03-06 07:29:21.652251	2026-03-06 07:29:21.652251
+KEC-DUMMY-001	Kecamatan Dummy Satu	D001	2026-03-06 09:19:24.532688	2026-03-06 09:19:24.532688
+KEC-DUMMY-002	Kecamatan Dummy Dua	D002	2026-03-06 09:19:24.532688	2026-03-06 09:19:24.532688
+KEC-DUMMY-003	Kecamatan Dummy Tiga	D003	2026-03-06 09:19:24.532688	2026-03-06 09:19:24.532688
+\.
+
+
+--
+-- Data for Name: master_kelurahan; Type: TABLE DATA; Schema: public; Owner: okus_dev
+--
+
+COPY public.master_kelurahan (cpm_kel_id, cpm_kelurahan, cpm_kode_kec, cpm_kode_kel, created_at, updated_at) FROM stdin;
+1609001001	Pulau Kemiling	01	01	2026-03-06 07:29:21.656971	2026-03-06 07:29:21.656971
+1609001002	Siring Alam	01	02	2026-03-06 07:29:21.660847	2026-03-06 07:29:21.660847
+1609001003	Pengandonan	01	03	2026-03-06 07:29:21.664242	2026-03-06 07:29:21.664242
+1609001004	Pius	01	04	2026-03-06 07:29:21.667132	2026-03-06 07:29:21.667132
+1609001005	Keban Agung	01	05	2026-03-06 07:29:21.670158	2026-03-06 07:29:21.670158
+1609001006	Muara Sindang	01	06	2026-03-06 07:29:21.674978	2026-03-06 07:29:21.674978
+1609001007	Simpang Campang	01	07	2026-03-06 07:29:21.679546	2026-03-06 07:29:21.679546
+1609001070	Campang Jaya	01	70	2026-03-06 07:29:21.682222	2026-03-06 07:29:21.682222
+1609001071	Tanjung Jati	01	71	2026-03-06 07:29:21.684926	2026-03-06 07:29:21.684926
+1609002001	Kota Batu	02	01	2026-03-06 07:29:21.689485	2026-03-06 07:29:21.689485
+1609002002	Sukajaya	02	02	2026-03-06 07:29:21.694682	2026-03-06 07:29:21.694682
+1609002003	Tanjung Jati	02	03	2026-03-06 07:29:21.698295	2026-03-06 07:29:21.698295
+1609002004	Pagar Dewa	02	04	2026-03-06 07:29:21.701657	2026-03-06 07:29:21.701657
+1609002005	Pilla	02	05	2026-03-06 07:29:21.706312	2026-03-06 07:29:21.706312
+1609002006	Gunung Aji	02	06	2026-03-06 07:29:21.711284	2026-03-06 07:29:21.711284
+1609002008	Gunung Raya	02	08	2026-03-06 07:29:21.716463	2026-03-06 07:29:21.716463
+1609002009	Remanam Jaya	02	09	2026-03-06 07:29:21.721821	2026-03-06 07:29:21.721821
+1609002010	Mekar Sari	02	10	2026-03-06 07:29:21.72714	2026-03-06 07:29:21.72714
+1609002011	Kiwis Raya	02	11	2026-03-06 07:29:21.734266	2026-03-06 07:29:21.734266
+1609002013	Segigok Raya	02	13	2026-03-06 07:29:21.749968	2026-03-06 07:29:21.749968
+1609002014	Bumi Agung	02	14	2026-03-06 07:29:21.756402	2026-03-06 07:29:21.756402
+1609002015	Gedung Ranau	02	15	2026-03-06 07:29:21.763942	2026-03-06 07:29:21.763942
+1609002016	Bedeng Tiga	02	16	2026-03-06 07:29:21.775842	2026-03-06 07:29:21.775842
+1609002017	Tanjung Baru Warkuk	02	17	2026-03-06 07:29:21.782826	2026-03-06 07:29:21.782826
+1609002018	Way Wangi Seminung	02	18	2026-03-06 07:29:21.789215	2026-03-06 07:29:21.789215
+1609003001	Air Baru	03	01	2026-03-06 07:29:21.799022	2026-03-06 07:29:21.799022
+1609003002	Merpang	03	02	2026-03-06 07:29:21.805663	2026-03-06 07:29:21.805663
+1609003003	Gedung Wani	03	03	2026-03-06 07:29:21.813581	2026-03-06 07:29:21.813581
+1609003004	Bumi Genap	03	04	2026-03-06 07:29:21.818919	2026-03-06 07:29:21.818919
+1609003005	Penanggungan	03	05	2026-03-06 07:29:21.826612	2026-03-06 07:29:21.826612
+1609003006	Tanjung Kurung	03	06	2026-03-06 07:29:21.833213	2026-03-06 07:29:21.833213
+1609003007	Karang Endah	03	07	2026-03-06 07:29:21.843145	2026-03-06 07:29:21.843145
+1609003008	Gedung Nyawa	03	08	2026-03-06 07:29:21.848672	2026-03-06 07:29:21.848672
+1609003009	Sura	03	09	2026-03-06 07:29:21.854657	2026-03-06 07:29:21.854657
+1609004001	Simpang Luas	04	01	2026-03-06 07:29:21.861246	2026-03-06 07:29:21.861246
+1609004010	Pulau Kemuning	04	10	2026-03-06 07:29:21.867619	2026-03-06 07:29:21.867619
+1609004011	Cukoh Nau	04	11	2026-03-06 07:29:21.881455	2026-03-06 07:29:21.881455
+1609004012	Ujan Mas	04	12	2026-03-06 07:29:21.888246	2026-03-06 07:29:21.888246
+1609004013	Sadau Jaya	04	13	2026-03-06 07:29:21.90253	2026-03-06 07:29:21.90253
+1609004014	Guntung Jaya	04	14	2026-03-06 07:29:21.910569	2026-03-06 07:29:21.910569
+1609004015	Tanah Pilih	04	15	2026-03-06 07:29:21.916519	2026-03-06 07:29:21.916519
+1609004016	Pecah Pinggan	04	16	2026-03-06 07:29:21.925969	2026-03-06 07:29:21.925969
+1609004018	Sebaja	04	18	2026-03-06 07:29:21.933475	2026-03-06 07:29:21.933475
+1609005001	Muara Sindang Ilir	05	01	2026-03-06 07:29:21.944083	2026-03-06 07:29:21.944083
+1609005002	Tanjung Harapan	05	02	2026-03-06 07:29:21.952172	2026-03-06 07:29:21.952172
+1609005003	Ulu Danau	05	03	2026-03-06 07:29:21.96784	2026-03-06 07:29:21.96784
+1609005004	Watas	05	04	2026-03-06 07:29:21.989899	2026-03-06 07:29:21.989899
+1609005005	Tebat Layang	05	05	2026-03-06 07:29:21.998273	2026-03-06 07:29:21.998273
+1609005017	Muara Sindang Tengah	05	17	2026-03-06 07:29:22.003423	2026-03-06 07:29:22.003423
+1609005018	Pematang Danau	05	18	2026-03-06 07:29:22.008668	2026-03-06 07:29:22.008668
+1609006001	Sukabumi	06	01	2026-03-06 07:29:22.015125	2026-03-06 07:29:22.015125
+1609006002	Tanjung Sari	06	02	2026-03-06 07:29:22.019389	2026-03-06 07:29:22.019389
+1609006003	Padang Ratu	06	03	2026-03-06 07:29:22.03298	2026-03-06 07:29:22.03298
+1609006004	Gedung Baru	06	04	2026-03-06 07:29:22.038709	2026-03-06 07:29:22.038709
+1609006005	Tanjung Setia	06	05	2026-03-06 07:29:22.053331	2026-03-06 07:29:22.053331
+1609006006	Simpang Sender	06	06	2026-03-06 07:29:22.062904	2026-03-06 07:29:22.062904
+1609006007	Sumber Mulia	06	07	2026-03-06 07:29:22.071658	2026-03-06 07:29:22.071658
+1609006008	Sukarami	06	08	2026-03-06 07:29:22.0984	2026-03-06 07:29:22.0984
+1609006010	Hangkusa	06	10	2026-03-06 07:29:22.106016	2026-03-06 07:29:22.106016
+1609006011	Jepara	06	11	2026-03-06 07:29:22.113991	2026-03-06 07:29:22.113991
+1609006012	Subik	06	12	2026-03-06 07:29:22.132268	2026-03-06 07:29:22.132268
+1609006013	Sukamarga	06	13	2026-03-06 07:29:22.139544	2026-03-06 07:29:22.139544
+1609006014	Tanjung Kemala	06	14	2026-03-06 07:29:22.14871	2026-03-06 07:29:22.14871
+1609006015	Sumber Jaya	06	15	2026-03-06 07:29:22.159688	2026-03-06 07:29:22.159688
+1609006016	Wayrelai	06	16	2026-03-06 07:29:22.165833	2026-03-06 07:29:22.165833
+1609006017	Tanjung Baru Ranau	06	17	2026-03-06 07:29:22.172649	2026-03-06 07:29:22.172649
+1609006018	Simpang Sender Selatan	06	18	2026-03-06 07:29:22.179219	2026-03-06 07:29:22.179219
+1609006019	Simpang Sender Utara	06	19	2026-03-06 07:29:22.184171	2026-03-06 07:29:22.184171
+1609006020	Simpang Sender Timur	06	20	2026-03-06 07:29:22.19176	2026-03-06 07:29:22.19176
+1609006021	Simpang Sender Tengah	06	21	2026-03-06 07:29:22.202416	2026-03-06 07:29:22.202416
+1609006022	Serumpun Jaya	06	22	2026-03-06 07:29:22.221079	2026-03-06 07:29:22.221079
+1609006023	Pakhda Suka	06	23	2026-03-06 07:29:22.23399	2026-03-06 07:29:22.23399
+1609010020	Way Timah	10	20	2026-03-06 07:29:22.244014	2026-03-06 07:29:22.244014
+1609010021	Sipatuhu	10	21	2026-03-06 07:29:22.263746	2026-03-06 07:29:22.263746
+1609010022	Banding Agung	10	22	2026-03-06 07:29:22.277688	2026-03-06 07:29:22.277688
+1609010023	Surabaya	10	23	2026-03-06 07:29:22.290502	2026-03-06 07:29:22.290502
+1609010024	Bandar Agung	10	24	2026-03-06 07:29:22.307237	2026-03-06 07:29:22.307237
+1609010025	Suka Negeri	10	25	2026-03-06 07:29:22.318	2026-03-06 07:29:22.318
+1609010026	Sugih Waras	10	26	2026-03-06 07:29:22.33246	2026-03-06 07:29:22.33246
+1609010027	Rantau Nipis	10	27	2026-03-06 07:29:22.339368	2026-03-06 07:29:22.339368
+1609010028	Air Rupik	10	28	2026-03-06 07:29:22.351178	2026-03-06 07:29:22.351178
+1609010029	Terap Mulia	10	29	2026-03-06 07:29:22.356769	2026-03-06 07:29:22.356769
+1609010030	Sipatuhu II	10	30	2026-03-06 07:29:22.360781	2026-03-06 07:29:22.360781
+1609010031	Sidodadi	10	31	2026-03-06 07:29:22.365158	2026-03-06 07:29:22.365158
+1609010032	Talang Merbau	10	32	2026-03-06 07:29:22.369086	2026-03-06 07:29:22.369086
+1609010033	Penantian	10	33	2026-03-06 07:29:22.379624	2026-03-06 07:29:22.379624
+1609010034	Sukamaju	10	34	2026-03-06 07:29:22.383986	2026-03-06 07:29:22.383986
+1609010035	Surabaya Timur	10	35	2026-03-06 07:29:22.391672	2026-03-06 07:29:22.391672
+1609010036	Tangsi Agung	10	36	2026-03-06 07:29:22.397323	2026-03-06 07:29:22.397323
+1609010038	Tanjung Agung	10	38	2026-03-06 07:29:22.416166	2026-03-06 07:29:22.416166
+1609010039	Sumber Makmur	10	39	2026-03-06 07:29:22.431636	2026-03-06 07:29:22.431636
+1609010040	Karang Indah	10	40	2026-03-06 07:29:22.436593	2026-03-06 07:29:22.436593
+1609010041	Telanai	10	41	2026-03-06 07:29:22.447277	2026-03-06 07:29:22.447277
+1609010042	Tanjung Harapan	10	42	2026-03-06 07:29:22.451289	2026-03-06 07:29:22.451289
+1609011028	Kota Dalam	11	28	2026-03-06 07:29:22.462826	2026-03-06 07:29:22.462826
+1609011029	Teluk Agung	11	29	2026-03-06 07:29:22.467224	2026-03-06 07:29:22.467224
+1609011030	Tanjung Besar	11	30	2026-03-06 07:29:22.473677	2026-03-06 07:29:22.473677
+1609011031	Pulau Duku	11	31	2026-03-06 07:29:22.483028	2026-03-06 07:29:22.483028
+1609011032	Sinar Marga	11	32	2026-03-06 07:29:22.489205	2026-03-06 07:29:22.489205
+1609011033	Kota Baru	11	33	2026-03-06 07:29:22.494173	2026-03-06 07:29:22.494173
+1609011034	Galang Tinggi	11	34	2026-03-06 07:29:22.500552	2026-03-06 07:29:22.500552
+1609011035	Sukaraja	11	35	2026-03-06 07:29:22.505911	2026-03-06 07:29:22.505911
+1609011036	Sri Menanti	11	36	2026-03-06 07:29:22.515983	2026-03-06 07:29:22.515983
+1609011037	Bunut	11	37	2026-03-06 07:29:22.521295	2026-03-06 07:29:22.521295
+1609011038	Kemang Bandung	11	38	2026-03-06 07:29:22.530404	2026-03-06 07:29:22.530404
+1609011039	Kepayang	11	39	2026-03-06 07:29:22.540011	2026-03-06 07:29:22.540011
+1609011041	Perean	11	41	2026-03-06 07:29:22.550073	2026-03-06 07:29:22.550073
+1609011042	Selabung Belimbing Jaya	11	42	2026-03-06 07:29:22.565744	2026-03-06 07:29:22.565744
+1609011043	Air Baru	11	43	2026-03-06 07:29:22.57706	2026-03-06 07:29:22.57706
+1609020002	Pagar Agung	20	02	2026-03-06 07:29:22.583237	2026-03-06 07:29:22.583237
+1609020003	Gunung Batu	20	03	2026-03-06 07:29:22.589062	2026-03-06 07:29:22.589062
+1609020004	Kemu	20	04	2026-03-06 07:29:22.597029	2026-03-06 07:29:22.597029
+1609020005	Simpang Pancur	20	05	2026-03-06 07:29:22.605001	2026-03-06 07:29:22.605001
+1609020006	Tanjung Kari	20	06	2026-03-06 07:29:22.611451	2026-03-06 07:29:22.611451
+1609020007	Aromantai	20	07	2026-03-06 07:29:22.619402	2026-03-06 07:29:22.619402
+1609020008	Pulau Beringin	20	08	2026-03-06 07:29:22.638139	2026-03-06 07:29:22.638139
+1609020009	Tanjung Bulan	20	09	2026-03-06 07:29:22.647129	2026-03-06 07:29:22.647129
+1609020010	Pematang Obar	20	10	2026-03-06 07:29:22.652423	2026-03-06 07:29:22.652423
+1609020011	Pulau Beringin Utara	20	11	2026-03-06 07:29:22.665782	2026-03-06 07:29:22.665782
+1609020064	Kemu Ulu	20	64	2026-03-06 07:29:22.671692	2026-03-06 07:29:22.671692
+1609020065	Anugrah Kemu	20	65	2026-03-06 07:29:22.683761	2026-03-06 07:29:22.683761
+1609020066	Tanjung Bulan Ulu	20	66	2026-03-06 07:29:22.709716	2026-03-06 07:29:22.709716
+1609030001	Lawang Agung	30	01	2026-03-06 07:29:22.71579	2026-03-06 07:29:22.71579
+1609030002	Bayur Tengah	30	02	2026-03-06 07:29:22.730371	2026-03-06 07:29:22.730371
+1609030003	Tanjung Tebat	30	03	2026-03-06 07:29:22.73455	2026-03-06 07:29:22.73455
+1609030004	Sugihan	30	04	2026-03-06 07:29:22.739354	2026-03-06 07:29:22.739354
+1609030005	Penyandingan	30	05	2026-03-06 07:29:22.743644	2026-03-06 07:29:22.743644
+1609030006	Alun Dua	30	06	2026-03-06 07:29:22.748157	2026-03-06 07:29:22.748157
+1609030007	Dusun Tengah	30	07	2026-03-06 07:29:22.752417	2026-03-06 07:29:22.752417
+1609030008	Ulak Agung Ilir	30	08	2026-03-06 07:29:22.762463	2026-03-06 07:29:22.762463
+1609030009	Bandar Alam Baru	30	09	2026-03-06 07:29:22.766852	2026-03-06 07:29:22.766852
+1609030010	Gunung Gare	30	10	2026-03-06 07:29:22.775755	2026-03-06 07:29:22.775755
+1609030018	Tanjung Beringin	30	18	2026-03-06 07:29:22.780728	2026-03-06 07:29:22.780728
+1609030019	Ulak Agung Ulu	30	19	2026-03-06 07:29:22.788239	2026-03-06 07:29:22.788239
+1609030020	Muaradua Kisam	30	20	2026-03-06 07:29:22.796812	2026-03-06 07:29:22.796812
+1609030021	Pagar Dewa	30	21	2026-03-06 07:29:22.803143	2026-03-06 07:29:22.803143
+1609030022	Sukananti	30	22	2026-03-06 07:29:22.810591	2026-03-06 07:29:22.810591
+1609030029	Suka Raja	30	29	2026-03-06 07:29:22.817936	2026-03-06 07:29:22.817936
+1609030030	Penantian	30	30	2026-03-06 07:29:22.827907	2026-03-06 07:29:22.827907
+1609030040	Simpang Lubuk Dalam	30	40	2026-03-06 07:29:22.836217	2026-03-06 07:29:22.836217
+1609031001	Tenang	31	01	2026-03-06 07:29:22.841559	2026-03-06 07:29:22.841559
+1609031002	Balaian	31	02	2026-03-06 07:29:22.847814	2026-03-06 07:29:22.847814
+1609031003	Berasang	31	03	2026-03-06 07:29:22.852354	2026-03-06 07:29:22.852354
+1609031004	Tebat Gabus	31	04	2026-03-06 07:29:22.86198	2026-03-06 07:29:22.86198
+1609031005	Padang Lay	31	05	2026-03-06 07:29:22.869543	2026-03-06 07:29:22.869543
+1609031006	Danau Rata	31	06	2026-03-06 07:29:22.876648	2026-03-06 07:29:22.876648
+1609031007	Pajar Bulan	31	07	2026-03-06 07:29:22.882701	2026-03-06 07:29:22.882701
+1609031008	Bandar Alam Lama	31	08	2026-03-06 07:29:22.889241	2026-03-06 07:29:22.889241
+1609031009	Siring Agung	31	09	2026-03-06 07:29:22.895129	2026-03-06 07:29:22.895129
+1609031010	Muara Payang	31	10	2026-03-06 07:29:22.900544	2026-03-06 07:29:22.900544
+1609031011	Kota Padang	31	11	2026-03-06 07:29:22.905395	2026-03-06 07:29:22.905395
+1609031012	Padang Bindu	31	12	2026-03-06 07:29:22.910026	2026-03-06 07:29:22.910026
+1609031013	Gunung Megang	31	13	2026-03-06 07:29:22.914764	2026-03-06 07:29:22.914764
+1609031014	Ulak Pandan	31	14	2026-03-06 07:29:22.918105	2026-03-06 07:29:22.918105
+1609031015	Pulau Panggung	31	15	2026-03-06 07:29:22.922736	2026-03-06 07:29:22.922736
+1609031016	Simpang Tiga	31	16	2026-03-06 07:29:22.928803	2026-03-06 07:29:22.928803
+1609031017	Air Alun	31	17	2026-03-06 07:29:22.932922	2026-03-06 07:29:22.932922
+1609031018	Singa Laga	31	18	2026-03-06 07:29:22.936791	2026-03-06 07:29:22.936791
+1609031019	Simpang Empat	31	19	2026-03-06 07:29:22.942248	2026-03-06 07:29:22.942248
+1609040001	Batu Belang Jaya	40	01	2026-03-06 07:29:22.947365	2026-03-06 07:29:22.947365
+1609040012	Suka Banjar	40	12	2026-03-06 07:29:22.950977	2026-03-06 07:29:22.950977
+1609040013	Sukaraja II	40	13	2026-03-06 07:29:22.955319	2026-03-06 07:29:22.955319
+1609040015	Pelangki	40	15	2026-03-06 07:29:22.960012	2026-03-06 07:29:22.960012
+1609040017	Bumi Agung	40	17	2026-03-06 07:29:22.964669	2026-03-06 07:29:22.964669
+1609040018	Gunung Tiga	40	18	2026-03-06 07:29:22.96756	2026-03-06 07:29:22.96756
+1609040019	Gedung Lepihan	40	19	2026-03-06 07:29:22.971251	2026-03-06 07:29:22.971251
+1609040054	Mehanggin	40	54	2026-03-06 07:29:22.975772	2026-03-06 07:29:22.975772
+1609040055	Pendagan	40	55	2026-03-06 07:29:22.979273	2026-03-06 07:29:22.979273
+1609040057	Pancur Pungah	40	57	2026-03-06 07:29:22.98223	2026-03-06 07:29:22.98223
+1609040058	Kisau	40	58	2026-03-06 07:29:22.985133	2026-03-06 07:29:22.985133
+1609040059	Pasar Muaradua	40	59	2026-03-06 07:29:22.989297	2026-03-06 07:29:22.989297
+1609040063	Datar	40	63	2026-03-06 07:29:22.993076	2026-03-06 07:29:22.993076
+1609040064	Batu Belang 2	40	64	2026-03-06 07:29:22.996505	2026-03-06 07:29:22.996505
+1609041020	Gunung Terang	41	20	2026-03-06 07:29:22.998966	2026-03-06 07:29:22.998966
+1609041021	Suka Rame	41	21	2026-03-06 07:29:23.001483	2026-03-06 07:29:23.001483
+1609041022	Tanjung Raya	41	22	2026-03-06 07:29:23.004931	2026-03-06 07:29:23.004931
+1609041024	Tanjung Menang Ilir	41	24	2026-03-06 07:29:23.008853	2026-03-06 07:29:23.008853
+1609041025	Tanjung Menang Ulu	41	25	2026-03-06 07:29:23.012538	2026-03-06 07:29:23.012538
+1609041026	Kenali	41	26	2026-03-06 07:29:23.015105	2026-03-06 07:29:23.015105
+1609041027	Negeri Cahya	41	27	2026-03-06 07:29:23.017889	2026-03-06 07:29:23.017889
+1609041028	Sukaraja I	41	28	2026-03-06 07:29:23.021312	2026-03-06 07:29:23.021312
+1609041029	Tanjung Iman	41	29	2026-03-06 07:29:23.025762	2026-03-06 07:29:23.025762
+1609041030	Lubuk Liku	41	30	2026-03-06 07:29:23.02929	2026-03-06 07:29:23.02929
+1609041031	Bunga Mas	41	31	2026-03-06 07:29:23.032079	2026-03-06 07:29:23.032079
+1609041050	Kota Karang	41	50	2026-03-06 07:29:23.036641	2026-03-06 07:29:23.036641
+1609041051	Negeri Batin	41	51	2026-03-06 07:29:23.042532	2026-03-06 07:29:23.042532
+1609041052	Madura	41	52	2026-03-06 07:29:23.048562	2026-03-06 07:29:23.048562
+1609041053	Negeri Agung	41	53	2026-03-06 07:29:23.052585	2026-03-06 07:29:23.052585
+1609041054	Talang Baru	41	54	2026-03-06 07:29:23.057758	2026-03-06 07:29:23.057758
+1609042032	Sugih Waras	42	32	2026-03-06 07:29:23.060953	2026-03-06 07:29:23.060953
+1609042033	Pandan Sari	42	33	2026-03-06 07:29:23.063409	2026-03-06 07:29:23.063409
+1609042034	Padang Bindu	42	34	2026-03-06 07:29:23.065639	2026-03-06 07:29:23.065639
+1609042035	Saung Naga	42	35	2026-03-06 07:29:23.068313	2026-03-06 07:29:23.068313
+1609042036	Nagar Agung	42	36	2026-03-06 07:29:23.072213	2026-03-06 07:29:23.072213
+1609042037	Negeri Batin Baru	42	37	2026-03-06 07:29:23.075183	2026-03-06 07:29:23.075183
+1609042038	Kota Aman	42	38	2026-03-06 07:29:23.078729	2026-03-06 07:29:23.078729
+1609042039	Peninjauan	42	39	2026-03-06 07:29:23.081129	2026-03-06 07:29:23.081129
+1609042040	Belambangan	42	40	2026-03-06 07:29:23.083477	2026-03-06 07:29:23.083477
+1609042041	Sukajadi Belambangan	42	41	2026-03-06 07:29:23.086074	2026-03-06 07:29:23.086074
+1609042042	Bedeng Belambangan	42	42	2026-03-06 07:29:23.090308	2026-03-06 07:29:23.090308
+1609042043	Kagelang	42	43	2026-03-06 07:29:23.095789	2026-03-06 07:29:23.095789
+1609042045	Perupus Belambangan	42	45	2026-03-06 07:29:23.098701	2026-03-06 07:29:23.098701
+1609042046	Simpang Saga	42	46	2026-03-06 07:29:23.101302	2026-03-06 07:29:23.101302
+1609043002	Gunung Cahya	43	02	2026-03-06 07:29:23.105684	2026-03-06 07:29:23.105684
+1609043003	Pelawi	43	03	2026-03-06 07:29:23.111703	2026-03-06 07:29:23.111703
+1609043004	Pekuwolan	43	04	2026-03-06 07:29:23.116447	2026-03-06 07:29:23.116447
+1609043005	Sukajaya	43	05	2026-03-06 07:29:23.122967	2026-03-06 07:29:23.122967
+1609043006	Majar	43	06	2026-03-06 07:29:23.128219	2026-03-06 07:29:23.128219
+1609043007	Ruos	43	07	2026-03-06 07:29:23.134534	2026-03-06 07:29:23.134534
+1609043008	Bumi Jaya	43	08	2026-03-06 07:29:23.144547	2026-03-06 07:29:23.144547
+1609043009	Banjar Agung	43	09	2026-03-06 07:29:23.150763	2026-03-06 07:29:23.150763
+1609043010	Bumi Agung Jaya	43	10	2026-03-06 07:29:23.164048	2026-03-06 07:29:23.164048
+1609043014	Rantau Panjang	43	14	2026-03-06 07:29:23.170081	2026-03-06 07:29:23.170081
+1609043060	Bendi	43	60	2026-03-06 07:29:23.180496	2026-03-06 07:29:23.180496
+1609050001	Sinar Mulyo	50	01	2026-03-06 07:29:23.186473	2026-03-06 07:29:23.186473
+1609050003	Simpang Agung	50	03	2026-03-06 07:29:23.197452	2026-03-06 07:29:23.197452
+1609050012	Tanjung Sari	50	12	2026-03-06 07:29:23.204753	2026-03-06 07:29:23.204753
+1609050014	Lubar	50	14	2026-03-06 07:29:23.212518	2026-03-06 07:29:23.212518
+1609050015	Karang Agung	50	15	2026-03-06 07:29:23.219204	2026-03-06 07:29:23.219204
+1609050016	Simpangan	50	16	2026-03-06 07:29:23.230796	2026-03-06 07:29:23.230796
+1609050017	Bungin Campang	50	17	2026-03-06 07:29:23.236363	2026-03-06 07:29:23.236363
+1609051001	Sipin	51	01	2026-03-06 07:29:23.244141	2026-03-06 07:29:23.244141
+1609051002	Tanjung Durian	51	02	2026-03-06 07:29:23.250751	2026-03-06 07:29:23.250751
+1609051003	Kota Way	51	03	2026-03-06 07:29:23.261088	2026-03-06 07:29:23.261088
+1609051004	Karet Jaya	51	04	2026-03-06 07:29:23.266099	2026-03-06 07:29:23.266099
+1609051005	Sri Menanti	51	05	2026-03-06 07:29:23.273623	2026-03-06 07:29:23.273623
+1609051006	Talang Padang	51	06	2026-03-06 07:29:23.281971	2026-03-06 07:29:23.281971
+1609051007	Serakat Jaya	51	07	2026-03-06 07:29:23.287021	2026-03-06 07:29:23.287021
+1609051008	Danau Jaya	51	08	2026-03-06 07:29:23.298924	2026-03-06 07:29:23.298924
+1609051009	Sido Rahayu	51	09	2026-03-06 07:29:23.304083	2026-03-06 07:29:23.304083
+1609051010	Kembang Tinggi	51	10	2026-03-06 07:29:23.310346	2026-03-06 07:29:23.310346
+1609051011	Sidodadi	51	11	2026-03-06 07:29:23.323005	2026-03-06 07:29:23.323005
+1609051012	Sumber Raya	51	12	2026-03-06 07:29:23.329512	2026-03-06 07:29:23.329512
+1609051013	Sumber Ringin	51	13	2026-03-06 07:29:23.3392	2026-03-06 07:29:23.3392
+1609051014	Durian Sembilan	51	14	2026-03-06 07:29:23.346736	2026-03-06 07:29:23.346736
+1609051015	Air Kelian	51	15	2026-03-06 07:29:23.357692	2026-03-06 07:29:23.357692
+1609051016	Tanjung Baru	51	16	2026-03-06 07:29:23.367763	2026-03-06 07:29:23.367763
+1609051017	Tanjung Menang	51	17	2026-03-06 07:29:23.380084	2026-03-06 07:29:23.380084
+1609051067	Tanjung Jaya	51	67	2026-03-06 07:29:23.389222	2026-03-06 07:29:23.389222
+1609051069	Tanjung Sari	51	69	2026-03-06 07:29:23.394702	2026-03-06 07:29:23.394702
+1609051070	Mekar Jaya	51	70	2026-03-06 07:29:23.40115	2026-03-06 07:29:23.40115
+1609051071	Sinar Baru	51	71	2026-03-06 07:29:23.407604	2026-03-06 07:29:23.407604
+1609051072	Sinar Napalan	51	72	2026-03-06 07:29:23.422142	2026-03-06 07:29:23.422142
+1609052001	Damar Pura	52	01	2026-03-06 07:29:23.428726	2026-03-06 07:29:23.428726
+1609052002	Bandar	52	02	2026-03-06 07:29:23.435768	2026-03-06 07:29:23.435768
+1609052003	Jaga Raga	52	03	2026-03-06 07:29:23.442202	2026-03-06 07:29:23.442202
+1609052004	Tanjung Beringin	52	04	2026-03-06 07:29:23.448528	2026-03-06 07:29:23.448528
+1609052005	Tekana	52	05	2026-03-06 07:29:23.452749	2026-03-06 07:29:23.452749
+1609052006	Sinar Danau	52	06	2026-03-06 07:29:23.458706	2026-03-06 07:29:23.458706
+1609052007	Tunas Jaya	52	07	2026-03-06 07:29:23.465254	2026-03-06 07:29:23.465254
+1609052070	Gemiung	52	70	2026-03-06 07:29:23.469844	2026-03-06 07:29:23.469844
+1609053001	Peninggiran	53	01	2026-03-06 07:29:23.479705	2026-03-06 07:29:23.479705
+1609053002	Kuripan	53	02	2026-03-06 07:29:23.484277	2026-03-06 07:29:23.484277
+1609053003	Surabaya	53	03	2026-03-06 07:29:23.493298	2026-03-06 07:29:23.493298
+1609053005	Karang Pendeta	53	05	2026-03-06 07:29:23.500704	2026-03-06 07:29:23.500704
+1609053006	Kota Agung	53	06	2026-03-06 07:29:23.505903	2026-03-06 07:29:23.505903
+1609053007	Suka Bumi	53	07	2026-03-06 07:29:23.51695	2026-03-06 07:29:23.51695
+1609053008	Kuripan Ii	53	08	2026-03-06 07:29:23.522037	2026-03-06 07:29:23.522037
+1609053009	Sukarena	53	09	2026-03-06 07:29:23.530387	2026-03-06 07:29:23.530387
+1609054001	Wilayah OKU Selatan	54	01	2026-03-06 07:29:23.535707	2026-03-06 07:29:23.535707
+KEL-DUMMY-001	Kelurahan Dummy Satu	D001	K001	2026-03-06 09:19:24.532688	2026-03-06 09:19:24.532688
+KEL-DUMMY-002	Kelurahan Dummy Dua	D002	K002	2026-03-06 09:19:24.532688	2026-03-06 09:19:24.532688
+KEL-DUMMY-003	Kelurahan Dummy Tiga	D003	K003	2026-03-06 09:19:24.532688	2026-03-06 09:19:24.532688
+\.
+
+
+--
+-- Data for Name: master_rekening_pajak; Type: TABLE DATA; Schema: public; Owner: okus_dev
+--
+
+COPY public.master_rekening_pajak (id, kode_rekening, nama_rekening, jenis_pajak, is_active, created_at, updated_at) FROM stdin;
+5	4.1.01.19.01.0001	PBJT - Makanan dan/atau Minuman	PBJT Makanan dan Minuman	t	2026-03-06 07:29:23.568716	2026-03-06 09:19:24.532688
+7	4.1.01.19.03.0001	PBJT - Jasa Perhotelan	PBJT Jasa Perhotelan	t	2026-03-06 07:29:23.582458	2026-03-06 09:19:24.532688
+8	4.1.01.19.04.0001	PBJT - Jasa Parkir	PBJT Jasa Parkir	t	2026-03-06 07:29:23.589223	2026-03-06 09:19:24.532688
+9	4.1.01.19.05.0001	PBJT - Jasa Kesenian dan Hiburan	PBJT Jasa Kesenian dan Hiburan	t	2026-03-06 07:29:23.598709	2026-03-06 09:19:24.532688
+6	4.1.01.19.02.0001	PBJT - Tenaga Listrik	PBJT Tenaga Listrik	t	2026-03-06 07:29:23.575163	2026-03-06 09:19:24.532688
+1	4.1.01.09.01.0001	Pajak Reklame	Pajak Reklame	t	2026-03-06 07:29:23.542123	2026-03-06 09:19:24.532688
+2	4.1.01.12.01.0001	Pajak Air Tanah	Pajak Air Tanah	t	2026-03-06 07:29:23.54896	2026-03-06 09:19:24.532688
+3	4.1.01.13.01.0001	Pajak Sarang Burung Walet	Pajak Sarang Burung Walet	t	2026-03-06 07:29:23.55388	2026-03-06 09:19:24.532688
+4	4.1.01.14.01.0001	Pajak Mineral Bukan Logam dan Batuan	Pajak MBLB	t	2026-03-06 07:29:23.562941	2026-03-06 09:19:24.532688
+\.
+
+
+--
+-- Data for Name: objek_pajak; Type: TABLE DATA; Schema: public; Owner: okus_dev
+--
+
+COPY public.objek_pajak (id, nopd, wp_id, jenis_pajak, nama_objek, alamat, kelurahan, kecamatan, omset_bulanan, tarif_persen, pajak_bulanan, rating, review_count, detail_pajak, latitude, longitude, status, created_at, rek_pajak_id, nama_op, npwp_op, alamat_op, kecamatan_id, kelurahan_id, updated_at) FROM stdin;
+10	OP.321.901.2026	17	PBJT Makanan dan Minuman	Resto Dummy Nusantara	Jl. OP Dummy 1	Kelurahan Dummy Satu	Kecamatan Dummy Satu	120000000.00	10.00	12000000.00	\N	\N	{}	-4.1234567	104.1234567	active	2026-03-06 09:19:24.532688	5	Resto Dummy Nusantara	31.111.222.3-901.000	Jl. OP Dummy 1	KEC-DUMMY-001	KEL-DUMMY-001	2026-03-06 09:19:24.532688
+11	OP.321.902.2026	18	PBJT Jasa Perhotelan	Hotel Dummy Sentosa	Jl. OP Dummy 2	Kelurahan Dummy Dua	Kecamatan Dummy Dua	250000000.00	10.00	25000000.00	\N	\N	{}	-4.2234567	104.2234567	active	2026-03-06 09:19:24.532688	7	Hotel Dummy Sentosa	31.111.222.3-902.000	Jl. OP Dummy 2	KEC-DUMMY-002	KEL-DUMMY-002	2026-03-06 09:19:24.532688
+12	OP.321.903.2026	19	PBJT Jasa Parkir	Parkir Dummy Center	Jl. OP Dummy 3	Kelurahan Dummy Tiga	Kecamatan Dummy Tiga	80000000.00	10.00	8000000.00	\N	\N	{}	-4.3234567	104.3234567	active	2026-03-06 09:19:24.532688	8	Parkir Dummy Center	31.111.222.3-903.000	Jl. OP Dummy 3	KEC-DUMMY-003	KEL-DUMMY-003	2026-03-06 09:19:24.532688
+13	OP.321.904.2026	20	PBJT Jasa Kesenian dan Hiburan	Arena Hiburan Dummy	Jl. OP Dummy 4	Kelurahan Dummy Satu	Kecamatan Dummy Satu	140000000.00	10.00	14000000.00	\N	\N	{}	-4.4234567	104.4234567	active	2026-03-06 09:19:24.532688	9	Arena Hiburan Dummy	31.111.222.3-904.000	Jl. OP Dummy 4	KEC-DUMMY-001	KEL-DUMMY-001	2026-03-06 09:19:24.532688
+14	OP.321.905.2026	21	PBJT Tenaga Listrik	PLN Dummy Niaga	Jl. OP Dummy 5	Kelurahan Dummy Dua	Kecamatan Dummy Dua	300000000.00	10.00	30000000.00	\N	\N	{}	-4.5234567	104.5234567	active	2026-03-06 09:19:24.532688	6	PLN Dummy Niaga	31.111.222.3-905.000	Jl. OP Dummy 5	KEC-DUMMY-002	KEL-DUMMY-002	2026-03-06 09:19:24.532688
+15	OP.321.906.2026	22	Pajak Reklame	Reklame Dummy Billboard	Jl. OP Dummy 6	Kelurahan Dummy Tiga	Kecamatan Dummy Tiga	50000000.00	25.00	12500000.00	\N	\N	{}	-4.6234567	104.6234567	active	2026-03-06 09:19:24.532688	1	Reklame Dummy Billboard	31.111.222.3-906.000	Jl. OP Dummy 6	KEC-DUMMY-003	KEL-DUMMY-003	2026-03-06 09:19:24.532688
+16	OP.321.907.2026	23	Pajak Air Tanah	Sumur Air Dummy	Jl. OP Dummy 7	Kelurahan Dummy Satu	Kecamatan Dummy Satu	45000000.00	20.00	9000000.00	\N	\N	{}	-4.7234567	104.7234567	active	2026-03-06 09:19:24.532688	2	Sumur Air Dummy	31.111.222.3-907.000	Jl. OP Dummy 7	KEC-DUMMY-001	KEL-DUMMY-001	2026-03-06 09:19:24.532688
+17	OP.321.908.2026	24	Pajak Sarang Burung Walet	Budidaya Walet Dummy	Jl. OP Dummy 8	Kelurahan Dummy Dua	Kecamatan Dummy Dua	70000000.00	10.00	7000000.00	\N	\N	{}	-4.8234567	104.8234567	active	2026-03-06 09:19:24.532688	3	Budidaya Walet Dummy	31.111.222.3-908.000	Jl. OP Dummy 8	KEC-DUMMY-002	KEL-DUMMY-002	2026-03-06 09:19:24.532688
+18	OP.321.909.2026	25	Pajak MBLB	Tambang Dummy MBLB	Jl. OP Dummy 9	Kelurahan Dummy Tiga	Kecamatan Dummy Tiga	160000000.00	20.00	32000000.00	\N	\N	{}	-4.9234567	104.9234567	active	2026-03-06 09:19:24.532688	4	Tambang Dummy MBLB	31.111.222.3-909.000	Jl. OP Dummy 9	KEC-DUMMY-003	KEL-DUMMY-003	2026-03-06 09:19:24.532688
+\.
+
+
+--
+-- Data for Name: op_detail_pajak_air_tanah; Type: TABLE DATA; Schema: public; Owner: okus_dev
+--
+
+COPY public.op_detail_pajak_air_tanah (op_id, jenis_air_tanah, rata2_ukuran_pemakaian, kriteria_air_tanah, kelompok_usaha, updated_at) FROM stdin;
+16	Sumur Bor	85.50	Dalam	Industri	2026-03-06 09:19:24.532688
+\.
+
+
+--
+-- Data for Name: op_detail_pajak_reklame; Type: TABLE DATA; Schema: public; Owner: okus_dev
+--
+
+COPY public.op_detail_pajak_reklame (op_id, jenis_reklame, ukuran_reklame, judul_reklame, masa_berlaku, status_reklame, nama_biro_jasa, updated_at) FROM stdin;
+15	Billboard	24.00	Promo Dummy 2026	2026-01-01 s/d 2026-12-31	baru	CV Biro Dummy	2026-03-06 09:19:24.532688
+\.
+
+
+--
+-- Data for Name: op_detail_pajak_walet; Type: TABLE DATA; Schema: public; Owner: okus_dev
+--
+
+COPY public.op_detail_pajak_walet (op_id, jenis_burung_walet, panen_per_tahun, rata2_berat_panen, updated_at) FROM stdin;
+17	Walet Sarang Putih	4	12.75	2026-03-06 09:19:24.532688
+\.
+
+
+--
+-- Data for Name: op_detail_pbjt_hiburan; Type: TABLE DATA; Schema: public; Owner: okus_dev
+--
+
+COPY public.op_detail_pbjt_hiburan (op_id, jenis_hiburan, kapasitas, jam_operasional, jumlah_karyawan, updated_at) FROM stdin;
+13	Karaoke	200	10:00-23:00	30	2026-03-06 09:19:24.532688
+\.
+
+
+--
+-- Data for Name: op_detail_pbjt_makan_minum; Type: TABLE DATA; Schema: public; Owner: okus_dev
+--
+
+COPY public.op_detail_pbjt_makan_minum (op_id, jenis_usaha, kapasitas_tempat, jumlah_karyawan, rata2_pengunjung, jam_buka, jam_tutup, harga_termurah, harga_termahal, updated_at) FROM stdin;
+10	Restoran	120	25	180	09:00:00	22:00:00	15000.00	120000.00	2026-03-06 09:19:24.532688
+\.
+
+
+--
+-- Data for Name: op_detail_pbjt_parkir; Type: TABLE DATA; Schema: public; Owner: okus_dev
+--
+
+COPY public.op_detail_pbjt_parkir (op_id, jenis_lokasi, kapasitas_kendaraan, tarif_parkir, rata2_pengunjung, updated_at) FROM stdin;
+12	Gedung Parkir	300	5000.00	420	2026-03-06 09:19:24.532688
+\.
+
+
+--
+-- Data for Name: op_detail_pbjt_perhotelan; Type: TABLE DATA; Schema: public; Owner: okus_dev
+--
+
+COPY public.op_detail_pbjt_perhotelan (op_id, jenis_usaha, jumlah_kamar, klasifikasi, fasilitas, rata2_pengunjung_harian, harga_termurah, harga_termahal, updated_at) FROM stdin;
+11	Hotel	45	Bintang 3	WiFi, Parkir, Sarapan	65	250000.00	900000.00	2026-03-06 09:19:24.532688
+\.
+
+
+--
+-- Data for Name: op_detail_pbjt_tenaga_listrik; Type: TABLE DATA; Schema: public; Owner: okus_dev
+--
+
+COPY public.op_detail_pbjt_tenaga_listrik (op_id, jenis_tenaga_listrik, daya_listrik, kapasitas, updated_at) FROM stdin;
+14	Listrik PLN	66000.00	500.00	2026-03-06 09:19:24.532688
+\.
+
+
+--
+-- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: okus_dev
+--
+
+COPY public.users (id, username, password) FROM stdin;
+1a63d224-b7f7-4d77-86a2-7878e4efddbe	demo	demo123
+\.
+
+
+--
+-- Data for Name: wajib_pajak; Type: TABLE DATA; Schema: public; Owner: okus_dev
+--
+
+COPY public.wajib_pajak (id, npwpd, nama_wp, alamat_wp, kelurahan_wp, kecamatan_wp, telepon_wa_wp, email_wp, created_at, jenis_wp, peran_wp, status_aktif, nik_ktp_wp, nama_pengelola, nik_pengelola, alamat_pengelola, kecamatan_pengelola, kelurahan_pengelola, telepon_wa_pengelola, updated_at) FROM stdin;
+9	\N	H. Syarifudin	Jl. Pasar Muaradua No. 12	Pasar Muaradua	Muaradua	08127654321	syarifudin@email.com	2026-03-06 07:38:50.9424	orang_pribadi	pemilik	active	1601081209800001	\N	\N	\N	\N	\N	\N	2026-03-06 07:38:50.938
+10	\N	Ny. Ratna Dewi	Jl. Raya Baturaja-Muaradua KM 5	Batu Belang Jaya	Muaradua	08234561234	ratna.dewi@email.com	2026-03-06 07:38:52.107617	badan_usaha	pemilik	active	1601085301850002	\N	\N	\N	\N	\N	\N	2026-03-06 07:38:52.104
+11	\N	Bambang Hermanto	Jl. Merdeka No. 45, Batu Belang Jaya	Batu Belang Jaya	Muaradua	08345678912	b.hermanto@email.com	2026-03-06 07:38:52.593863	badan_usaha	pemilik	active	1601081001820003	\N	\N	\N	\N	\N	\N	2026-03-06 07:38:52.59
+17	DUMMY-NPWPD-001	Andi Pratama	Jl. Dummy 1	Kelurahan Dummy Satu	Kecamatan Dummy Satu	081200000001	andi@example.com	2026-03-06 09:19:24.532688	orang_pribadi	pemilik	active	1601010101010001	\N	\N	\N	\N	\N	\N	2026-03-06 09:19:24.532688
+18	DUMMY-NPWPD-002	Budi Santoso	Jl. Dummy 2	Kelurahan Dummy Dua	Kecamatan Dummy Dua	081200000002	budi@example.com	2026-03-06 09:19:24.532688	orang_pribadi	pemilik	active	1601010101010002	\N	\N	\N	\N	\N	\N	2026-03-06 09:19:24.532688
+19	DUMMY-NPWPD-003	Citra Lestari	Jl. Dummy 3	Kelurahan Dummy Tiga	Kecamatan Dummy Tiga	081200000003	citra@example.com	2026-03-06 09:19:24.532688	orang_pribadi	pemilik	active	1601010101010003	\N	\N	\N	\N	\N	\N	2026-03-06 09:19:24.532688
+20	DUMMY-NPWPD-004	Deni Pengelola	Jl. Dummy 4	\N	\N	\N	deni@example.com	2026-03-06 09:19:24.532688	orang_pribadi	pengelola	active	\N	Deni Pengelola	1601010101010004	Jl. Dummy 4	Kecamatan Dummy Satu	Kelurahan Dummy Satu	081200000004	2026-03-06 09:19:24.532688
+21	DUMMY-NPWPD-005	Eka Pemilik BU	Jl. Dummy 5	Kelurahan Dummy Dua	Kecamatan Dummy Dua	081200000005	eka@example.com	2026-03-06 09:19:24.532688	badan_usaha	pemilik	active	1601010101010005	\N	\N	\N	\N	\N	\N	2026-03-06 09:19:24.532688
+22	DUMMY-NPWPD-006	Fajar Pemilik BU	Jl. Dummy 6	Kelurahan Dummy Tiga	Kecamatan Dummy Tiga	081200000006	fajar@example.com	2026-03-06 09:19:24.532688	badan_usaha	pemilik	active	1601010101010006	\N	\N	\N	\N	\N	\N	2026-03-06 09:19:24.532688
+23	DUMMY-NPWPD-007	Gina Pemilik BU	Jl. Dummy 7	Kelurahan Dummy Satu	Kecamatan Dummy Satu	081200000007	gina@example.com	2026-03-06 09:19:24.532688	badan_usaha	pemilik	active	1601010101010007	\N	\N	\N	\N	\N	\N	2026-03-06 09:19:24.532688
+24	DUMMY-NPWPD-008	Hadi Pemilik BU	Jl. Dummy 8	Kelurahan Dummy Dua	Kecamatan Dummy Dua	081200000008	hadi@example.com	2026-03-06 09:19:24.532688	badan_usaha	pemilik	active	1601010101010008	\N	\N	\N	\N	\N	\N	2026-03-06 09:19:24.532688
+25	DUMMY-NPWPD-009	Indra Pemilik BU	Jl. Dummy 9	Kelurahan Dummy Tiga	Kecamatan Dummy Tiga	081200000009	indra@example.com	2026-03-06 09:19:24.532688	badan_usaha	pemilik	active	1601010101010009	\N	\N	\N	\N	\N	\N	2026-03-06 09:19:24.532688
+\.
+
+
+--
+-- Data for Name: wp_badan_usaha; Type: TABLE DATA; Schema: public; Owner: okus_dev
+--
+
+COPY public.wp_badan_usaha (wp_id, nama_badan_usaha, npwp_badan_usaha, alamat_badan_usaha, kecamatan_badan_usaha, kelurahan_badan_usaha, telepon_badan_usaha, email_badan_usaha, created_at, updated_at) FROM stdin;
+10	PT Ranau Indah Hospitality	01.234.567.8-321.000	Jl. Raya Baturaja-Muaradua KM 5	Muaradua	Batu Belang Jaya	0735321001	hotel.ranau@gmail.com	2026-03-06 07:38:52.104	2026-03-06 07:38:52.104
+11	CV Penginapan Muaradua Asri	02.111.222.3-321.000	Jl. Merdeka No. 45	Muaradua	Batu Belang Jaya	0735321002	penginapan.asri@email.com	2026-03-06 07:38:52.59	2026-03-06 07:38:52.59
+21	PT Dummy Makan Sejahtera	09.111.222.3-444.000	Komplek Dummy A	Kecamatan Dummy Dua	Kelurahan Dummy Dua	0711000005	ptmakan@example.com	2026-03-06 09:19:24.532688	2026-03-06 09:19:24.532688
+22	PT Dummy Hotel Sentosa	09.111.222.3-444.001	Komplek Dummy B	Kecamatan Dummy Tiga	Kelurahan Dummy Tiga	0711000006	pthotel@example.com	2026-03-06 09:19:24.532688	2026-03-06 09:19:24.532688
+23	PT Dummy Parkir Jaya	09.111.222.3-444.002	Komplek Dummy C	Kecamatan Dummy Satu	Kelurahan Dummy Satu	0711000007	ptparkir@example.com	2026-03-06 09:19:24.532688	2026-03-06 09:19:24.532688
+24	PT Dummy Reklame Prima	09.111.222.3-444.003	Komplek Dummy D	Kecamatan Dummy Dua	Kelurahan Dummy Dua	0711000008	ptreklame@example.com	2026-03-06 09:19:24.532688	2026-03-06 09:19:24.532688
+25	PT Dummy MBLB Mandiri	09.111.222.3-444.004	Komplek Dummy E	Kecamatan Dummy Tiga	Kelurahan Dummy Tiga	0711000009	ptmblb@example.com	2026-03-06 09:19:24.532688	2026-03-06 09:19:24.532688
+\.
+
+
+--
+-- Name: master_rekening_pajak_id_seq; Type: SEQUENCE SET; Schema: public; Owner: okus_dev
+--
+
+SELECT pg_catalog.setval('public.master_rekening_pajak_id_seq', 108, true);
+
+
+--
+-- Name: objek_pajak_id_seq; Type: SEQUENCE SET; Schema: public; Owner: okus_dev
+--
+
+SELECT pg_catalog.setval('public.objek_pajak_id_seq', 18, true);
+
+
+--
+-- Name: wajib_pajak_id_seq; Type: SEQUENCE SET; Schema: public; Owner: okus_dev
+--
+
+SELECT pg_catalog.setval('public.wajib_pajak_id_seq', 25, true);
+
+
+--
+-- Name: master_kecamatan master_kecamatan_cpm_kode_kec_key; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.master_kecamatan
+    ADD CONSTRAINT master_kecamatan_cpm_kode_kec_key UNIQUE (cpm_kode_kec);
+
+
+--
+-- Name: master_kecamatan master_kecamatan_pkey; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.master_kecamatan
+    ADD CONSTRAINT master_kecamatan_pkey PRIMARY KEY (cpm_kec_id);
+
+
+--
+-- Name: master_kelurahan master_kelurahan_pkey; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.master_kelurahan
+    ADD CONSTRAINT master_kelurahan_pkey PRIMARY KEY (cpm_kel_id);
+
+
+--
+-- Name: master_rekening_pajak master_rekening_pajak_kode_rekening_key; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.master_rekening_pajak
+    ADD CONSTRAINT master_rekening_pajak_kode_rekening_key UNIQUE (kode_rekening);
+
+
+--
+-- Name: master_rekening_pajak master_rekening_pajak_pkey; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.master_rekening_pajak
+    ADD CONSTRAINT master_rekening_pajak_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: objek_pajak objek_pajak_pkey; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.objek_pajak
+    ADD CONSTRAINT objek_pajak_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: op_detail_pajak_air_tanah op_detail_pajak_air_tanah_pkey; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.op_detail_pajak_air_tanah
+    ADD CONSTRAINT op_detail_pajak_air_tanah_pkey PRIMARY KEY (op_id);
+
+
+--
+-- Name: op_detail_pajak_reklame op_detail_pajak_reklame_pkey; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.op_detail_pajak_reklame
+    ADD CONSTRAINT op_detail_pajak_reklame_pkey PRIMARY KEY (op_id);
+
+
+--
+-- Name: op_detail_pajak_walet op_detail_pajak_walet_pkey; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.op_detail_pajak_walet
+    ADD CONSTRAINT op_detail_pajak_walet_pkey PRIMARY KEY (op_id);
+
+
+--
+-- Name: op_detail_pbjt_hiburan op_detail_pbjt_hiburan_pkey; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.op_detail_pbjt_hiburan
+    ADD CONSTRAINT op_detail_pbjt_hiburan_pkey PRIMARY KEY (op_id);
+
+
+--
+-- Name: op_detail_pbjt_makan_minum op_detail_pbjt_makan_minum_pkey; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.op_detail_pbjt_makan_minum
+    ADD CONSTRAINT op_detail_pbjt_makan_minum_pkey PRIMARY KEY (op_id);
+
+
+--
+-- Name: op_detail_pbjt_parkir op_detail_pbjt_parkir_pkey; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.op_detail_pbjt_parkir
+    ADD CONSTRAINT op_detail_pbjt_parkir_pkey PRIMARY KEY (op_id);
+
+
+--
+-- Name: op_detail_pbjt_perhotelan op_detail_pbjt_perhotelan_pkey; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.op_detail_pbjt_perhotelan
+    ADD CONSTRAINT op_detail_pbjt_perhotelan_pkey PRIMARY KEY (op_id);
+
+
+--
+-- Name: op_detail_pbjt_tenaga_listrik op_detail_pbjt_tenaga_listrik_pkey; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.op_detail_pbjt_tenaga_listrik
+    ADD CONSTRAINT op_detail_pbjt_tenaga_listrik_pkey PRIMARY KEY (op_id);
+
+
+--
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: users users_username_unique; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_username_unique UNIQUE (username);
+
+
+--
+-- Name: wajib_pajak wajib_pajak_pkey; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.wajib_pajak
+    ADD CONSTRAINT wajib_pajak_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: wp_badan_usaha wp_badan_usaha_pkey; Type: CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.wp_badan_usaha
+    ADD CONSTRAINT wp_badan_usaha_pkey PRIMARY KEY (wp_id);
+
+
+--
+-- Name: master_kelurahan_unique_kode; Type: INDEX; Schema: public; Owner: okus_dev
+--
+
+CREATE UNIQUE INDEX master_kelurahan_unique_kode ON public.master_kelurahan USING btree (cpm_kode_kec, cpm_kode_kel);
+
+
+--
+-- Name: objek_pajak_nopd_unique; Type: INDEX; Schema: public; Owner: okus_dev
+--
+
+CREATE UNIQUE INDEX objek_pajak_nopd_unique ON public.objek_pajak USING btree (nopd);
+
+
+--
+-- Name: wajib_pajak_npwpd_unique_not_null; Type: INDEX; Schema: public; Owner: okus_dev
+--
+
+CREATE UNIQUE INDEX wajib_pajak_npwpd_unique_not_null ON public.wajib_pajak USING btree (npwpd) WHERE (npwpd IS NOT NULL);
+
+
+--
+-- Name: objek_pajak objek_pajak_wp_id_wajib_pajak_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.objek_pajak
+    ADD CONSTRAINT objek_pajak_wp_id_wajib_pajak_id_fk FOREIGN KEY (wp_id) REFERENCES public.wajib_pajak(id);
+
+
+--
+-- Name: op_detail_pajak_air_tanah op_detail_pajak_air_tanah_op_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.op_detail_pajak_air_tanah
+    ADD CONSTRAINT op_detail_pajak_air_tanah_op_id_fkey FOREIGN KEY (op_id) REFERENCES public.objek_pajak(id) ON DELETE CASCADE;
+
+
+--
+-- Name: op_detail_pajak_reklame op_detail_pajak_reklame_op_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.op_detail_pajak_reklame
+    ADD CONSTRAINT op_detail_pajak_reklame_op_id_fkey FOREIGN KEY (op_id) REFERENCES public.objek_pajak(id) ON DELETE CASCADE;
+
+
+--
+-- Name: op_detail_pajak_walet op_detail_pajak_walet_op_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.op_detail_pajak_walet
+    ADD CONSTRAINT op_detail_pajak_walet_op_id_fkey FOREIGN KEY (op_id) REFERENCES public.objek_pajak(id) ON DELETE CASCADE;
+
+
+--
+-- Name: op_detail_pbjt_hiburan op_detail_pbjt_hiburan_op_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.op_detail_pbjt_hiburan
+    ADD CONSTRAINT op_detail_pbjt_hiburan_op_id_fkey FOREIGN KEY (op_id) REFERENCES public.objek_pajak(id) ON DELETE CASCADE;
+
+
+--
+-- Name: op_detail_pbjt_makan_minum op_detail_pbjt_makan_minum_op_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.op_detail_pbjt_makan_minum
+    ADD CONSTRAINT op_detail_pbjt_makan_minum_op_id_fkey FOREIGN KEY (op_id) REFERENCES public.objek_pajak(id) ON DELETE CASCADE;
+
+
+--
+-- Name: op_detail_pbjt_parkir op_detail_pbjt_parkir_op_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.op_detail_pbjt_parkir
+    ADD CONSTRAINT op_detail_pbjt_parkir_op_id_fkey FOREIGN KEY (op_id) REFERENCES public.objek_pajak(id) ON DELETE CASCADE;
+
+
+--
+-- Name: op_detail_pbjt_perhotelan op_detail_pbjt_perhotelan_op_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.op_detail_pbjt_perhotelan
+    ADD CONSTRAINT op_detail_pbjt_perhotelan_op_id_fkey FOREIGN KEY (op_id) REFERENCES public.objek_pajak(id) ON DELETE CASCADE;
+
+
+--
+-- Name: op_detail_pbjt_tenaga_listrik op_detail_pbjt_tenaga_listrik_op_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.op_detail_pbjt_tenaga_listrik
+    ADD CONSTRAINT op_detail_pbjt_tenaga_listrik_op_id_fkey FOREIGN KEY (op_id) REFERENCES public.objek_pajak(id) ON DELETE CASCADE;
+
+
+--
+-- Name: wp_badan_usaha wp_badan_usaha_wp_id_wajib_pajak_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: okus_dev
+--
+
+ALTER TABLE ONLY public.wp_badan_usaha
+    ADD CONSTRAINT wp_badan_usaha_wp_id_wajib_pajak_id_fk FOREIGN KEY (wp_id) REFERENCES public.wajib_pajak(id) ON DELETE CASCADE;
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict fI5ztV0X20Ee6UOHXrenUy7OEuPcz7UrfzRimqjcnoY8wOp1aqzDVlXGEWXTmcw
+
