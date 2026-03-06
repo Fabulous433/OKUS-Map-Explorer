@@ -38,25 +38,24 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { ObjekPajak, WajibPajakWithBadanUsaha } from "@shared/schema";
+import type { MasterKecamatan, MasterKelurahan, MasterRekeningPajak, ObjekPajak, WajibPajakWithBadanUsaha } from "@shared/schema";
 import { JENIS_PAJAK_OPTIONS } from "@shared/schema";
 import BackofficeLayout from "./layout";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 const opFormSchema = z.object({
-  nopd: z.string().trim().min(1, "NOPD wajib diisi"),
-  wpId: z.coerce.number().nullable().optional(),
-  jenisPajak: z.string().min(1, "Jenis Pajak wajib diisi"),
-  namaObjek: z.string().trim().min(1, "Nama Objek wajib diisi"),
-  alamat: z.string().trim().min(1, "Alamat wajib diisi"),
-  kelurahan: z.string().nullable().optional(),
-  kecamatan: z.string().nullable().optional(),
+  nopd: z.string().trim().optional(),
+  wpId: z.coerce.number().int().positive("Wajib Pajak wajib dipilih"),
+  rekPajakId: z.coerce.number().int().positive("Rekening pajak wajib dipilih"),
+  namaOp: z.string().trim().min(1, "Nama Objek wajib diisi"),
+  npwpOp: z.string().trim().max(32).nullable().optional(),
+  alamatOp: z.string().trim().min(1, "Alamat wajib diisi"),
+  kecamatanId: z.string().trim().min(1, "Kecamatan wajib dipilih"),
+  kelurahanId: z.string().trim().min(1, "Kelurahan wajib dipilih"),
   omsetBulanan: z.string().nullable().optional(),
   tarifPersen: z.string().nullable().optional(),
   pajakBulanan: z.string().nullable().optional(),
-  rating: z.string().nullable().optional(),
-  reviewCount: z.coerce.number().nullable().optional(),
   detailPajak: z.record(z.union([z.string(), z.number(), z.null()])).nullable().optional(),
   latitude: z.string().nullable().optional(),
   longitude: z.string().nullable().optional(),
@@ -91,20 +90,96 @@ function normalizeOptional(value: string | null | undefined) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function normalizeOpPayload(data: OPFormValues): OPFormValues {
+function normalizeOpPayload(
+  data: OPFormValues,
+  rekeningList: MasterRekeningPajak[],
+) {
+  const rekening = rekeningList.find((item) => item.id === data.rekPajakId);
+  if (!rekening) {
+    throw new Error("Rekening pajak tidak ditemukan");
+  }
+
+  const jenisPajak = rekening.jenisPajak;
+  const detailRaw = (data.detailPajak ?? {}) as OPDetailRecord;
+  const detail: Record<string, unknown> = {};
+
+  if (jenisPajak.includes("Makanan")) {
+    if (detailRaw.jamOperasi && !detailRaw.jamBuka) {
+      const split = String(detailRaw.jamOperasi).split("-").map((x) => x.trim());
+      if (split[0]) detail.jamBuka = split[0];
+      if (split[1]) detail.jamTutup = split[1];
+    }
+    detail.jenisUsaha = detailRaw.jenisUsaha;
+    detail.kapasitasTempat = detailRaw.kapasitasTempat;
+    detail.jumlahKaryawan = detailRaw.jumlahKaryawan;
+    detail.rata2Pengunjung = detailRaw.rata2Pengunjung;
+    detail.hargaTermurah = detailRaw.hargaTermurah;
+    detail.hargaTermahal = detailRaw.hargaTermahal;
+  } else if (jenisPajak.includes("Perhotelan")) {
+    detail.jenisUsaha = detailRaw.jenisUsaha ?? "Hotel";
+    detail.jumlahKamar = detailRaw.jumlahKamar;
+    detail.klasifikasi = detailRaw.klasifikasi;
+    detail.fasilitas = detailRaw.fasilitas ?? detailRaw.fasilitasTambahan;
+    detail.rata2PengunjungHarian = detailRaw.rata2PengunjungHarian;
+    detail.hargaTermurah = detailRaw.hargaTermurah;
+    detail.hargaTermahal = detailRaw.hargaTermahal;
+  } else if (jenisPajak.includes("Parkir")) {
+    detail.jenisLokasi = detailRaw.jenisLokasi;
+    detail.kapasitasKendaraan = detailRaw.kapasitasKendaraan;
+    detail.tarifParkir = detailRaw.tarifParkir;
+    detail.rata2Pengunjung = detailRaw.rata2Pengunjung;
+  } else if (jenisPajak.includes("Hiburan") || jenisPajak.includes("Kesenian")) {
+    detail.jenisHiburan = detailRaw.jenisHiburan;
+    detail.kapasitas = detailRaw.kapasitas ?? detailRaw.kapasitasPenonton;
+    detail.jamOperasional = detailRaw.jamOperasional ?? detailRaw.frekuensi;
+    detail.jumlahKaryawan = detailRaw.jumlahKaryawan;
+  } else if (jenisPajak.includes("Tenaga Listrik")) {
+    detail.jenisTenagaListrik = detailRaw.jenisTenagaListrik;
+    detail.dayaListrik = detailRaw.dayaListrik;
+    detail.kapasitas = detailRaw.kapasitas;
+  } else if (jenisPajak.includes("Reklame")) {
+    const panjang = typeof detailRaw.ukuranPanjang === "number" ? detailRaw.ukuranPanjang : Number(detailRaw.ukuranPanjang);
+    const lebar = typeof detailRaw.ukuranLebar === "number" ? detailRaw.ukuranLebar : Number(detailRaw.ukuranLebar);
+    const ukuranReklame = Number.isFinite(panjang) && Number.isFinite(lebar)
+      ? panjang * lebar
+      : detailRaw.ukuranReklame;
+    detail.jenisReklame = detailRaw.jenisReklame;
+    detail.ukuranReklame = ukuranReklame;
+    detail.judulReklame = detailRaw.judulReklame;
+    detail.masaBerlaku = detailRaw.masaBerlaku;
+    detail.statusReklame = detailRaw.statusReklame ?? "baru";
+    detail.namaBiroJasa = detailRaw.namaBiroJasa ?? detailRaw.lokasiPenempatan;
+  } else if (jenisPajak.includes("Air Tanah")) {
+    detail.jenisAirTanah = detailRaw.jenisAirTanah;
+    detail.rata2UkuranPemakaian = detailRaw.rata2UkuranPemakaian;
+    detail.kriteriaAirTanah = detailRaw.kriteriaAirTanah;
+    detail.kelompokUsaha = detailRaw.kelompokUsaha;
+  } else if (jenisPajak.includes("Walet")) {
+    detail.jenisBurungWalet = detailRaw.jenisBurungWalet;
+    detail.panenPerTahun = detailRaw.panenPerTahun;
+    detail.rata2BeratPanen = detailRaw.rata2BeratPanen;
+  }
+
+  const cleanDetail = Object.fromEntries(
+    Object.entries(detail).filter(([, value]) => value !== null && value !== undefined && value !== ""),
+  );
+
   return {
-    ...data,
-    nopd: data.nopd.trim(),
-    namaObjek: data.namaObjek.trim(),
-    alamat: data.alamat.trim(),
-    kelurahan: normalizeOptional(data.kelurahan),
-    kecamatan: normalizeOptional(data.kecamatan),
+    nopd: data.nopd?.trim() ? data.nopd.trim() : undefined,
+    wpId: data.wpId,
+    rekPajakId: data.rekPajakId,
+    namaOp: data.namaOp.trim(),
+    npwpOp: normalizeOptional(data.npwpOp),
+    alamatOp: data.alamatOp.trim(),
+    kecamatanId: data.kecamatanId,
+    kelurahanId: data.kelurahanId,
     omsetBulanan: normalizeOptional(data.omsetBulanan),
     tarifPersen: normalizeOptional(data.tarifPersen),
     pajakBulanan: normalizeOptional(data.pajakBulanan),
-    rating: normalizeOptional(data.rating),
     latitude: normalizeOptional(data.latitude),
     longitude: normalizeOptional(data.longitude),
+    status: data.status,
+    detailPajak: Object.keys(cleanDetail).length > 0 ? cleanDetail : null,
   };
 }
 
@@ -559,12 +634,18 @@ function OPFormDialog({
   mode,
   editOp,
   wpList,
+  rekeningList,
+  kecamatanList,
+  kelurahanList,
   isOpen,
   onOpenChange,
 }: {
   mode: "create" | "edit";
   editOp?: ObjekPajak | null;
   wpList: WajibPajakWithBadanUsaha[];
+  rekeningList: MasterRekeningPajak[];
+  kecamatanList: MasterKecamatan[];
+  kelurahanList: MasterKelurahan[];
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -575,17 +656,15 @@ function OPFormDialog({
     resolver: zodResolver(opFormSchema),
     defaultValues: {
       nopd: "",
-      wpId: null,
-      jenisPajak: "",
-      namaObjek: "",
-      alamat: "",
-      kelurahan: "",
-      kecamatan: "",
+      wpId: undefined,
+      rekPajakId: undefined,
+      namaOp: "",
+      alamatOp: "",
+      kecamatanId: "",
+      kelurahanId: "",
       omsetBulanan: "",
       tarifPersen: "",
       pajakBulanan: "",
-      rating: "",
-      reviewCount: null,
       detailPajak: null,
       latitude: "",
       longitude: "",
@@ -598,16 +677,14 @@ function OPFormDialog({
       form.reset({
         nopd: editOp.nopd,
         wpId: editOp.wpId,
-        jenisPajak: editOp.jenisPajak,
-        namaObjek: editOp.namaObjek,
-        alamat: editOp.alamat,
-        kelurahan: editOp.kelurahan || "",
-        kecamatan: editOp.kecamatan || "",
+        rekPajakId: editOp.rekPajakId,
+        namaOp: editOp.namaOp,
+        alamatOp: editOp.alamatOp,
+        kecamatanId: editOp.kecamatanId,
+        kelurahanId: editOp.kelurahanId,
         omsetBulanan: editOp.omsetBulanan || "",
         tarifPersen: editOp.tarifPersen || "",
         pajakBulanan: editOp.pajakBulanan || "",
-        rating: editOp.rating || "",
-        reviewCount: editOp.reviewCount,
         detailPajak: editOp.detailPajak || null,
         latitude: editOp.latitude || "",
         longitude: editOp.longitude || "",
@@ -620,7 +697,7 @@ function OPFormDialog({
 
   const createMutation = useMutation({
     mutationFn: async (data: OPFormValues) => {
-      const res = await apiRequest("POST", "/api/objek-pajak", normalizeOpPayload(data));
+      const res = await apiRequest("POST", "/api/objek-pajak", normalizeOpPayload(data, rekeningList));
       return res.json();
     },
     onSuccess: () => {
@@ -636,7 +713,7 @@ function OPFormDialog({
 
   const updateMutation = useMutation({
     mutationFn: async (data: OPFormValues) => {
-      const res = await apiRequest("PATCH", `/api/objek-pajak/${editOp!.id}`, normalizeOpPayload(data));
+      const res = await apiRequest("PATCH", `/api/objek-pajak/${editOp!.id}`, normalizeOpPayload(data, rekeningList));
       return res.json();
     },
     onSuccess: () => {
@@ -650,7 +727,13 @@ function OPFormDialog({
   });
 
   const isPending = createMutation.isPending || updateMutation.isPending;
-  const jenisPajak = form.watch("jenisPajak");
+  const selectedRekPajakId = form.watch("rekPajakId");
+  const jenisPajak = rekeningList.find((item) => item.id === selectedRekPajakId)?.jenisPajak || "";
+  const selectedKecamatanId = form.watch("kecamatanId");
+  const selectedKecamatanKode = kecamatanList.find((item) => item.cpmKecId === selectedKecamatanId)?.cpmKodeKec;
+  const filteredKelurahanList = selectedKecamatanKode
+    ? kelurahanList.filter((item) => item.cpmKodeKec === selectedKecamatanKode)
+    : [];
 
   const handleSubmit = (data: OPFormValues) => {
     if (mode === "edit") {
@@ -669,22 +752,29 @@ function OPFormDialog({
           </DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="p-4 space-y-4">
-            <FormField
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="p-4 space-y-4">\n            <FormField
               control={form.control}
-              name="jenisPajak"
+              name="rekPajakId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="font-mono text-xs font-bold text-black">JENIS PAJAK DAERAH</FormLabel>
-                  <Select onValueChange={(v) => { field.onChange(v); form.setValue("detailPajak", null); }} value={field.value}>
+                  <FormLabel className="font-mono text-xs font-bold text-black">REKENING PAJAK</FormLabel>
+                  <Select
+                    onValueChange={(value) => {
+                      field.onChange(parseInt(value, 10));
+                      form.setValue("detailPajak", null);
+                    }}
+                    value={field.value ? String(field.value) : ""}
+                  >
                     <FormControl>
-                      <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="select-jenis-pajak-op">
-                        <SelectValue placeholder="Pilih Jenis Pajak" />
+                      <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="select-rekening-pajak-op">
+                        <SelectValue placeholder="Pilih Rekening Pajak" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent className="rounded-none border-[2px] border-black">
-                      {JENIS_PAJAK_OPTIONS.map((jp) => (
-                        <SelectItem key={jp} value={jp}>{jp}</SelectItem>
+                      {rekeningList.map((rek) => (
+                        <SelectItem key={rek.id} value={String(rek.id)}>
+                          {rek.kodeRekening} - {rek.namaRekening}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -711,7 +801,7 @@ function OPFormDialog({
               />
               <FormField
                 control={form.control}
-                name="namaObjek"
+                name="namaOp"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="font-mono text-xs font-bold text-black">NAMA OBJEK</FormLabel>
@@ -730,12 +820,12 @@ function OPFormDialog({
                 <FormItem>
                   <FormLabel className="font-mono text-xs font-bold text-black">WAJIB PAJAK</FormLabel>
                   <Select
-                    onValueChange={(val) => field.onChange(val ? parseInt(val) : null)}
+                    onValueChange={(val) => field.onChange(parseInt(val, 10))}
                     value={field.value?.toString() || ""}
                   >
                     <FormControl>
                       <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="select-wp">
-                        <SelectValue placeholder="Pilih Wajib Pajak (opsional)" />
+                        <SelectValue placeholder="Pilih Wajib Pajak" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent className="rounded-none border-[2px] border-black">
@@ -751,7 +841,7 @@ function OPFormDialog({
             />
             <FormField
               control={form.control}
-              name="alamat"
+              name="alamatOp"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="font-mono text-xs font-bold text-black">ALAMAT</FormLabel>
@@ -765,25 +855,55 @@ function OPFormDialog({
             <div className="grid grid-cols-2 gap-3">
               <FormField
                 control={form.control}
-                name="kelurahan"
+                name="kecamatanId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="font-mono text-xs font-bold text-black">KELURAHAN</FormLabel>
-                    <FormControl>
-                      <Input {...field} value={field.value || ""} className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="input-kelurahan-op" />
-                    </FormControl>
+                    <FormLabel className="font-mono text-xs font-bold text-black">KECAMATAN</FormLabel>
+                    <Select
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        form.setValue("kelurahanId", "");
+                      }}
+                      value={field.value || ""}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="select-kecamatan-op">
+                          <SelectValue placeholder="Pilih Kecamatan" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="rounded-none border-[2px] border-black">
+                        {kecamatanList.map((kec) => (
+                          <SelectItem key={kec.cpmKecId} value={kec.cpmKecId}>
+                            {kec.cpmKecamatan}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
               <FormField
                 control={form.control}
-                name="kecamatan"
+                name="kelurahanId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="font-mono text-xs font-bold text-black">KECAMATAN</FormLabel>
-                    <FormControl>
-                      <Input {...field} value={field.value || ""} className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="input-kecamatan-op" />
-                    </FormControl>
+                    <FormLabel className="font-mono text-xs font-bold text-black">KELURAHAN</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <FormControl>
+                        <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-sm" data-testid="select-kelurahan-op">
+                          <SelectValue placeholder={selectedKecamatanId ? "Pilih Kelurahan" : "Pilih Kecamatan dulu"} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="rounded-none border-[2px] border-black">
+                        {filteredKelurahanList.map((kel) => (
+                          <SelectItem key={kel.cpmKelId} value={kel.cpmKelId}>
+                            {kel.cpmKelurahan}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -920,15 +1040,15 @@ export default function BackofficeObjekPajak() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [kecamatanFilter, setKecamatanFilter] = useState("");
+  const [kecamatanFilterId, setKecamatanFilterId] = useState<string>("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const baseParams = new URLSearchParams();
   if (statusFilter !== "all") {
     baseParams.set("status", statusFilter);
   }
-  if (kecamatanFilter.trim()) {
-    baseParams.set("kecamatan", kecamatanFilter.trim());
+  if (kecamatanFilterId !== "all") {
+    baseParams.set("kecamatanId", kecamatanFilterId);
   }
 
   const baseQueryKey = baseParams.toString()
@@ -954,6 +1074,18 @@ export default function BackofficeObjekPajak() {
 
   const { data: wpList = [] } = useQuery<WajibPajakWithBadanUsaha[]>({
     queryKey: ["/api/wajib-pajak"],
+  });
+
+  const { data: rekeningList = [] } = useQuery<MasterRekeningPajak[]>({
+    queryKey: ["/api/master/rekening-pajak"],
+  });
+
+  const { data: kecamatanList = [] } = useQuery<MasterKecamatan[]>({
+    queryKey: ["/api/master/kecamatan"],
+  });
+
+  const { data: kelurahanList = [] } = useQuery<MasterKelurahan[]>({
+    queryKey: ["/api/master/kelurahan"],
   });
 
   const { toast } = useToast();
@@ -1002,10 +1134,10 @@ export default function BackofficeObjekPajak() {
   const filtered = opList.filter((op) => {
     const q = searchQuery.toLowerCase();
     const matchesSearch = !searchQuery ||
-      op.namaObjek.toLowerCase().includes(q) ||
+      op.namaOp.toLowerCase().includes(q) ||
       op.nopd.toLowerCase().includes(q) ||
       op.jenisPajak.toLowerCase().includes(q) ||
-      op.alamat.toLowerCase().includes(q) ||
+      op.alamatOp.toLowerCase().includes(q) ||
       (op.kecamatan && op.kecamatan.toLowerCase().includes(q));
     return matchesSearch;
   });
@@ -1109,21 +1241,27 @@ export default function BackofficeObjekPajak() {
               <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
-          <Input
-            value={kecamatanFilter}
-            onChange={(e) => setKecamatanFilter(e.target.value)}
-            placeholder="Filter kecamatan"
-            className="w-[220px] rounded-none border-[2px] border-black font-mono text-xs"
-            data-testid="input-filter-kecamatan-op"
-          />
-          {(statusFilter !== "all" || kecamatanFilter.trim().length > 0) && (
+          <Select value={kecamatanFilterId} onValueChange={setKecamatanFilterId}>
+            <SelectTrigger className="w-[220px] rounded-none border-[2px] border-black font-mono text-xs" data-testid="select-filter-kecamatan-op">
+              <SelectValue placeholder="Filter kecamatan" />
+            </SelectTrigger>
+            <SelectContent className="rounded-none border-[2px] border-black">
+              <SelectItem value="all">Semua Kecamatan</SelectItem>
+              {kecamatanList.map((kec) => (
+                <SelectItem key={kec.cpmKecId} value={kec.cpmKecId}>
+                  {kec.cpmKecamatan}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {(statusFilter !== "all" || kecamatanFilterId !== "all") && (
             <Button
               variant="outline"
               size="sm"
               className="rounded-none border-[2px] border-black font-mono text-xs"
               onClick={() => {
                 setStatusFilter("all");
-                setKecamatanFilter("");
+                setKecamatanFilterId("all");
               }}
               data-testid="button-reset-filter-op"
             >
@@ -1162,6 +1300,9 @@ export default function BackofficeObjekPajak() {
         <OPFormDialog
           mode="create"
           wpList={wpList}
+          rekeningList={rekeningList}
+          kecamatanList={kecamatanList}
+          kelurahanList={kelurahanList}
           isOpen={isCreateOpen}
           onOpenChange={setIsCreateOpen}
         />
@@ -1170,6 +1311,9 @@ export default function BackofficeObjekPajak() {
           mode="edit"
           editOp={editOp}
           wpList={wpList}
+          rekeningList={rekeningList}
+          kecamatanList={kecamatanList}
+          kelurahanList={kelurahanList}
           isOpen={!!editOp}
           onOpenChange={(open) => { if (!open) setEditOp(null); }}
         />
@@ -1219,7 +1363,7 @@ export default function BackofficeObjekPajak() {
                         {op.nopd}
                       </TableCell>
                       <TableCell className="font-mono text-xs font-bold text-black max-w-[200px] truncate" data-testid={`text-nama-objek-${op.id}`}>
-                        {op.namaObjek}
+                        {op.namaOp}
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -1235,7 +1379,7 @@ export default function BackofficeObjekPajak() {
                       <TableCell className="font-mono text-xs text-gray-600 max-w-[200px] truncate">
                         <div className="flex items-center gap-1">
                           <MapPin className="w-3 h-3 flex-shrink-0" />
-                          <span className="truncate">{op.alamat}</span>
+                          <span className="truncate">{op.alamatOp}</span>
                         </div>
                       </TableCell>
                       <TableCell className="font-mono text-xs text-black whitespace-nowrap">
@@ -1300,5 +1444,14 @@ export default function BackofficeObjekPajak() {
     </BackofficeLayout>
   );
 }
+
+
+
+
+
+
+
+
+
 
 

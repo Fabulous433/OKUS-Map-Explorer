@@ -328,17 +328,17 @@ export default function MapPage() {
 
     opList.forEach((op) => {
       if (
-        op.namaObjek.toLowerCase().includes(q) ||
+        op.namaOp.toLowerCase().includes(q) ||
         op.nopd.toLowerCase().includes(q) ||
         op.jenisPajak.toLowerCase().includes(q) ||
-        op.alamat.toLowerCase().includes(q)
+        op.alamatOp.toLowerCase().includes(q)
       ) {
         results.push({
           type: "op",
           id: op.id,
-          name: op.namaObjek,
+          name: op.namaOp,
           jenisPajak: op.jenisPajak,
-          alamat: op.alamat,
+          alamat: op.alamatOp,
           lat: op.latitude,
           lng: op.longitude,
           wpId: op.wpId,
@@ -522,7 +522,7 @@ export default function MapPage() {
             <span className="font-mono text-xs font-bold text-black flex-1 truncate">
               {selectedWpId
                 ? `WP: ${wpList.find((wp) => wp.id === selectedWpId)?.displayName} (${visibleOP.length} OP)`
-                : `OP: ${opList.find((op) => op.id === highlightedOpId)?.namaObjek}`}
+                : `OP: ${opList.find((op) => op.id === highlightedOpId)?.namaOp}`}
             </span>
             <Button
               size="icon"
@@ -588,12 +588,12 @@ export default function MapPage() {
               >
                 <Popup>
                   <div className="font-mono text-xs space-y-1 min-w-[180px]">
-                    <div className="font-bold text-sm">{op.namaObjek}</div>
+                    <div className="font-bold text-sm">{op.namaOp}</div>
                     <div className="inline-block px-1.5 py-0.5 text-white text-[10px] font-bold" style={{ background: jenisPajakBadgeColor(op.jenisPajak) }}>
                       {op.jenisPajak}
                     </div>
                     <div>NOPD: {op.nopd}</div>
-                    <div>{op.alamat}</div>
+                    <div>{op.alamatOp}</div>
                     {op.pajakBulanan && (
                       <div className="font-bold">Pajak: Rp {Number(op.pajakBulanan).toLocaleString("id-ID")}/bln</div>
                     )}
@@ -615,7 +615,7 @@ export default function MapPage() {
                   <div className="font-bold text-sm border-b border-gray-300 pb-1">{ops.length} Objek Pajak di lokasi ini</div>
                   {ops.map((op) => (
                     <div key={op.id} className="border-b border-gray-100 pb-1.5">
-                      <div className="font-bold">{op.namaObjek}</div>
+                      <div className="font-bold">{op.namaOp}</div>
                       <div className="inline-block px-1 py-0 text-white text-[9px] font-bold mt-0.5" style={{ background: jenisPajakBadgeColor(op.jenisPajak) }}>
                         {op.jenisPajak}
                       </div>
@@ -634,5 +634,7 @@ export default function MapPage() {
     </div>
   );
 }
+
+
 
 

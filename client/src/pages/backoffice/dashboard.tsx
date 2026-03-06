@@ -197,13 +197,13 @@ export default function BackofficeDashboard() {
                                 <TableCell className="font-mono text-xs">{op.nopd}</TableCell>
                                 <TableCell>
                                   <div>
-                                    <p className="font-mono text-xs font-bold">{op.namaObjek}</p>
+                                    <p className="font-mono text-xs font-bold">{op.namaOp}</p>
                                     {wp && (
                                       <p className="font-mono text-[10px] text-muted-foreground">WP: {wp.displayName}</p>
                                     )}
                                   </div>
                                 </TableCell>
-                                <TableCell className="font-mono text-xs max-w-[200px] truncate">{op.alamat}</TableCell>
+                                <TableCell className="font-mono text-xs max-w-[200px] truncate">{op.alamatOp}</TableCell>
                                 <TableCell className="font-mono text-xs">{op.kecamatan || "-"}</TableCell>
                                 <TableCell className="font-mono text-xs text-right">{op.tarifPersen ? `${op.tarifPersen}%` : "-"}</TableCell>
                                 <TableCell className="font-mono text-xs text-right">{formatCurrency(op.pajakBulanan)}</TableCell>
@@ -238,4 +238,5 @@ export default function BackofficeDashboard() {
     </BackofficeLayout>
   );
 }
+
 

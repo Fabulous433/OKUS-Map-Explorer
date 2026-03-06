@@ -2,7 +2,6 @@ import fs from "fs/promises";
 import path from "path";
 import { and, eq } from "drizzle-orm";
 import { db, storage } from "./storage";
-import { log } from "./index";
 import { masterKecamatan, masterKelurahan, masterRekeningPajak } from "@shared/schema";
 
 type RawKecamatan = {
@@ -18,6 +17,16 @@ type RawKelurahan = {
   CPM_KODE_KEL: string;
 };
 
+function log(message: string, source = "seed") {
+  const formattedTime = new Date().toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+
+  console.log(`${formattedTime} [${source}] ${message}`);
+}
 function jenisPajakFromNamaRekening(namaRekening: string) {
   if (namaRekening.includes("Makanan")) return "PBJT Makanan dan Minuman";
   if (namaRekening.includes("Tenaga Listrik")) return "PBJT Tenaga Listrik";

@@ -585,10 +585,6 @@ export type ObjekPajak = ObjekPajakRow & {
   namaRekPajak: string;
   kecamatan: string | null;
   kelurahan: string | null;
-  namaObjek: string;
-  alamat: string;
-  rating?: string | null;
-  reviewCount?: number | null;
   rekeningPajak: MasterRekeningPajak | null;
   kecamatanRef: MasterKecamatan | null;
   kelurahanRef: MasterKelurahan | null;
@@ -602,5 +598,6 @@ export type OpDetailPbjtTenagaListrik = typeof opDetailPbjtTenagaListrik.$inferS
 export type OpDetailPajakReklame = typeof opDetailPajakReklame.$inferSelect;
 export type OpDetailPajakAirTanah = typeof opDetailPajakAirTanah.$inferSelect;
 export type OpDetailPajakWalet = typeof opDetailPajakWalet.$inferSelect;
+
 
 

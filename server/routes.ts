@@ -56,16 +56,48 @@ const OP_CSV_COLUMNS = [
   "npwp_op",
   "alamat_op",
   "kecamatan_id",
-  "kecamatan_op",
+  "kecamatan_nama",
   "kelurahan_id",
-  "kelurahan_op",
+  "kelurahan_nama",
   "omset_bulanan",
   "tarif_persen",
   "pajak_bulanan",
   "latitude",
   "longitude",
   "status",
-  "detail_pajak",
+  "detail_jenis_usaha",
+  "detail_kapasitas_tempat",
+  "detail_jumlah_karyawan",
+  "detail_rata2_pengunjung",
+  "detail_jam_buka",
+  "detail_jam_tutup",
+  "detail_harga_termurah",
+  "detail_harga_termahal",
+  "detail_jumlah_kamar",
+  "detail_klasifikasi",
+  "detail_fasilitas",
+  "detail_rata2_pengunjung_harian",
+  "detail_jenis_hiburan",
+  "detail_kapasitas",
+  "detail_jam_operasional",
+  "detail_jenis_lokasi",
+  "detail_kapasitas_kendaraan",
+  "detail_tarif_parkir",
+  "detail_jenis_tenaga_listrik",
+  "detail_daya_listrik",
+  "detail_jenis_reklame",
+  "detail_ukuran_reklame",
+  "detail_judul_reklame",
+  "detail_masa_berlaku",
+  "detail_status_reklame",
+  "detail_nama_biro_jasa",
+  "detail_jenis_air_tanah",
+  "detail_rata2_ukuran_pemakaian",
+  "detail_kriteria_air_tanah",
+  "detail_kelompok_usaha",
+  "detail_jenis_burung_walet",
+  "detail_panen_per_tahun",
+  "detail_rata2_berat_panen",
 ] as const;
 
 function hasOwn(payload: Record<string, unknown>, key: string) {
@@ -193,30 +225,30 @@ function parseInteger(value: unknown) {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-function parseJson(value: unknown) {
+function parseNumber(value: unknown) {
   const cleaned = cleanText(value);
   if (!cleaned) return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    throw new Error("detail_pajak bukan JSON valid");
-  }
+function compactObject<T extends Record<string, unknown>>(input: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined && value !== null && value !== ""),
+  ) as Partial<T>;
 }
 
 function normalizeOpData(payload: Record<string, unknown>, partial = false) {
   const normalized: Record<string, unknown> = {};
 
-  if (!partial || hasOwn(payload, "nopd")) normalized.nopd = cleanText(payload.nopd) ?? undefined;
+  if (!partial || hasOwn(payload, "nopd")) {
+    normalized.nopd = cleanText(payload.nopd) ?? undefined;
+  }
   if (!partial || hasOwn(payload, "wpId")) normalized.wpId = payload.wpId ?? null;
   if (!partial || hasOwn(payload, "rekPajakId")) normalized.rekPajakId = payload.rekPajakId ?? null;
-  if (!partial || hasOwn(payload, "namaOp") || hasOwn(payload, "namaObjek")) {
-    normalized.namaOp = cleanText(payload.namaOp ?? payload.namaObjek) ?? "";
-  }
+  if (!partial || hasOwn(payload, "namaOp")) normalized.namaOp = cleanText(payload.namaOp) ?? "";
   if (!partial || hasOwn(payload, "npwpOp")) normalized.npwpOp = cleanText(payload.npwpOp);
-  if (!partial || hasOwn(payload, "alamatOp") || hasOwn(payload, "alamat")) {
-    normalized.alamatOp = cleanText(payload.alamatOp ?? payload.alamat) ?? "";
-  }
+  if (!partial || hasOwn(payload, "alamatOp")) normalized.alamatOp = cleanText(payload.alamatOp) ?? "";
   if (!partial || hasOwn(payload, "kecamatanId")) normalized.kecamatanId = cleanText(payload.kecamatanId) ?? "";
   if (!partial || hasOwn(payload, "kelurahanId")) normalized.kelurahanId = cleanText(payload.kelurahanId) ?? "";
   if (!partial || hasOwn(payload, "omsetBulanan")) normalized.omsetBulanan = cleanText(payload.omsetBulanan);
@@ -239,45 +271,126 @@ async function getJenisPajakFromRekId(rekPajakId: number) {
   return rekening.jenisPajak;
 }
 
-async function enrichLegacyOpReferences(payload: Record<string, unknown>, normalized: Record<string, unknown>, partial = false) {
-  if ((!partial || hasOwn(payload, "jenisPajak")) && (!normalized.rekPajakId || normalized.rekPajakId === null)) {
-    const jenisLegacy = cleanText(payload.jenisPajak);
-    if (jenisLegacy) {
-      const rekeningList = await storage.getAllMasterRekeningPajak();
-      const rekening = rekeningList.find((item) => item.jenisPajak === jenisLegacy || item.namaRekening.includes(jenisLegacy));
-      if (!rekening) {
-        throw new Error(`Mapping rekening pajak tidak ditemukan untuk jenis: ${jenisLegacy}`);
-      }
-      normalized.rekPajakId = rekening.id;
-    }
+function buildDetailFromCsvRow(row: CsvImportRow, jenisPajak: string) {
+  if (jenisPajak === "PBJT Makanan dan Minuman") {
+    return compactObject({
+      jenisUsaha: cleanText(row.detail_jenis_usaha) ?? undefined,
+      kapasitasTempat: parseNumber(row.detail_kapasitas_tempat) ?? undefined,
+      jumlahKaryawan: parseNumber(row.detail_jumlah_karyawan) ?? undefined,
+      rata2Pengunjung: parseNumber(row.detail_rata2_pengunjung) ?? undefined,
+      jamBuka: cleanText(row.detail_jam_buka) ?? undefined,
+      jamTutup: cleanText(row.detail_jam_tutup) ?? undefined,
+      hargaTermurah: parseNumber(row.detail_harga_termurah) ?? undefined,
+      hargaTermahal: parseNumber(row.detail_harga_termahal) ?? undefined,
+    });
   }
 
-  if ((!partial || hasOwn(payload, "kecamatan")) && (!normalized.kecamatanId || normalized.kecamatanId === "")) {
-    const kecamatanLegacy = cleanText(payload.kecamatan);
-    if (kecamatanLegacy) {
-      const kecamatanList = await storage.getAllMasterKecamatan();
-      const kec = kecamatanList.find((item) => item.cpmKecamatan.toLowerCase() === kecamatanLegacy.toLowerCase());
-      if (!kec) {
-        throw new Error(`Mapping kecamatan tidak ditemukan: ${kecamatanLegacy}`);
-      }
-      normalized.kecamatanId = kec.cpmKecId;
-    }
+  if (jenisPajak === "PBJT Jasa Perhotelan") {
+    return compactObject({
+      jenisUsaha: cleanText(row.detail_jenis_usaha) ?? undefined,
+      jumlahKamar: parseNumber(row.detail_jumlah_kamar) ?? undefined,
+      klasifikasi: cleanText(row.detail_klasifikasi) ?? undefined,
+      fasilitas: cleanText(row.detail_fasilitas) ?? undefined,
+      rata2PengunjungHarian: parseNumber(row.detail_rata2_pengunjung_harian) ?? undefined,
+      hargaTermurah: parseNumber(row.detail_harga_termurah) ?? undefined,
+      hargaTermahal: parseNumber(row.detail_harga_termahal) ?? undefined,
+    });
   }
 
-  if ((!partial || hasOwn(payload, "kelurahan")) && (!normalized.kelurahanId || normalized.kelurahanId === "")) {
-    const kelurahanLegacy = cleanText(payload.kelurahan);
-    if (kelurahanLegacy) {
-      const kecamatanId = cleanText(normalized.kecamatanId);
-      const kelList = await storage.getMasterKelurahan(kecamatanId ?? undefined);
-      const kel = kelList.find((item) => item.cpmKelurahan.toLowerCase() === kelurahanLegacy.toLowerCase());
-      if (!kel) {
-        throw new Error(`Mapping kelurahan tidak ditemukan: ${kelurahanLegacy}`);
-      }
-      normalized.kelurahanId = kel.cpmKelId;
-    }
+  if (jenisPajak === "PBJT Jasa Parkir") {
+    return compactObject({
+      jenisLokasi: cleanText(row.detail_jenis_lokasi) ?? undefined,
+      kapasitasKendaraan: parseNumber(row.detail_kapasitas_kendaraan) ?? undefined,
+      tarifParkir: parseNumber(row.detail_tarif_parkir) ?? undefined,
+      rata2Pengunjung: parseNumber(row.detail_rata2_pengunjung) ?? undefined,
+    });
   }
 
-  return normalized;
+  if (jenisPajak === "PBJT Jasa Kesenian dan Hiburan") {
+    return compactObject({
+      jenisHiburan: cleanText(row.detail_jenis_hiburan) ?? undefined,
+      kapasitas: parseNumber(row.detail_kapasitas) ?? undefined,
+      jamOperasional: cleanText(row.detail_jam_operasional) ?? undefined,
+      jumlahKaryawan: parseNumber(row.detail_jumlah_karyawan) ?? undefined,
+    });
+  }
+
+  if (jenisPajak === "PBJT Tenaga Listrik") {
+    return compactObject({
+      jenisTenagaListrik: cleanText(row.detail_jenis_tenaga_listrik) ?? undefined,
+      dayaListrik: parseNumber(row.detail_daya_listrik) ?? undefined,
+      kapasitas: parseNumber(row.detail_kapasitas) ?? undefined,
+    });
+  }
+
+  if (jenisPajak === "Pajak Reklame") {
+    return compactObject({
+      jenisReklame: cleanText(row.detail_jenis_reklame) ?? undefined,
+      ukuranReklame: parseNumber(row.detail_ukuran_reklame) ?? undefined,
+      judulReklame: cleanText(row.detail_judul_reklame) ?? undefined,
+      masaBerlaku: cleanText(row.detail_masa_berlaku) ?? undefined,
+      statusReklame: cleanText(row.detail_status_reklame) ?? undefined,
+      namaBiroJasa: cleanText(row.detail_nama_biro_jasa) ?? undefined,
+    });
+  }
+
+  if (jenisPajak === "Pajak Air Tanah") {
+    return compactObject({
+      jenisAirTanah: cleanText(row.detail_jenis_air_tanah) ?? undefined,
+      rata2UkuranPemakaian: parseNumber(row.detail_rata2_ukuran_pemakaian) ?? undefined,
+      kriteriaAirTanah: cleanText(row.detail_kriteria_air_tanah) ?? undefined,
+      kelompokUsaha: cleanText(row.detail_kelompok_usaha) ?? undefined,
+    });
+  }
+
+  if (jenisPajak === "Pajak Sarang Burung Walet") {
+    return compactObject({
+      jenisBurungWalet: cleanText(row.detail_jenis_burung_walet) ?? undefined,
+      panenPerTahun: parseNumber(row.detail_panen_per_tahun) ?? undefined,
+      rata2BeratPanen: parseNumber(row.detail_rata2_berat_panen) ?? undefined,
+    });
+  }
+
+  return null;
+}
+
+function flattenDetailForCsv(detail: unknown) {
+  const d = detail && typeof detail === "object" ? (detail as Record<string, unknown>) : {};
+  return {
+    detail_jenis_usaha: d.jenisUsaha ?? "",
+    detail_kapasitas_tempat: d.kapasitasTempat ?? "",
+    detail_jumlah_karyawan: d.jumlahKaryawan ?? "",
+    detail_rata2_pengunjung: d.rata2Pengunjung ?? "",
+    detail_jam_buka: d.jamBuka ?? "",
+    detail_jam_tutup: d.jamTutup ?? "",
+    detail_harga_termurah: d.hargaTermurah ?? "",
+    detail_harga_termahal: d.hargaTermahal ?? "",
+    detail_jumlah_kamar: d.jumlahKamar ?? "",
+    detail_klasifikasi: d.klasifikasi ?? "",
+    detail_fasilitas: d.fasilitas ?? "",
+    detail_rata2_pengunjung_harian: d.rata2PengunjungHarian ?? "",
+    detail_jenis_hiburan: d.jenisHiburan ?? "",
+    detail_kapasitas: d.kapasitas ?? "",
+    detail_jam_operasional: d.jamOperasional ?? "",
+    detail_jenis_lokasi: d.jenisLokasi ?? "",
+    detail_kapasitas_kendaraan: d.kapasitasKendaraan ?? "",
+    detail_tarif_parkir: d.tarifParkir ?? "",
+    detail_jenis_tenaga_listrik: d.jenisTenagaListrik ?? "",
+    detail_daya_listrik: d.dayaListrik ?? "",
+    detail_jenis_reklame: d.jenisReklame ?? "",
+    detail_ukuran_reklame: d.ukuranReklame ?? "",
+    detail_judul_reklame: d.judulReklame ?? "",
+    detail_masa_berlaku: d.masaBerlaku ?? "",
+    detail_status_reklame: d.statusReklame ?? "",
+    detail_nama_biro_jasa: d.namaBiroJasa ?? "",
+    detail_jenis_air_tanah: d.jenisAirTanah ?? "",
+    detail_rata2_ukuran_pemakaian: d.rata2UkuranPemakaian ?? "",
+    detail_kriteria_air_tanah: d.kriteriaAirTanah ?? "",
+    detail_kelompok_usaha: d.kelompokUsaha ?? "",
+    detail_jenis_burung_walet: d.jenisBurungWalet ?? "",
+    detail_panen_per_tahun: d.panenPerTahun ?? "",
+    detail_rata2_berat_panen: d.rata2BeratPanen ?? "",
+  };
 }
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
@@ -474,10 +587,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/objek-pajak", async (req, res) => {
     const jenisPajak = typeof req.query.jenisPajak === "string" ? req.query.jenisPajak : undefined;
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
-    const kecamatan = typeof req.query.kecamatan === "string" ? req.query.kecamatan : undefined;
     const kecamatanId = typeof req.query.kecamatanId === "string" ? req.query.kecamatanId : undefined;
 
-    const data = await storage.getAllObjekPajak({ jenisPajak, status, kecamatan, kecamatanId });
+    const data = await storage.getAllObjekPajak({ jenisPajak, status, kecamatanId });
     res.json(data);
   });
 
@@ -493,16 +605,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       npwp_op: op.npwpOp || "",
       alamat_op: op.alamatOp,
       kecamatan_id: op.kecamatanId,
-      kecamatan_op: op.kecamatan || "",
+      kecamatan_nama: op.kecamatan || "",
       kelurahan_id: op.kelurahanId,
-      kelurahan_op: op.kelurahan || "",
+      kelurahan_nama: op.kelurahan || "",
       omset_bulanan: op.omsetBulanan || "",
       tarif_persen: op.tarifPersen || "",
       pajak_bulanan: op.pajakBulanan || "",
       latitude: op.latitude || "",
       longitude: op.longitude || "",
       status: op.status,
-      detail_pajak: op.detailPajak ? JSON.stringify(op.detailPajak) : "",
+      ...flattenDetailForCsv(op.detailPajak),
     }));
 
     const csv = stringify(rows, { header: true, columns: [...OP_CSV_COLUMNS] });
@@ -527,16 +639,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       for (let i = 0; i < records.length; i++) {
         const row = records[i];
 
-        let detailPajak: unknown = null;
-        try {
-          detailPajak = parseJson(row.detail_pajak);
-        } catch (error: any) {
-          failed++;
-          errors.push(`Baris ${i + 2}: ${error.message}`);
-          continue;
-        }
-
-        let opData = normalizeOpData({
+        const opData = normalizeOpData({
           nopd: row.nopd,
           wpId: parseInteger(row.wp_id),
           rekPajakId: parseInteger(row.rek_pajak_id),
@@ -551,10 +654,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           latitude: row.latitude,
           longitude: row.longitude,
           status: row.status,
-          detailPajak,
+          detailPajak: null,
         });
-
-        opData = await enrichLegacyOpReferences(row as Record<string, unknown>, opData);
 
         const parsed = insertObjekPajakSchema.safeParse(opData);
         if (!parsed.success) {
@@ -565,7 +666,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
         try {
           const jenisPajak = await getJenisPajakFromRekId(parsed.data.rekPajakId);
-          const detailParsed = validateDetailByJenis(jenisPajak, parsed.data.detailPajak);
+          const detailCandidate = buildDetailFromCsvRow(row, jenisPajak);
+          const detailParsed = validateDetailByJenis(jenisPajak, detailCandidate);
           if (!detailParsed.success) {
             failed++;
             errors.push(`Baris ${i + 2}: ${detailParsed.error.issues.map((e) => e.message).join(", ")}`);
@@ -595,7 +697,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/objek-pajak", async (req, res) => {
-    const normalized = await enrichLegacyOpReferences(req.body, normalizeOpData(req.body));
+    const normalized = normalizeOpData(req.body);
     const parsed = insertObjekPajakSchema.safeParse(normalized);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.message });
@@ -619,7 +721,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     const partialSchema = insertObjekPajakSchema.partial();
-    const normalized = await enrichLegacyOpReferences(req.body, normalizeOpData(req.body, true), true);
+    const normalized = normalizeOpData(req.body, true);
     const parsed = partialSchema.safeParse(normalized);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.message });
@@ -647,5 +749,3 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   return httpServer;
 }
-
-

@@ -1,5 +1,4 @@
 import {
-  DETAIL_SCHEMA_BY_JENIS,
   type CreateWajibPajakInput,
   type InsertObjekPajak,
   type InsertUser,
@@ -437,8 +436,6 @@ function mapObjekPajakRecord(record: {
     namaRekPajak: record.rekening?.namaRekening ?? "",
     kecamatan: record.kecamatan?.cpmKecamatan ?? null,
     kelurahan: record.kelurahan?.cpmKelurahan ?? null,
-    namaObjek: record.op.namaOp,
-    alamat: record.op.alamatOp,
     rekeningPajak: record.rekening,
     kecamatanRef: record.kecamatan,
     kelurahanRef: record.kelurahan,
@@ -493,197 +490,6 @@ async function resolveNopd(nopdRaw?: string | null) {
 
   const nextSeq = String(maxSeq + 1).padStart(3, "0");
   return `OP.321.${nextSeq}.${year}`;
-}
-
-export async function migrateLegacyObjekPajakDetails() {
-  await pool.query(`
-    create table if not exists master_kecamatan (
-      cpm_kec_id varchar(16) primary key,
-      cpm_kecamatan text not null,
-      cpm_kode_kec varchar(4) not null unique,
-      created_at timestamp not null default now(),
-      updated_at timestamp not null default now()
-    );
-
-    create table if not exists master_kelurahan (
-      cpm_kel_id varchar(16) primary key,
-      cpm_kelurahan text not null,
-      cpm_kode_kec varchar(4) not null,
-      cpm_kode_kel varchar(4) not null,
-      created_at timestamp not null default now(),
-      updated_at timestamp not null default now()
-    );
-
-    create unique index if not exists master_kelurahan_unique_kode on master_kelurahan(cpm_kode_kec, cpm_kode_kel);
-
-    create table if not exists master_rekening_pajak (
-      id serial primary key,
-      kode_rekening varchar(30) not null unique,
-      nama_rekening text not null,
-      jenis_pajak text not null,
-      is_active boolean not null default true,
-      created_at timestamp not null default now(),
-      updated_at timestamp not null default now()
-    );
-
-    alter table objek_pajak add column if not exists rek_pajak_id integer;
-    alter table objek_pajak add column if not exists nama_op text;
-    alter table objek_pajak add column if not exists npwp_op varchar(32);
-    alter table objek_pajak add column if not exists alamat_op text;
-    alter table objek_pajak add column if not exists kecamatan_id varchar(16);
-    alter table objek_pajak add column if not exists kelurahan_id varchar(16);
-    alter table objek_pajak add column if not exists updated_at timestamp default now();
-
-    create unique index if not exists objek_pajak_nopd_unique on objek_pajak(nopd);
-
-    create table if not exists op_detail_pbjt_makan_minum (
-      op_id integer primary key references objek_pajak(id) on delete cascade,
-      jenis_usaha text not null,
-      kapasitas_tempat integer not null,
-      jumlah_karyawan integer,
-      rata2_pengunjung integer,
-      jam_buka time,
-      jam_tutup time,
-      harga_termurah numeric(15,2),
-      harga_termahal numeric(15,2),
-      updated_at timestamp not null default now()
-    );
-
-    create table if not exists op_detail_pbjt_perhotelan (
-      op_id integer primary key references objek_pajak(id) on delete cascade,
-      jenis_usaha text not null,
-      jumlah_kamar integer not null,
-      klasifikasi text,
-      fasilitas text,
-      rata2_pengunjung_harian integer,
-      harga_termurah numeric(15,2),
-      harga_termahal numeric(15,2),
-      updated_at timestamp not null default now()
-    );
-
-    create table if not exists op_detail_pbjt_hiburan (
-      op_id integer primary key references objek_pajak(id) on delete cascade,
-      jenis_hiburan text not null,
-      kapasitas integer not null,
-      jam_operasional text,
-      jumlah_karyawan integer,
-      updated_at timestamp not null default now()
-    );
-
-    create table if not exists op_detail_pbjt_parkir (
-      op_id integer primary key references objek_pajak(id) on delete cascade,
-      jenis_lokasi text not null,
-      kapasitas_kendaraan integer not null,
-      tarif_parkir numeric(15,2),
-      rata2_pengunjung integer,
-      updated_at timestamp not null default now()
-    );
-
-    create table if not exists op_detail_pbjt_tenaga_listrik (
-      op_id integer primary key references objek_pajak(id) on delete cascade,
-      jenis_tenaga_listrik text not null,
-      daya_listrik numeric(15,2) not null,
-      kapasitas numeric(15,2),
-      updated_at timestamp not null default now()
-    );
-
-    create table if not exists op_detail_pajak_reklame (
-      op_id integer primary key references objek_pajak(id) on delete cascade,
-      jenis_reklame text not null,
-      ukuran_reklame numeric(15,2) not null,
-      judul_reklame text,
-      masa_berlaku text,
-      status_reklame varchar(20) not null,
-      nama_biro_jasa text,
-      updated_at timestamp not null default now()
-    );
-
-    create table if not exists op_detail_pajak_air_tanah (
-      op_id integer primary key references objek_pajak(id) on delete cascade,
-      jenis_air_tanah text not null,
-      rata2_ukuran_pemakaian numeric(15,2) not null,
-      kriteria_air_tanah text,
-      kelompok_usaha text,
-      updated_at timestamp not null default now()
-    );
-
-    create table if not exists op_detail_pajak_walet (
-      op_id integer primary key references objek_pajak(id) on delete cascade,
-      jenis_burung_walet text not null,
-      panen_per_tahun integer not null,
-      rata2_berat_panen numeric(15,2),
-      updated_at timestamp not null default now()
-    );
-  `);
-
-  await pool.query(`
-    update objek_pajak
-    set nama_op = coalesce(nama_op, nama_objek),
-        alamat_op = coalesce(alamat_op, alamat),
-        updated_at = coalesce(updated_at, created_at, now())
-    where nama_op is null
-       or alamat_op is null
-       or updated_at is null;
-  `);
-
-  await pool.query(`
-    update objek_pajak op
-    set rek_pajak_id = mrp.id
-    from master_rekening_pajak mrp
-    where op.rek_pajak_id is null
-      and op.jenis_pajak is not null
-      and lower(trim(op.jenis_pajak)) = lower(trim(mrp.jenis_pajak));
-  `);
-
-  await pool.query(`
-    update objek_pajak op
-    set kecamatan_id = mk.cpm_kec_id
-    from master_kecamatan mk
-    where op.kecamatan_id is null
-      and op.kecamatan is not null
-      and lower(trim(op.kecamatan)) = lower(trim(mk.cpm_kecamatan));
-  `);
-
-  await pool.query(`
-    update objek_pajak op
-    set kelurahan_id = mkel.cpm_kel_id
-    from master_kelurahan mkel
-    join master_kecamatan mkec on mkel.cpm_kode_kec = mkec.cpm_kode_kec
-    where op.kelurahan_id is null
-      and op.kelurahan is not null
-      and lower(trim(op.kelurahan)) = lower(trim(mkel.cpm_kelurahan))
-      and (op.kecamatan_id is null or mkec.cpm_kec_id = op.kecamatan_id);
-  `);
-
-  const legacyCheck = await pool.query(
-    `
-      select count(*)::int as cnt
-      from information_schema.columns
-      where table_name = 'objek_pajak'
-        and column_name in ('jenis_pajak', 'detail_pajak')
-    `,
-  );
-
-  const count = legacyCheck.rows[0]?.cnt ?? 0;
-  if (count < 2) {
-    return;
-  }
-
-  const legacyRows = await pool.query(
-    `
-      select id, jenis_pajak, detail_pajak
-      from objek_pajak
-      where detail_pajak is not null
-    `,
-  );
-
-  for (const row of legacyRows.rows as Array<{ id: number; jenis_pajak: string; detail_pajak: unknown }>) {
-    if (!(row.jenis_pajak in DETAIL_SCHEMA_BY_JENIS)) {
-      continue;
-    }
-
-    await upsertDetailByJenis(row.id, row.jenis_pajak, row.detail_pajak);
-  }
 }
 
 export interface IStorage {
@@ -993,3 +799,5 @@ export class DatabaseStorage implements IStorage {
 }
 
 export const storage = new DatabaseStorage();
+
+
