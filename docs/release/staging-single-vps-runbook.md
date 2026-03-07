@@ -40,6 +40,9 @@ Catatan:
 Di EasyPanel:
 1. Create app service dari GitHub repo `OKUS-Map-Explorer`.
 2. Branch: `main` (atau release branch khusus jika kamu pakai).
+3. Pastikan Nixpacks membaca file:
+   - `nixpacks.toml`
+   - `.nvmrc`
 3. Build command:
 ```bash
 npm ci && npm run build
@@ -141,3 +144,4 @@ Di EasyPanel:
 2. Jangan expose DB ke publik internet.
 3. Simpan secret hanya di EasyPanel env secret manager.
 4. Status release tetap ditentukan oleh readiness board + owner approval.
+5. Build sekarang memakai `node script/build.mjs`, bukan `tsx`, agar aman di environment build EasyPanel.
