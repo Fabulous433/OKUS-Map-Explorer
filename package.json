@@ -18,7 +18,9 @@
     "test:integration:csv-roundtrip": "tsx tests/integration/op-csv-roundtrip.integration.ts",
     "test:integration:detail-validation": "tsx tests/integration/op-detail-validation.integration.ts",
     "test:integration:governance-quality": "tsx tests/integration/governance-quality.integration.ts",
-    "test:integration": "npm run test:integration:final-contract && npm run test:integration:csv-roundtrip && npm run test:integration:detail-validation && npm run test:integration:governance-quality"
+    "test:integration:auth-rbac": "tsx tests/integration/auth-rbac.integration.ts",
+    "test:integration:performance-hardening": "tsx tests/integration/performance-query-hardening.integration.ts",
+    "test:integration": "npm run test:integration:final-contract && npm run test:integration:csv-roundtrip && npm run test:integration:detail-validation && npm run test:integration:governance-quality && npm run test:integration:auth-rbac && npm run test:integration:performance-hardening"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

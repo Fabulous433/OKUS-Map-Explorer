@@ -69,15 +69,19 @@ const DETAIL_SCENARIOS: DetailScenario[] = [
 
 async function run() {
   const server = await createIntegrationServer();
-  const { requestJson, jsonRequest } = server;
+  const { requestJson, jsonRequest, loginAs } = server;
 
   const createdIds: number[] = [];
 
   try {
+    const loginResult = await loginAs("admin", "admin123");
+    assert.equal(loginResult.response.status, 200);
+
     const { body: wpBody } = await requestJson("/api/wajib-pajak");
-    assert.ok(Array.isArray(wpBody));
-    assert.ok(wpBody.length > 0);
-    const wpId = requiredNumber((wpBody[0] as JsonRecord).id, "wp id wajib ada");
+    assert.ok(Array.isArray((wpBody as JsonRecord).items));
+    const wpItems = (wpBody as JsonRecord).items as JsonRecord[];
+    assert.ok(wpItems.length > 0);
+    const wpId = requiredNumber((wpItems[0] as JsonRecord).id, "wp id wajib ada");
 
     const { body: rekeningBody } = await requestJson("/api/master/rekening-pajak");
     assert.ok(Array.isArray(rekeningBody));
@@ -150,7 +154,7 @@ async function run() {
     createdIds.push(mblbId);
   } finally {
     for (const id of createdIds) {
-      await fetch(`${server.baseUrl}/api/objek-pajak/${id}`, { method: "DELETE" });
+      await jsonRequest(`/api/objek-pajak/${id}`, "DELETE");
     }
 
     await server.close();

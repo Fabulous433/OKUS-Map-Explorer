@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import BackofficeLayout from "./layout";
-import type { ObjekPajak, WajibPajakWithBadanUsaha } from "@shared/schema";
+import type { ObjekPajakListItem, PaginatedResult, WajibPajakListItem } from "@shared/schema";
 import { JENIS_PAJAK_OPTIONS } from "@shared/schema";
 
 const JENIS_PAJAK_COLORS: Record<string, string> = {
@@ -47,30 +47,78 @@ function formatCurrency(value: string | number | null | undefined): string {
 export default function BackofficeDashboard() {
   const [expandedJenis, setExpandedJenis] = useState<string | null>(null);
 
-  const { data: opList = [], isLoading: opLoading } = useQuery<ObjekPajak[]>({
-    queryKey: ["/api/objek-pajak?includeUnverified=true"],
+  const { data: opList = [], isLoading: opLoading } = useQuery<ObjekPajakListItem[]>({
+    queryKey: ["dashboard:objek-pajak:all"],
+    queryFn: async ({ signal }) => {
+      const rows: ObjekPajakListItem[] = [];
+      let page = 1;
+      const limit = 100;
+
+      while (true) {
+        const response = await fetch(`/api/objek-pajak?page=${page}&limit=${limit}&includeUnverified=true`, {
+          credentials: "include",
+          signal,
+        });
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+
+        const body = (await response.json()) as PaginatedResult<ObjekPajakListItem>;
+        rows.push(...body.items);
+
+        if (!body.meta.hasNext) break;
+        page += 1;
+        if (page > 200) break;
+      }
+
+      return rows;
+    },
   });
 
-  const { data: wpList = [], isLoading: wpLoading } = useQuery<WajibPajakWithBadanUsaha[]>({
-    queryKey: ["/api/wajib-pajak"],
+  const { data: wpList = [], isLoading: wpLoading } = useQuery<WajibPajakListItem[]>({
+    queryKey: ["dashboard:wajib-pajak:all"],
+    queryFn: async ({ signal }) => {
+      const rows: WajibPajakListItem[] = [];
+      let page = 1;
+      const limit = 100;
+
+      while (true) {
+        const response = await fetch(`/api/wajib-pajak?page=${page}&limit=${limit}`, {
+          credentials: "include",
+          signal,
+        });
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+
+        const body = (await response.json()) as PaginatedResult<WajibPajakListItem>;
+        rows.push(...body.items);
+
+        if (!body.meta.hasNext) break;
+        page += 1;
+        if (page > 200) break;
+      }
+
+      return rows;
+    },
   });
 
   const isLoading = opLoading || wpLoading;
 
-  const wpMap = new Map<number, WajibPajakWithBadanUsaha>();
+  const wpMap = new Map<number, WajibPajakListItem>();
   wpList.forEach((wp) => wpMap.set(wp.id, wp));
 
   const jenisStats = JENIS_PAJAK_OPTIONS.map((jenis) => {
     const ops = opList.filter((op) => op.jenisPajak === jenis);
     const total = ops.length;
-    const updated = ops.filter((op) => op.detailPajak !== null && op.detailPajak !== undefined).length;
+    const updated = ops.filter((op) => op.hasDetail).length;
     const pending = total - updated;
     const percentage = total > 0 ? Math.round((updated / total) * 100) : 0;
     return { jenis, ops, total, updated, pending, percentage };
   });
 
   const totalOP = opList.length;
-  const totalUpdated = opList.filter((op) => op.detailPajak !== null && op.detailPajak !== undefined).length;
+  const totalUpdated = opList.filter((op) => op.hasDetail).length;
   const totalPending = totalOP - totalUpdated;
   const overallPercentage = totalOP > 0 ? Math.round((totalUpdated / totalOP) * 100) : 0;
 
@@ -186,7 +234,7 @@ export default function BackofficeDashboard() {
                         </TableHeader>
                         <TableBody>
                           {ops.map((op) => {
-                            const hasDetail = op.detailPajak !== null && op.detailPajak !== undefined;
+                            const hasDetail = op.hasDetail;
                             const wp = op.wpId ? wpMap.get(op.wpId) : null;
                             return (
                               <TableRow

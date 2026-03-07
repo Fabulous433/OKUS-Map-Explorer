@@ -31,6 +31,12 @@
 - `catatan_verifikasi`, `verified_at`, `verified_by`
 - `created_at`, `updated_at`
 
+### `users`
+- `id` (PK)
+- `username` (unique)
+- `password` (hashed/plain legacy)
+- `role` (`admin|editor|viewer`)
+
 ### Master
 - `master_kecamatan` (`cpm_kec_id`, `cpm_kecamatan`, `cpm_kode_kec`, timestamps)
 - `master_kelurahan` (`cpm_kel_id`, `cpm_kelurahan`, `cpm_kode_kec`, `cpm_kode_kel`, timestamps)
@@ -54,6 +60,7 @@
   - `created_at`
 
 ## Relationship Summary
+- `users` dipakai untuk session auth + RBAC layer aplikasi
 - `wajib_pajak (1) -> (N) objek_pajak`
 - `wajib_pajak (1) -> (0..1) wp_badan_usaha`
 - `master_rekening_pajak (1) -> (N) objek_pajak`
@@ -66,3 +73,15 @@
 - Delete master ditolak jika direferensikan OP.
 - Verifikasi OP disimpan di kolom dedicated (`status_verifikasi`, `verified_*`).
 - Rule conditional bisnis WP/OP tetap enforced di aplikasi (Zod/service), bukan DB CHECK kompleks.
+
+## Performance Indexes (Phase 1.9)
+- `objek_pajak`:
+  - index list filter (`status_verifikasi`, `status`, `kecamatan_id`, `rek_pajak_id`, `updated_at`, `id`)
+  - index `wp_id`
+  - index `updated_at,id`
+  - expression index bbox map (`latitude::double precision`, `longitude::double precision`)
+  - trigram GIN (`nama_op`, `nopd`, `alamat_op`)
+- `wajib_pajak`:
+  - trigram GIN (`nama_wp`, `nama_pengelola`, `npwpd`)
+- `wp_badan_usaha`:
+  - trigram GIN (`nama_badan_usaha`, `npwp_badan_usaha`)

@@ -20,6 +20,7 @@ export const REKLAME_STATUS_OPTIONS = ["baru", "perpanjangan"] as const;
 export const JENIS_WP_OPTIONS = ["orang_pribadi", "badan_usaha"] as const;
 export const PERAN_WP_OPTIONS = ["pemilik", "pengelola"] as const;
 export const VERIFICATION_STATUS_OPTIONS = ["draft", "verified", "rejected"] as const;
+export const APP_ROLE_OPTIONS = ["admin", "editor", "viewer"] as const;
 
 export const JENIS_PAJAK_OPTIONS = [
   "PBJT Makanan dan Minuman",
@@ -37,11 +38,13 @@ export type JenisPajak = (typeof JENIS_PAJAK_OPTIONS)[number];
 export type JenisWp = (typeof JENIS_WP_OPTIONS)[number];
 export type PeranWp = (typeof PERAN_WP_OPTIONS)[number];
 export type VerificationStatus = (typeof VERIFICATION_STATUS_OPTIONS)[number];
+export type AppRole = (typeof APP_ROLE_OPTIONS)[number];
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  role: varchar("role", { length: 20 }).notNull().default("viewer"),
 });
 
 export const wajibPajak = pgTable(
@@ -552,10 +555,15 @@ export function validateDetailByJenis(jenisPajak: string, detailPajak: unknown) 
   return schema.safeParse(detailPajak);
 }
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
+export const insertUserSchema = createInsertSchema(users)
+  .pick({
+    username: true,
+    password: true,
+    role: true,
+  })
+  .extend({
+    role: z.enum(APP_ROLE_OPTIONS).default("viewer"),
+  });
 
 export const insertObjekPajakSchema = createInsertSchema(objekPajak)
   .omit({
@@ -669,6 +677,65 @@ export type ObjekPajak = ObjekPajakRow & {
   kelurahanRef: MasterKelurahan | null;
 };
 
+export type PaginationMeta = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+};
+
+export type PaginatedResult<T> = {
+  items: T[];
+  meta: PaginationMeta;
+};
+
+export type WajibPajakListItem = WajibPajakWithBadanUsaha;
+
+export type ObjekPajakListItem = {
+  id: number;
+  nopd: string;
+  wpId: number;
+  rekPajakId: number;
+  namaOp: string;
+  npwpOp: string | null;
+  alamatOp: string;
+  kecamatanId: string;
+  kelurahanId: string;
+  omsetBulanan: string | null;
+  tarifPersen: string | null;
+  pajakBulanan: string | null;
+  latitude: string | null;
+  longitude: string | null;
+  status: string;
+  statusVerifikasi: string;
+  catatanVerifikasi: string | null;
+  verifiedAt: Date | null;
+  verifiedBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  jenisPajak: string;
+  noRekPajak: string;
+  namaRekPajak: string;
+  kecamatan: string | null;
+  kelurahan: string | null;
+  hasDetail: boolean;
+};
+
+export type MapObjekPajakItem = {
+  id: number;
+  wpId: number;
+  nopd: string;
+  namaOp: string;
+  jenisPajak: string;
+  alamatOp: string;
+  pajakBulanan: string | null;
+  statusVerifikasi: string;
+  latitude: number;
+  longitude: number;
+};
+
 export type OpDetailPbjtMakanMinum = typeof opDetailPbjtMakanMinum.$inferSelect;
 export type OpDetailPbjtPerhotelan = typeof opDetailPbjtPerhotelan.$inferSelect;
 export type OpDetailPbjtHiburan = typeof opDetailPbjtHiburan.$inferSelect;
@@ -677,5 +744,3 @@ export type OpDetailPbjtTenagaListrik = typeof opDetailPbjtTenagaListrik.$inferS
 export type OpDetailPajakReklame = typeof opDetailPajakReklame.$inferSelect;
 export type OpDetailPajakAirTanah = typeof opDetailPajakAirTanah.$inferSelect;
 export type OpDetailPajakWalet = typeof opDetailPajakWalet.$inferSelect;
-
-

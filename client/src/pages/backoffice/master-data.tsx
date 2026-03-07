@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useAuth } from "@/lib/auth";
 import type { MasterKecamatan, MasterKelurahan, MasterRekeningPajak } from "@shared/schema";
 
 function invalidateMasterQueries() {
@@ -20,6 +21,8 @@ function invalidateMasterQueries() {
 
 export default function BackofficeMasterData() {
   const { toast } = useToast();
+  const { hasRole } = useAuth();
+  const isAdmin = hasRole(["admin"]);
   const [kecNama, setKecNama] = useState("");
   const [kecKode, setKecKode] = useState("");
   const [kelNama, setKelNama] = useState("");
@@ -140,6 +143,21 @@ export default function BackofficeMasterData() {
       toast({ title: "Gagal", description: error.message, variant: "destructive" });
     }
   };
+
+  if (!isAdmin) {
+    return (
+      <BackofficeLayout>
+        <div className="p-6">
+          <div className="border-[3px] border-black bg-white p-4">
+            <h1 className="font-serif text-xl font-black">AKSES DITOLAK</h1>
+            <p className="font-mono text-xs mt-1">
+              Halaman Master Data hanya tersedia untuk role admin.
+            </p>
+          </div>
+        </div>
+      </BackofficeLayout>
+    );
+  }
 
   return (
     <BackofficeLayout>

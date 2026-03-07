@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { useForm, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -7,14 +7,24 @@ import { Download, History, Pencil, Plus, Search, Trash2, Upload, Users } from "
 import BackofficeLayout from "./layout";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { WajibPajakWithBadanUsaha } from "@shared/schema";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import type { PaginatedResult, WajibPajakListItem, WajibPajakWithBadanUsaha } from "@shared/schema";
 import AuditHistoryDialog from "@/components/audit-history-dialog";
 
 const ownerFields = [
@@ -234,15 +244,59 @@ function WpForm({ form, mode }: { form: UseFormReturn<WpFormValues>; mode: "crea
 }
 
 export default function BackofficeWajibPajak() {
+  const { hasRole } = useAuth();
+  const canMutate = hasRole(["admin", "editor"]);
   const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const [jenisWpFilter, setJenisWpFilter] = useState<"all" | "orang_pribadi" | "badan_usaha">("all");
+  const [peranWpFilter, setPeranWpFilter] = useState<"all" | "pemilik" | "pengelola">("all");
+  const [statusAktifFilter, setStatusAktifFilter] = useState<"all" | "active" | "inactive">("all");
   const [openAdd, setOpenAdd] = useState(false);
   const [edit, setEdit] = useState<WajibPajakWithBadanUsaha | null>(null);
   const [auditTarget, setAuditTarget] = useState<WajibPajakWithBadanUsaha | null>(null);
   const [qualityWarnings, setQualityWarnings] = useState<QualityWarning[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const debouncedQ = useDebouncedValue(q, 300);
 
-  const { data: wpList = [], isLoading } = useQuery<WajibPajakWithBadanUsaha[]>({ queryKey: ["/api/wajib-pajak"] });
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedQ, jenisWpFilter, peranWpFilter, statusAktifFilter, limit]);
+
+  const listQueryKey = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    if (debouncedQ) params.set("q", debouncedQ);
+    if (jenisWpFilter !== "all") params.set("jenisWp", jenisWpFilter);
+    if (peranWpFilter !== "all") params.set("peranWp", peranWpFilter);
+    if (statusAktifFilter !== "all") params.set("statusAktif", statusAktifFilter);
+    return `/api/wajib-pajak?${params.toString()}`;
+  }, [debouncedQ, jenisWpFilter, limit, page, peranWpFilter, statusAktifFilter]);
+
+  const invalidateWajibPajakQueries = () => {
+    queryClient.invalidateQueries({
+      predicate: (query) => {
+        const [first] = query.queryKey;
+        return typeof first === "string" && first.startsWith("/api/wajib-pajak");
+      },
+    });
+  };
+
+  const { data: listResult, isLoading, isFetching } = useQuery<PaginatedResult<WajibPajakListItem>>({
+    queryKey: [listQueryKey],
+    placeholderData: keepPreviousData,
+  });
+  const wpList = listResult?.items ?? [];
+  const meta = listResult?.meta ?? {
+    page,
+    limit,
+    total: 0,
+    totalPages: 1,
+    hasNext: false,
+    hasPrev: false,
+  };
   const addForm = useForm<WpFormValues>({ resolver: zodResolver(wpSchema), defaultValues: defaults() });
   const editForm = useForm<WpFormValues>({ resolver: zodResolver(wpSchema), defaultValues: defaults() });
 
@@ -275,30 +329,31 @@ export default function BackofficeWajibPajak() {
 
   const createMutation = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => (await apiRequest("POST", "/api/wajib-pajak", payload)).json(),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/wajib-pajak"] }); setOpenAdd(false); addForm.reset(defaults()); setQualityWarnings([]); toast({ title: "Berhasil", description: "Wajib Pajak berhasil ditambahkan" }); },
+    onSuccess: () => { invalidateWajibPajakQueries(); setOpenAdd(false); addForm.reset(defaults()); setQualityWarnings([]); toast({ title: "Berhasil", description: "Wajib Pajak berhasil ditambahkan" }); },
     onError: (err: Error) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
     mutationFn: async (p: { id: number; payload: Record<string, unknown> }) => (await apiRequest("PATCH", `/api/wajib-pajak/${p.id}`, p.payload)).json(),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/wajib-pajak"] }); setEdit(null); setQualityWarnings([]); toast({ title: "Berhasil", description: "Wajib Pajak berhasil diperbarui" }); },
+    onSuccess: () => { invalidateWajibPajakQueries(); setEdit(null); setQualityWarnings([]); toast({ title: "Berhasil", description: "Wajib Pajak berhasil diperbarui" }); },
     onError: (err: Error) => toast({ title: "Gagal", description: err.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => { await apiRequest("DELETE", `/api/wajib-pajak/${id}`); },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/wajib-pajak"] }); toast({ title: "Berhasil", description: "Wajib Pajak berhasil dihapus" }); },
+    onSuccess: () => { invalidateWajibPajakQueries(); toast({ title: "Berhasil", description: "Wajib Pajak berhasil dihapus" }); },
   });
 
-  const filtered = useMemo(() => {
-    const s = q.toLowerCase().trim();
-    if (!s) return wpList;
-    return wpList.filter((wp) => wp.displayName.toLowerCase().includes(s) || (wp.npwpd || "").toLowerCase().includes(s) || wp.peranWp.includes(s) || wp.jenisWp.includes(s));
-  }, [q, wpList]);
-
-  const openEdit = (wp: WajibPajakWithBadanUsaha) => { setQualityWarnings([]); setEdit(wp); editForm.reset(defaults(wp)); };
+  const openEdit = (wp: WajibPajakWithBadanUsaha) => {
+    if (!canMutate) return;
+    setQualityWarnings([]);
+    setEdit(wp);
+    editForm.reset(defaults(wp));
+  };
 
   const submitCreate = async (data: WpFormValues) => {
+    if (!canMutate) return;
+
     const payload = toPayload(data, "create");
     const warnings = await runQualityCheck(payload);
     if (warnings.length > 0) {
@@ -309,6 +364,8 @@ export default function BackofficeWajibPajak() {
   };
 
   const submitEdit = async (data: WpFormValues) => {
+    if (!canMutate) return;
+
     if (!edit) return;
     const payload = toPayload(data, "edit");
     const warnings = await runQualityCheck(payload);
@@ -320,6 +377,8 @@ export default function BackofficeWajibPajak() {
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canMutate) return;
+
     const file = e.target.files?.[0];
     if (!file) return;
     const formData = new FormData();
@@ -328,7 +387,7 @@ export default function BackofficeWajibPajak() {
       const res = await fetch("/api/wajib-pajak/import", { method: "POST", body: formData });
       const result = await res.json();
       if (!res.ok) toast({ title: "Gagal", description: result.message, variant: "destructive" });
-      else { toast({ title: "Import Selesai", description: `${result.success} berhasil, ${result.failed} gagal dari ${result.total} data` }); queryClient.invalidateQueries({ queryKey: ["/api/wajib-pajak"] }); }
+      else { toast({ title: "Import Selesai", description: `${result.success} berhasil, ${result.failed} gagal dari ${result.total} data` }); invalidateWajibPajakQueries(); }
     } catch (err: any) { toast({ title: "Error", description: err.message, variant: "destructive" }); }
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -341,34 +400,126 @@ export default function BackofficeWajibPajak() {
           <div className="flex items-center gap-3"><div className="bg-[#FF6B00] w-10 h-10 border-[3px] border-black flex items-center justify-center"><Users className="w-5 h-5 text-white" /></div><div><h1 className="font-serif text-2xl font-black">WAJIB PAJAK</h1><p className="font-mono text-[10px] tracking-widest uppercase text-gray-500">Model Baru</p></div></div>
           <div className="flex gap-2 flex-wrap">
             <Button variant="outline" className="rounded-none border-[3px] border-black bg-white font-mono text-xs font-bold" onClick={() => window.open("/api/wajib-pajak/export", "_blank")}><Download className="w-4 h-4 mr-1" />EXPORT CSV</Button>
-            <Button variant="outline" className="rounded-none border-[3px] border-black bg-white font-mono text-xs font-bold" onClick={() => fileInputRef.current?.click()}><Upload className="w-4 h-4 mr-1" />IMPORT CSV</Button>
-            <Button className="rounded-none border-[3px] border-black bg-[#FFFF00] text-black font-mono font-bold" onClick={() => { setQualityWarnings([]); addForm.reset(defaults()); setOpenAdd(true); }}><Plus className="w-4 h-4 mr-2" />TAMBAH WP</Button>
+            {canMutate && <Button variant="outline" className="rounded-none border-[3px] border-black bg-white font-mono text-xs font-bold" onClick={() => fileInputRef.current?.click()}><Upload className="w-4 h-4 mr-1" />IMPORT CSV</Button>}
+            {canMutate && <Button className="rounded-none border-[3px] border-black bg-[#FFFF00] text-black font-mono font-bold" onClick={() => { setQualityWarnings([]); addForm.reset(defaults()); setOpenAdd(true); }}><Plus className="w-4 h-4 mr-2" />TAMBAH WP</Button>}
           </div>
         </div>
-        <div className="mb-4 flex items-center gap-3"><div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nama/NPWPD/peran/jenis" className="pl-9 rounded-none border-[3px] border-black font-mono text-sm" /></div><Badge className="rounded-none border-[2px] border-black bg-[#FF6B00] text-white font-mono text-xs">{filtered.length} WP</Badge></div>
+        <div className="mb-3 flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[240px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Cari nama / NPWPD"
+              className="pl-9 rounded-none border-[3px] border-black font-mono text-sm"
+            />
+          </div>
+          <Select value={jenisWpFilter} onValueChange={(value) => setJenisWpFilter(value as typeof jenisWpFilter)}>
+            <SelectTrigger className="w-[170px] rounded-none border-[3px] border-black font-mono text-xs">
+              <SelectValue placeholder="Jenis WP" />
+            </SelectTrigger>
+            <SelectContent className="rounded-none border-[2px] border-black">
+              <SelectItem value="all">Semua Jenis</SelectItem>
+              <SelectItem value="orang_pribadi">Orang Pribadi</SelectItem>
+              <SelectItem value="badan_usaha">Badan Usaha</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={peranWpFilter} onValueChange={(value) => setPeranWpFilter(value as typeof peranWpFilter)}>
+            <SelectTrigger className="w-[170px] rounded-none border-[3px] border-black font-mono text-xs">
+              <SelectValue placeholder="Peran WP" />
+            </SelectTrigger>
+            <SelectContent className="rounded-none border-[2px] border-black">
+              <SelectItem value="all">Semua Peran</SelectItem>
+              <SelectItem value="pemilik">Pemilik</SelectItem>
+              <SelectItem value="pengelola">Pengelola</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={statusAktifFilter} onValueChange={(value) => setStatusAktifFilter(value as typeof statusAktifFilter)}>
+            <SelectTrigger className="w-[150px] rounded-none border-[3px] border-black font-mono text-xs">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent className="rounded-none border-[2px] border-black">
+              <SelectItem value="all">Semua Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+          <Badge className="rounded-none border-[2px] border-black bg-[#FF6B00] text-white font-mono text-xs">{meta.total} WP</Badge>
+        </div>
+        <div className="mb-4 flex items-center justify-between">
+          <p className="font-mono text-[11px] text-gray-600">
+            Halaman {meta.page} dari {meta.totalPages}
+            {isFetching ? " - memperbarui..." : ""}
+          </p>
+          <Select value={String(limit)} onValueChange={(value) => setLimit(Number(value))}>
+            <SelectTrigger className="w-[130px] rounded-none border-[2px] border-black font-mono text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="rounded-none border-[2px] border-black">
+              <SelectItem value="10">10 / halaman</SelectItem>
+              <SelectItem value="25">25 / halaman</SelectItem>
+              <SelectItem value="50">50 / halaman</SelectItem>
+              <SelectItem value="100">100 / halaman</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
         {isLoading ? <div className="h-40 flex items-center justify-center font-mono">Memuat...</div> : (
           <div className="border-[3px] border-black overflow-x-auto">
             <Table>
               <TableHeader><TableRow className="bg-black"><TableHead className="text-[#FFFF00] font-mono text-xs">NPWPD</TableHead><TableHead className="text-[#FFFF00] font-mono text-xs">DISPLAY NAME</TableHead><TableHead className="text-[#FFFF00] font-mono text-xs">JENIS</TableHead><TableHead className="text-[#FFFF00] font-mono text-xs">PERAN</TableHead><TableHead className="text-[#FFFF00] font-mono text-xs">STATUS</TableHead><TableHead className="text-[#FFFF00] font-mono text-xs text-right">AKSI</TableHead></TableRow></TableHeader>
               <TableBody>
-                {filtered.map((wp) => (
-                  <TableRow key={wp.id} className="border-b-[2px] border-black">
+                {wpList.map((wp) => (
+                  <TableRow key={wp.id} className="border-b-[2px] border-black transition-all duration-150 hover:bg-[#FFF5EB] animate-in fade-in">
                     <TableCell className="font-mono text-xs">{wp.npwpd || "-"}</TableCell>
                     <TableCell className="font-mono text-sm font-bold">{wp.displayName}</TableCell>
                     <TableCell className="font-mono text-xs">{wp.jenisWp}</TableCell>
                     <TableCell className="font-mono text-xs">{wp.peranWp}</TableCell>
                     <TableCell className="font-mono text-xs">{wp.statusAktif}</TableCell>
-                    <TableCell className="text-right"><div className="flex justify-end gap-1"><Button size="icon" variant="ghost" className="rounded-none" onClick={() => openEdit(wp)}><Pencil className="w-4 h-4" /></Button><Button size="icon" variant="ghost" className="rounded-none" onClick={() => setAuditTarget(wp)}><History className="w-4 h-4" /></Button><Button size="icon" variant="ghost" className="rounded-none text-red-600" onClick={() => deleteMutation.mutate(wp.id)}><Trash2 className="w-4 h-4" /></Button></div></TableCell>
+                    <TableCell className="text-right"><div className="flex justify-end gap-1">{canMutate && <Button size="icon" variant="ghost" className="rounded-none" onClick={() => openEdit(wp)}><Pencil className="w-4 h-4" /></Button>}<Button size="icon" variant="ghost" className="rounded-none" onClick={() => setAuditTarget(wp)}><History className="w-4 h-4" /></Button>{canMutate && <Button size="icon" variant="ghost" className="rounded-none text-red-600" onClick={() => deleteMutation.mutate(wp.id)}><Trash2 className="w-4 h-4" /></Button>}</div></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
         )}
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <p className="font-mono text-[11px] text-gray-600">
+            Menampilkan {wpList.length} dari {meta.total} data
+          </p>
+          <Pagination className="w-auto">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (meta.hasPrev) setPage((prev) => Math.max(1, prev - 1));
+                  }}
+                  className={`rounded-none border-[2px] border-black font-mono text-xs ${meta.hasPrev ? "" : "pointer-events-none opacity-40"}`}
+                />
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationLink href="#" isActive className="rounded-none border-[2px] border-black font-mono text-xs">
+                  {meta.page}
+                </PaginationLink>
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (meta.hasNext) setPage((prev) => prev + 1);
+                  }}
+                  className={`rounded-none border-[2px] border-black font-mono text-xs ${meta.hasNext ? "" : "pointer-events-none opacity-40"}`}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
       </div>
 
-      <Dialog open={openAdd} onOpenChange={setOpenAdd}>
+      {canMutate && <Dialog open={openAdd} onOpenChange={setOpenAdd}>
         <DialogContent className="rounded-none border-[4px] border-black max-w-2xl bg-white p-0 max-h-[90vh] overflow-y-auto">
           <DialogHeader className="p-4 border-b-[3px] border-black bg-[#FF6B00]"><DialogTitle className="font-serif text-xl font-black text-white">TAMBAH WAJIB PAJAK</DialogTitle></DialogHeader>
           <Form {...addForm}>
@@ -392,9 +543,9 @@ export default function BackofficeWajibPajak() {
             </form>
           </Form>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
 
-      <Dialog open={!!edit} onOpenChange={(open) => !open && setEdit(null)}>
+      {canMutate && <Dialog open={!!edit} onOpenChange={(open) => !open && setEdit(null)}>
         <DialogContent className="rounded-none border-[4px] border-black max-w-2xl bg-white p-0 max-h-[90vh] overflow-y-auto">
           <DialogHeader className="p-4 border-b-[3px] border-black bg-blue-600"><DialogTitle className="font-serif text-xl font-black text-white">EDIT WAJIB PAJAK</DialogTitle></DialogHeader>
           <Form {...editForm}>
@@ -418,7 +569,7 @@ export default function BackofficeWajibPajak() {
             </form>
           </Form>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
       <AuditHistoryDialog
         open={!!auditTarget}
         onOpenChange={(open) => !open && setAuditTarget(null)}

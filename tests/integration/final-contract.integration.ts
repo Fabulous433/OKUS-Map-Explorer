@@ -5,9 +5,12 @@ import { createIntegrationServer, requiredNumber, requiredString, type JsonRecor
 async function run() {
   const server = await createIntegrationServer();
 
-  const { requestJson, jsonRequest } = server;
+  const { requestJson, jsonRequest, loginAs } = server;
 
   try {
+    const loginResult = await loginAs("admin", "admin123");
+    assert.equal(loginResult.response.status, 200);
+
     const { body: rekeningBody, response: rekeningRes } = await requestJson("/api/master/rekening-pajak");
     assert.equal(rekeningRes.status, 200);
     assert.ok(Array.isArray(rekeningBody));
@@ -28,10 +31,11 @@ async function run() {
 
     const { body: wpBody, response: wpRes } = await requestJson("/api/wajib-pajak");
     assert.equal(wpRes.status, 200);
-    assert.ok(Array.isArray(wpBody));
-    assert.ok(wpBody.length > 0);
+    assert.ok(Array.isArray((wpBody as JsonRecord).items));
+    const wpItems = (wpBody as JsonRecord).items as JsonRecord[];
+    assert.ok(wpItems.length > 0);
 
-    const targetWp = wpBody[0] as JsonRecord;
+    const targetWp = wpItems[0] as JsonRecord;
     const wpId = requiredNumber(targetWp.id, "wp.id wajib number");
     const oldNpwpd = targetWp.npwpd === null || targetWp.npwpd === undefined ? null : String(targetWp.npwpd);
 
@@ -107,14 +111,14 @@ async function run() {
 
       const listAfter = await requestJson("/api/objek-pajak?includeUnverified=true");
       assert.equal(listAfter.response.status, 200);
-      assert.ok(Array.isArray(listAfter.body));
-      const inserted = (listAfter.body as JsonRecord[]).find((item) => Number(item.id) === createdOpId);
+      assert.ok(Array.isArray((listAfter.body as JsonRecord).items));
+      const inserted = ((listAfter.body as JsonRecord).items as JsonRecord[]).find((item) => Number(item.id) === createdOpId);
       assert.ok(inserted);
       assert.equal("namaObjek" in inserted, false);
       assert.equal("alamat" in inserted, false);
     } finally {
       if (createdOpId !== null) {
-        await fetch(`${server.baseUrl}/api/objek-pajak/${createdOpId}`, { method: "DELETE" });
+        await jsonRequest(`/api/objek-pajak/${createdOpId}`, "DELETE");
       }
 
       await jsonRequest(`/api/wajib-pajak/${wpId}`, "PATCH", { npwpd: oldNpwpd });

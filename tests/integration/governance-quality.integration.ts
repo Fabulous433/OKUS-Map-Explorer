@@ -4,7 +4,7 @@ import { createIntegrationServer, requiredNumber, type JsonRecord } from "./_hel
 
 async function run() {
   const server = await createIntegrationServer();
-  const { requestJson, jsonRequest } = server;
+  const { requestJson, jsonRequest, loginAs } = server;
 
   let createdOpId: number | null = null;
   let createdRekId: number | null = null;
@@ -12,11 +12,15 @@ async function run() {
   let createdKelId: string | null = null;
 
   try {
+    const loginResult = await loginAs("admin", "admin123");
+    assert.equal(loginResult.response.status, 200);
+
     const { body: wpBody, response: wpRes } = await requestJson("/api/wajib-pajak");
     assert.equal(wpRes.status, 200);
-    assert.ok(Array.isArray(wpBody));
-    assert.ok(wpBody.length > 0);
-    const wpId = requiredNumber((wpBody[0] as JsonRecord).id, "wp id wajib ada");
+    assert.ok(Array.isArray((wpBody as JsonRecord).items));
+    const wpItems = (wpBody as JsonRecord).items as JsonRecord[];
+    assert.ok(wpItems.length > 0);
+    const wpId = requiredNumber((wpItems[0] as JsonRecord).id, "wp id wajib ada");
 
     const uniq = Date.now().toString().slice(-6);
     const kodeKec = `9${uniq.slice(0, 3)}`;
@@ -61,14 +65,14 @@ async function run() {
 
     const listPublic = await requestJson("/api/objek-pajak");
     assert.equal(listPublic.response.status, 200);
-    assert.ok(Array.isArray(listPublic.body));
-    const foundPublic = (listPublic.body as JsonRecord[]).some((row) => Number(row.id) === createdOpId);
+    assert.ok(Array.isArray((listPublic.body as JsonRecord).items));
+    const foundPublic = ((listPublic.body as JsonRecord).items as JsonRecord[]).some((row) => Number(row.id) === createdOpId);
     assert.equal(foundPublic, false, "OP draft tidak boleh muncul pada list default");
 
     const listInternal = await requestJson("/api/objek-pajak?includeUnverified=true");
     assert.equal(listInternal.response.status, 200);
-    assert.ok(Array.isArray(listInternal.body));
-    const foundInternal = (listInternal.body as JsonRecord[]).some((row) => Number(row.id) === createdOpId);
+    assert.ok(Array.isArray((listInternal.body as JsonRecord).items));
+    const foundInternal = ((listInternal.body as JsonRecord).items as JsonRecord[]).some((row) => Number(row.id) === createdOpId);
     assert.equal(foundInternal, true);
 
     const rejectNoNote = await jsonRequest(`/api/objek-pajak/${createdOpId}/verification`, "PATCH", {
@@ -87,8 +91,8 @@ async function run() {
 
     const rejectedList = await requestJson("/api/objek-pajak?statusVerifikasi=rejected&includeUnverified=true");
     assert.equal(rejectedList.response.status, 200);
-    assert.ok(Array.isArray(rejectedList.body));
-    assert.ok((rejectedList.body as JsonRecord[]).some((row) => Number(row.id) === createdOpId));
+    assert.ok(Array.isArray((rejectedList.body as JsonRecord).items));
+    assert.ok(((rejectedList.body as JsonRecord).items as JsonRecord[]).some((row) => Number(row.id) === createdOpId));
 
     const verifyOp = await jsonRequest(`/api/objek-pajak/${createdOpId}/verification`, "PATCH", {
       statusVerifikasi: "verified",
@@ -101,8 +105,8 @@ async function run() {
 
     const listPublicAfterVerify = await requestJson("/api/objek-pajak");
     assert.equal(listPublicAfterVerify.response.status, 200);
-    assert.ok(Array.isArray(listPublicAfterVerify.body));
-    assert.ok((listPublicAfterVerify.body as JsonRecord[]).some((row) => Number(row.id) === createdOpId));
+    assert.ok(Array.isArray((listPublicAfterVerify.body as JsonRecord).items));
+    assert.ok(((listPublicAfterVerify.body as JsonRecord).items as JsonRecord[]).some((row) => Number(row.id) === createdOpId));
 
     const qualityCheck = await jsonRequest("/api/quality/check", "POST", {
       nopd: (verifyOp.body as JsonRecord).nopd,
@@ -137,16 +141,16 @@ async function run() {
     assert.ok(((auditOp.body as JsonRecord).data as JsonRecord[]).length >= 1);
   } finally {
     if (createdOpId !== null) {
-      await fetch(`${server.baseUrl}/api/objek-pajak/${createdOpId}`, { method: "DELETE" });
+      await jsonRequest(`/api/objek-pajak/${createdOpId}`, "DELETE");
     }
     if (createdKelId) {
-      await fetch(`${server.baseUrl}/api/master/kelurahan/${createdKelId}`, { method: "DELETE" });
+      await jsonRequest(`/api/master/kelurahan/${createdKelId}`, "DELETE");
     }
     if (createdKecId) {
-      await fetch(`${server.baseUrl}/api/master/kecamatan/${createdKecId}`, { method: "DELETE" });
+      await jsonRequest(`/api/master/kecamatan/${createdKecId}`, "DELETE");
     }
     if (createdRekId !== null) {
-      await fetch(`${server.baseUrl}/api/master/rekening-pajak/${createdRekId}`, { method: "DELETE" });
+      await jsonRequest(`/api/master/rekening-pajak/${createdRekId}`, "DELETE");
     }
 
     await server.close();

@@ -1,6 +1,6 @@
-import type { Express, Request } from "express";
+import type { Express, Request, Response } from "express";
 import { type Server } from "http";
-import { and, asc, desc, eq, gte, ilike, lte, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, lte, lt, or, sql, type SQL } from "drizzle-orm";
 import { db, storage } from "./storage";
 import {
   auditLog,
@@ -27,6 +27,7 @@ import {
 import { stringify } from "csv-stringify/sync";
 import { parse } from "csv-parse/sync";
 import multer from "multer";
+import { APP_ROLE_OPTIONS, isAppRole, verifyPassword, type AppRole, type SessionUser } from "./auth";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
@@ -132,11 +133,54 @@ type QualityWarning = {
   relatedIds: Array<string | number>;
 };
 
+type Bbox = {
+  minLng: number;
+  minLat: number;
+  maxLng: number;
+  maxLat: number;
+};
+
+const VERIFICATION_STATUS_OPTIONS = ["draft", "verified", "rejected"] as const;
+const LIST_LIMIT_DEFAULT = 25;
+const LIST_LIMIT_MAX = 100;
+const MAP_LIMIT_DEFAULT = 500;
+const MAP_LIMIT_MAX = 1000;
+const SEARCH_QUERY_MAX_LENGTH = 100;
+
 function getActorName(req: Request) {
+  const sessionUser = getSessionUser(req);
+  if (sessionUser) {
+    return sessionUser.username;
+  }
+
   const raw = req.headers["x-actor-name"];
   const val = Array.isArray(raw) ? raw[0] : raw;
   const cleaned = typeof val === "string" ? val.trim() : "";
   return cleaned.length > 0 ? cleaned : "system";
+}
+
+function getSessionUser(req: Request): SessionUser | null {
+  const user = req.session?.user;
+  if (!user) return null;
+  if (typeof user.id !== "string" || typeof user.username !== "string" || !isAppRole(user.role)) {
+    return null;
+  }
+  return user;
+}
+
+function requireRole(req: Request, res: Response, roles: readonly AppRole[]) {
+  const user = getSessionUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Authentication required" });
+    return null;
+  }
+
+  if (!roles.includes(user.role)) {
+    res.status(403).json({ message: "Forbidden" });
+    return null;
+  }
+
+  return user;
 }
 
 function parseDate(value: unknown) {
@@ -150,6 +194,71 @@ function parseLimit(value: unknown, fallback = 25) {
   const num = Number.parseInt(value, 10);
   if (!Number.isFinite(num) || num <= 0) return fallback;
   return Math.min(num, 200);
+}
+
+function parsePage(value: unknown) {
+  if (typeof value !== "string" || value.trim().length === 0) return 1;
+  const num = Number.parseInt(value, 10);
+  if (!Number.isFinite(num) || num < 1) return null;
+  return num;
+}
+
+function parseListLimit(value: unknown) {
+  if (typeof value !== "string" || value.trim().length === 0) return LIST_LIMIT_DEFAULT;
+  const num = Number.parseInt(value, 10);
+  if (!Number.isFinite(num) || num < 1) return null;
+  return Math.min(num, LIST_LIMIT_MAX);
+}
+
+function parseMapLimit(value: unknown) {
+  if (typeof value !== "string" || value.trim().length === 0) return MAP_LIMIT_DEFAULT;
+  const num = Number.parseInt(value, 10);
+  if (!Number.isFinite(num) || num < 1) return null;
+  return Math.min(num, MAP_LIMIT_MAX);
+}
+
+function parseSearchQuery(value: unknown) {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  if (normalized.length === 0) return undefined;
+  if (normalized.length > SEARCH_QUERY_MAX_LENGTH) return null;
+  return normalized;
+}
+
+function parseOptionalNumber(value: unknown) {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string" || value.trim().length === 0) return undefined;
+  const num = Number.parseInt(value, 10);
+  if (!Number.isFinite(num) || num < 1) return null;
+  return num;
+}
+
+function parseVerificationStatus(value: unknown) {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value !== "string") return null;
+  return VERIFICATION_STATUS_OPTIONS.includes(value as (typeof VERIFICATION_STATUS_OPTIONS)[number]) ? value : null;
+}
+
+function parseBooleanFlag(value: unknown) {
+  if (value === undefined || value === null || value === "") return false;
+  if (typeof value !== "string") return null;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return null;
+}
+
+function parseBbox(value: unknown): Bbox | null {
+  if (typeof value !== "string" || value.trim().length === 0) return null;
+  const parts = value.split(",").map((part) => Number(part.trim()));
+  if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part))) return null;
+
+  const [minLng, minLat, maxLng, maxLat] = parts;
+  if (minLng < -180 || minLng > 180 || maxLng < -180 || maxLng > 180) return null;
+  if (minLat < -90 || minLat > 90 || maxLat < -90 || maxLat > 90) return null;
+  if (minLng >= maxLng || minLat >= maxLat) return null;
+
+  return { minLng, minLat, maxLng, maxLat };
 }
 
 function parseCursor(value: unknown) {
@@ -190,7 +299,7 @@ async function writeAuditLog(params: {
 }
 
 async function listAuditLogs(filter: AuditFilter) {
-  const conditions = [];
+  const conditions: SQL[] = [];
   if (filter.entityType) conditions.push(eq(auditLog.entityType, filter.entityType));
   if (filter.entityId) conditions.push(eq(auditLog.entityId, filter.entityId));
   if (filter.action) conditions.push(eq(auditLog.action, filter.action));
@@ -581,12 +690,116 @@ function flattenDetailForCsv(detail: unknown) {
 }
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
-  app.get("/api/wajib-pajak", async (_req, res) => {
-    const data = await storage.getAllWajibPajak();
+  app.post("/api/auth/login", async (req, res) => {
+    const username = cleanText((req.body as Record<string, unknown>)?.username);
+    const password = cleanText((req.body as Record<string, unknown>)?.password);
+
+    if (!username || !password) {
+      return res.status(400).json({ message: "Username dan password wajib diisi" });
+    }
+
+    const user = await storage.getUserByUsername(username);
+    if (!user || !verifyPassword(user.password, password)) {
+      return res.status(401).json({ message: "Username atau password salah" });
+    }
+
+    const rawRole = (user as { role?: unknown }).role;
+    const role: AppRole = isAppRole(rawRole) ? rawRole : "viewer";
+    req.session.user = {
+      id: user.id,
+      username: user.username,
+      role,
+    };
+
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+
+    res.json({
+      user: {
+        id: user.id,
+        username: user.username,
+        role,
+      },
+    });
+  });
+
+  app.post("/api/auth/logout", async (req, res) => {
+    await new Promise<void>((resolve, reject) => {
+      req.session.destroy((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+
+    res.status(204).send();
+  });
+
+  app.get("/api/auth/me", async (req, res) => {
+    const user = getSessionUser(req);
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    res.json({ user });
+  });
+
+  app.get("/api/wajib-pajak", async (req, res) => {
+    if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
+    const page = parsePage(req.query.page);
+    if (!page) {
+      return res.status(400).json({ message: "Query page tidak valid" });
+    }
+
+    const limit = parseListLimit(req.query.limit);
+    if (!limit) {
+      return res.status(400).json({ message: "Query limit tidak valid" });
+    }
+
+    const q = parseSearchQuery(req.query.q);
+    if (q === null) {
+      return res.status(400).json({ message: `Query q harus <= ${SEARCH_QUERY_MAX_LENGTH} karakter` });
+    }
+
+    const jenisWp = typeof req.query.jenisWp === "string" ? req.query.jenisWp : undefined;
+    if (jenisWp && jenisWp !== "orang_pribadi" && jenisWp !== "badan_usaha") {
+      return res.status(400).json({ message: "Query jenisWp tidak valid" });
+    }
+
+    const peranWp = typeof req.query.peranWp === "string" ? req.query.peranWp : undefined;
+    if (peranWp && peranWp !== "pemilik" && peranWp !== "pengelola") {
+      return res.status(400).json({ message: "Query peranWp tidak valid" });
+    }
+
+    const statusAktif = typeof req.query.statusAktif === "string" ? req.query.statusAktif : undefined;
+    if (statusAktif && statusAktif !== "active" && statusAktif !== "inactive") {
+      return res.status(400).json({ message: "Query statusAktif tidak valid" });
+    }
+
+    const data = await storage.getWajibPajakPage({
+      page,
+      limit,
+      q,
+      jenisWp,
+      peranWp,
+      statusAktif,
+    });
     res.json(data);
   });
 
   app.post("/api/wajib-pajak", async (req, res) => {
+    if (!requireRole(req, res, ["admin", "editor"])) return;
+
     const normalized = normalizeWpData(req.body);
     const parsed = createWajibPajakSchema.safeParse(normalized);
     if (!parsed.success) {
@@ -609,6 +822,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.patch("/api/wajib-pajak/:id", async (req, res) => {
+    if (!requireRole(req, res, ["admin", "editor"])) return;
+
     const id = Number.parseInt(req.params.id, 10);
     const existing = await storage.getWajibPajak(id);
     if (!existing) {
@@ -665,6 +880,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.delete("/api/wajib-pajak/:id", async (req, res) => {
+    if (!requireRole(req, res, ["admin", "editor"])) return;
+
     const id = Number.parseInt(req.params.id, 10);
     const existing = await storage.getWajibPajak(id);
     if (!existing) {
@@ -685,7 +902,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.status(204).send();
   });
 
-  app.get("/api/wajib-pajak/export", async (_req, res) => {
+  app.get("/api/wajib-pajak/export", async (req, res) => {
+    if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
     const data = await storage.getAllWajibPajak();
     const rows = data.map((wp) => ({
       jenis_wp: wp.jenisWp,
@@ -724,6 +943,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/wajib-pajak/import", upload.single("file"), async (req, res) => {
+    if (!requireRole(req, res, ["admin", "editor"])) return;
+
     try {
       if (!req.file) {
         return res.status(400).json({ message: "File CSV diperlukan" });
@@ -804,11 +1025,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.get("/api/master/kecamatan", async (_req, res) => {
+    if (!requireRole(_req, res, APP_ROLE_OPTIONS)) return;
+
     const data = await storage.getAllMasterKecamatan();
     res.json(data);
   });
 
   app.post("/api/master/kecamatan", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
     const parsed = masterKecamatanPayloadSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.message });
@@ -847,6 +1072,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.patch("/api/master/kecamatan/:id", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
     const id = req.params.id;
     const parsed = masterKecamatanPayloadSchema.partial().safeParse(req.body);
     if (!parsed.success) {
@@ -905,6 +1132,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.delete("/api/master/kecamatan/:id", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
     const id = req.params.id;
     const rows = await db.select().from(masterKecamatan).where(eq(masterKecamatan.cpmKecId, id)).limit(1);
     if (rows.length === 0) {
@@ -945,12 +1174,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.get("/api/master/kelurahan", async (req, res) => {
+    if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
     const kecamatanId = typeof req.query.kecamatanId === "string" ? req.query.kecamatanId : undefined;
     const data = await storage.getMasterKelurahan(kecamatanId);
     res.json(data);
   });
 
   app.post("/api/master/kelurahan", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
     const parsed = masterKelurahanPayloadSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.message });
@@ -999,6 +1232,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.patch("/api/master/kelurahan/:id", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
     const id = req.params.id;
     const parsed = masterKelurahanPayloadSchema.partial().safeParse(req.body);
     if (!parsed.success) {
@@ -1056,6 +1291,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.delete("/api/master/kelurahan/:id", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
     const id = req.params.id;
     const rows = await db.select().from(masterKelurahan).where(eq(masterKelurahan.cpmKelId, id)).limit(1);
     if (rows.length === 0) {
@@ -1086,6 +1323,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.get("/api/master/rekening-pajak", async (req, res) => {
+    if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
     const includeInactive = typeof req.query.includeInactive === "string" && req.query.includeInactive === "true";
     const data = includeInactive
       ? await db.select().from(masterRekeningPajak).orderBy(asc(masterRekeningPajak.kodeRekening))
@@ -1094,6 +1333,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/master/rekening-pajak", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
     const parsed = masterRekeningPayloadSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.message });
@@ -1128,6 +1369,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.patch("/api/master/rekening-pajak/:id", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
     const id = Number.parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) {
       return res.status(400).json({ message: "ID rekening tidak valid" });
@@ -1178,6 +1421,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.delete("/api/master/rekening-pajak/:id", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
     const id = Number.parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) {
       return res.status(400).json({ message: "ID rekening tidak valid" });
@@ -1212,6 +1457,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.get("/api/audit-log", async (req, res) => {
+    if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
     const fromRaw = typeof req.query.from === "string" ? req.query.from : undefined;
     const toRaw = typeof req.query.to === "string" ? req.query.to : undefined;
     const from = parseDate(fromRaw);
@@ -1236,6 +1483,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/quality/check", async (req, res) => {
+    if (!requireRole(req, res, ["admin", "editor"])) return;
+
     const parsed = qualityCheckInputSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.message });
@@ -1285,7 +1534,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ warnings });
   });
 
-  app.get("/api/quality/report", async (_req, res) => {
+  app.get("/api/quality/report", async (req, res) => {
+    if (!requireRole(req, res, ["admin", "editor"])) return;
+
     const wpRows = await db
       .select({
         id: wajibPajak.id,
@@ -1357,32 +1608,126 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.get("/api/objek-pajak", async (req, res) => {
-    const jenisPajak = typeof req.query.jenisPajak === "string" ? req.query.jenisPajak : undefined;
-    const status = typeof req.query.status === "string" ? req.query.status : undefined;
-    const kecamatanId = typeof req.query.kecamatanId === "string" ? req.query.kecamatanId : undefined;
-    const statusVerifikasi = typeof req.query.statusVerifikasi === "string" ? req.query.statusVerifikasi : undefined;
-    const includeUnverified = typeof req.query.includeUnverified === "string" && req.query.includeUnverified === "true";
+    const page = parsePage(req.query.page);
+    if (!page) {
+      return res.status(400).json({ message: "Query page tidak valid" });
+    }
 
-    if (
-      statusVerifikasi &&
-      statusVerifikasi !== "draft" &&
-      statusVerifikasi !== "verified" &&
-      statusVerifikasi !== "rejected"
-    ) {
+    const limit = parseListLimit(req.query.limit);
+    if (!limit) {
+      return res.status(400).json({ message: "Query limit tidak valid" });
+    }
+
+    const q = parseSearchQuery(req.query.q);
+    if (q === null) {
+      return res.status(400).json({ message: `Query q harus <= ${SEARCH_QUERY_MAX_LENGTH} karakter` });
+    }
+
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    if (status && status !== "active" && status !== "inactive") {
+      return res.status(400).json({ message: "status tidak valid" });
+    }
+
+    const kecamatanId = typeof req.query.kecamatanId === "string" ? req.query.kecamatanId : undefined;
+    const rekPajakId = parseOptionalNumber(req.query.rekPajakId);
+    if (rekPajakId === null) {
+      return res.status(400).json({ message: "rekPajakId tidak valid" });
+    }
+
+    const statusVerifikasi = parseVerificationStatus(req.query.statusVerifikasi);
+    if (statusVerifikasi === null) {
       return res.status(400).json({ message: "statusVerifikasi tidak valid" });
     }
 
-    const data = await storage.getAllObjekPajak({ jenisPajak, status, kecamatanId });
-    const filtered = statusVerifikasi
-      ? data.filter((item) => item.statusVerifikasi === statusVerifikasi)
-      : includeUnverified
-        ? data
-        : data.filter((item) => item.statusVerifikasi === "verified");
+    const includeUnverified = parseBooleanFlag(req.query.includeUnverified);
+    if (includeUnverified === null) {
+      return res.status(400).json({ message: "includeUnverified harus true/false" });
+    }
 
-    res.json(filtered);
+    const requiresInternalAccess = includeUnverified || (statusVerifikasi ? statusVerifikasi !== "verified" : false);
+    if (requiresInternalAccess && !requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
+    const effectiveStatusVerifikasi = statusVerifikasi ?? (includeUnverified ? undefined : "verified");
+
+    const data = await storage.getObjekPajakPage({
+      page,
+      limit,
+      q,
+      status,
+      statusVerifikasi: effectiveStatusVerifikasi,
+      kecamatanId,
+      rekPajakId: rekPajakId ?? undefined,
+    });
+
+    res.json(data);
   });
 
-  app.get("/api/objek-pajak/export", async (_req, res) => {
+  app.get("/api/objek-pajak/map", async (req, res) => {
+    const bbox = parseBbox(req.query.bbox);
+    if (!bbox) {
+      return res.status(400).json({ message: "bbox tidak valid. Gunakan format minLng,minLat,maxLng,maxLat" });
+    }
+
+    const zoomRaw = req.query.zoom;
+    if (zoomRaw !== undefined && zoomRaw !== null && zoomRaw !== "") {
+      const zoom = Number(zoomRaw);
+      if (!Number.isFinite(zoom) || zoom < 0 || zoom > 24) {
+        return res.status(400).json({ message: "zoom tidak valid" });
+      }
+    }
+
+    const limit = parseMapLimit(req.query.limit);
+    if (!limit) {
+      return res.status(400).json({ message: "limit tidak valid" });
+    }
+
+    const q = parseSearchQuery(req.query.q);
+    if (q === null) {
+      return res.status(400).json({ message: `Query q harus <= ${SEARCH_QUERY_MAX_LENGTH} karakter` });
+    }
+
+    const kecamatanId = typeof req.query.kecamatanId === "string" ? req.query.kecamatanId : undefined;
+    const rekPajakId = parseOptionalNumber(req.query.rekPajakId);
+    if (rekPajakId === null) {
+      return res.status(400).json({ message: "rekPajakId tidak valid" });
+    }
+
+    const statusVerifikasi = parseVerificationStatus(req.query.statusVerifikasi);
+    if (statusVerifikasi === null) {
+      return res.status(400).json({ message: "statusVerifikasi tidak valid" });
+    }
+
+    const includeUnverified = parseBooleanFlag(req.query.includeUnverified);
+    if (includeUnverified === null) {
+      return res.status(400).json({ message: "includeUnverified harus true/false" });
+    }
+
+    const requiresInternalAccess = includeUnverified || (statusVerifikasi ? statusVerifikasi !== "verified" : false);
+    if (requiresInternalAccess && !requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
+    const effectiveStatusVerifikasi = statusVerifikasi ?? (includeUnverified ? undefined : "verified");
+
+    const result = await storage.getObjekPajakMap({
+      ...bbox,
+      q,
+      kecamatanId,
+      rekPajakId: rekPajakId ?? undefined,
+      statusVerifikasi: effectiveStatusVerifikasi,
+      limit,
+    });
+
+    res.json({
+      items: result.items,
+      meta: {
+        totalInView: result.totalInView,
+        isCapped: result.isCapped,
+      },
+    });
+  });
+
+  app.get("/api/objek-pajak/export", async (req, res) => {
+    if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
     const data = await storage.getAllObjekPajak();
     const rows = data.map((op) => ({
       nopd: op.nopd,
@@ -1413,6 +1758,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/objek-pajak/import", upload.single("file"), async (req, res) => {
+    if (!requireRole(req, res, ["admin", "editor"])) return;
+
     try {
       if (!req.file) {
         return res.status(400).json({ message: "File CSV diperlukan" });
@@ -1495,6 +1842,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.patch("/api/objek-pajak/:id/verification", async (req, res) => {
+    if (!requireRole(req, res, ["admin", "editor"])) return;
+
     const id = Number.parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) {
       return res.status(400).json({ message: "ID objek pajak tidak valid" });
@@ -1561,10 +1910,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!op) {
       return res.status(404).json({ message: "Objek Pajak tidak ditemukan" });
     }
+
+    if (op.statusVerifikasi !== "verified" && !requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
     res.json(op);
   });
 
   app.post("/api/objek-pajak", async (req, res) => {
+    if (!requireRole(req, res, ["admin", "editor"])) return;
+
     const normalized = normalizeOpData(req.body);
     const parsed = insertObjekPajakSchema.safeParse(normalized);
     if (!parsed.success) {
@@ -1598,6 +1952,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.patch("/api/objek-pajak/:id", async (req, res) => {
+    if (!requireRole(req, res, ["admin", "editor"])) return;
+
     const id = Number.parseInt(req.params.id, 10);
     const existing = await storage.getObjekPajak(id);
     if (!existing) {
@@ -1641,6 +1997,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.delete("/api/objek-pajak/:id", async (req, res) => {
+    if (!requireRole(req, res, ["admin", "editor"])) return;
+
     const id = Number.parseInt(req.params.id, 10);
     const existing = await storage.getObjekPajak(id);
     if (!existing) {

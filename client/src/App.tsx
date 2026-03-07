@@ -10,11 +10,14 @@ import BackofficeWajibPajak from "@/pages/backoffice/wajib-pajak";
 import BackofficeObjekPajak from "@/pages/backoffice/objek-pajak";
 import BackofficeFormMockup from "@/pages/backoffice/form-mockup";
 import BackofficeMasterData from "@/pages/backoffice/master-data";
+import BackofficeLogin from "@/pages/backoffice/login";
+import { AuthProvider } from "@/lib/auth";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={MapPage} />
+      <Route path="/backoffice/login" component={BackofficeLogin} />
       <Route path="/backoffice" component={BackofficeDashboard} />
       <Route path="/backoffice/wajib-pajak" component={BackofficeWajibPajak} />
       <Route path="/backoffice/objek-pajak" component={BackofficeObjekPajak} />
@@ -28,10 +31,12 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

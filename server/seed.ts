@@ -2,7 +2,8 @@ import fs from "fs/promises";
 import path from "path";
 import { and, eq } from "drizzle-orm";
 import { db, storage } from "./storage";
-import { masterKecamatan, masterKelurahan, masterRekeningPajak } from "@shared/schema";
+import { masterKecamatan, masterKelurahan, masterRekeningPajak, users } from "@shared/schema";
+import { hashPassword } from "./auth";
 
 type RawKecamatan = {
   CPM_KEC_ID: string;
@@ -48,6 +49,40 @@ const REKENING_DOC_ROWS = [
   { kodeRekening: "4.1.01.19.04.0001", namaRekening: "PBJT - Jasa Parkir" },
   { kodeRekening: "4.1.01.19.05.0001", namaRekening: "PBJT - Jasa Kesenian dan Hiburan" },
 ] as const;
+
+const DEFAULT_AUTH_USERS = [
+  { username: "admin", password: "admin123", role: "admin" as const },
+  { username: "editor", password: "editor123", role: "editor" as const },
+  { username: "viewer", password: "viewer123", role: "viewer" as const },
+] as const;
+
+async function seedAuthUsers() {
+  for (const item of DEFAULT_AUTH_USERS) {
+    const [existing] = await db.select().from(users).where(eq(users.username, item.username)).limit(1);
+    const hashed = hashPassword(item.password);
+
+    if (!existing) {
+      await db.insert(users).values({
+        username: item.username,
+        password: hashed,
+        role: item.role,
+      });
+      continue;
+    }
+
+    const needsRoleUpdate = existing.role !== item.role;
+    const needsPasswordUpdate = !existing.password.startsWith("pbkdf2$");
+    if (needsRoleUpdate || needsPasswordUpdate) {
+      await db
+        .update(users)
+        .set({
+          role: item.role,
+          password: needsPasswordUpdate ? hashed : existing.password,
+        })
+        .where(eq(users.id, existing.id));
+    }
+  }
+}
 
 async function seedMasterWilayah() {
   const docsDir = path.resolve(process.cwd(), "docs");
@@ -124,6 +159,7 @@ export async function seedDatabase() {
   try {
     await seedMasterWilayah();
     await seedMasterRekening();
+    await seedAuthUsers();
 
     const existingWP = await storage.getAllWajibPajak();
     if (existingWP.length > 0) {
@@ -405,6 +441,5 @@ export async function seedDatabase() {
     log(`Seed error: ${err.message}`, "seed");
   }
 }
-
 
 

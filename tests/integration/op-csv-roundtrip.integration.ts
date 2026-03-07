@@ -60,16 +60,20 @@ const OP_CSV_COLUMNS = [
 
 async function run() {
   const server = await createIntegrationServer();
-  const { requestJson, requestText, jsonRequest } = server;
+  const { requestJson, requestText, jsonRequest, loginAs } = server;
 
   let sourceId: number | null = null;
   let importedId: number | null = null;
 
   try {
+    const loginResult = await loginAs("admin", "admin123");
+    assert.equal(loginResult.response.status, 200);
+
     const { body: wpBody } = await requestJson("/api/wajib-pajak");
-    assert.ok(Array.isArray(wpBody));
-    assert.ok(wpBody.length > 0);
-    const wpId = requiredNumber((wpBody[0] as JsonRecord).id, "wp id wajib ada");
+    assert.ok(Array.isArray((wpBody as JsonRecord).items));
+    const wpItems = (wpBody as JsonRecord).items as JsonRecord[];
+    assert.ok(wpItems.length > 0);
+    const wpId = requiredNumber((wpItems[0] as JsonRecord).id, "wp id wajib ada");
 
     const { body: rekeningBody } = await requestJson("/api/master/rekening-pajak");
     assert.ok(Array.isArray(rekeningBody));
@@ -139,11 +143,11 @@ async function run() {
     const form = new FormData();
     form.append("file", new Blob([csvPayload], { type: "text/csv" }), "op-import.csv");
 
-    const importResponse = await fetch(`${server.baseUrl}/api/objek-pajak/import`, {
+    const { response: importResponse, body: importBodyRaw } = await requestJson("/api/objek-pajak/import", {
       method: "POST",
       body: form,
     });
-    const importBody = (await importResponse.json()) as JsonRecord;
+    const importBody = (importBodyRaw ?? {}) as JsonRecord;
 
     assert.equal(importResponse.status, 200);
     assert.equal(importBody.total, 1);
@@ -152,9 +156,9 @@ async function run() {
 
     const listAfter = await requestJson("/api/objek-pajak?includeUnverified=true");
     assert.equal(listAfter.response.status, 200);
-    assert.ok(Array.isArray(listAfter.body));
+    assert.ok(Array.isArray((listAfter.body as JsonRecord).items));
 
-    const imported = (listAfter.body as JsonRecord[]).find((item) => item.namaOp === importName);
+    const imported = ((listAfter.body as JsonRecord).items as JsonRecord[]).find((item) => item.namaOp === importName);
     assert.ok(imported, "Data hasil import harus ada");
     importedId = requiredNumber(imported.id, "imported id wajib ada");
     assert.equal(imported.rekPajakId, rekPajakId);
@@ -162,11 +166,11 @@ async function run() {
     assert.equal("alamat" in imported, false);
   } finally {
     if (importedId !== null) {
-      await fetch(`${server.baseUrl}/api/objek-pajak/${importedId}`, { method: "DELETE" });
+      await jsonRequest(`/api/objek-pajak/${importedId}`, "DELETE");
     }
 
     if (sourceId !== null) {
-      await fetch(`${server.baseUrl}/api/objek-pajak/${sourceId}`, { method: "DELETE" });
+      await jsonRequest(`/api/objek-pajak/${sourceId}`, "DELETE");
     }
 
     await server.close();

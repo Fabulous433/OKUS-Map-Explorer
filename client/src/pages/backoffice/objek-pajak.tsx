@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { keepPreviousData, useQuery, useMutation } from "@tanstack/react-query";
 import { useForm, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -36,10 +36,27 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { useToast } from "@/hooks/use-toast";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { MasterKecamatan, MasterKelurahan, MasterRekeningPajak, ObjekPajak, WajibPajakWithBadanUsaha } from "@shared/schema";
-import { JENIS_PAJAK_OPTIONS } from "@shared/schema";
+import { useAuth } from "@/lib/auth";
+import type {
+  MasterKecamatan,
+  MasterKelurahan,
+  MasterRekeningPajak,
+  ObjekPajak,
+  ObjekPajakListItem,
+  PaginatedResult,
+  WajibPajakListItem,
+} from "@shared/schema";
 import BackofficeLayout from "./layout";
 import AuditHistoryDialog from "@/components/audit-history-dialog";
 import L from "leaflet";
@@ -646,7 +663,7 @@ function OPFormDialog({
 }: {
   mode: "create" | "edit";
   editOp?: ObjekPajak | null;
-  wpList: WajibPajakWithBadanUsaha[];
+  wpList: WajibPajakListItem[];
   rekeningList: MasterRekeningPajak[];
   kecamatanList: MasterKecamatan[];
   kelurahanList: MasterKelurahan[];
@@ -1073,52 +1090,56 @@ function OPFormDialog({
 }
 
 export default function BackofficeObjekPajak() {
+  const { hasRole } = useAuth();
+  const canMutate = hasRole(["admin", "editor"]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editOp, setEditOp] = useState<ObjekPajak | null>(null);
-  const [auditTarget, setAuditTarget] = useState<ObjekPajak | null>(null);
+  const [auditTargetId, setAuditTargetId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [verificationFilter, setVerificationFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [verificationFilter, setVerificationFilter] = useState<"all" | "draft" | "verified" | "rejected">("all");
   const [kecamatanFilterId, setKecamatanFilterId] = useState<string>("all");
+  const [rekPajakFilterId, setRekPajakFilterId] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
 
-  const baseParams = new URLSearchParams();
-  baseParams.set("includeUnverified", "true");
-  if (statusFilter !== "all") {
-    baseParams.set("status", statusFilter);
-  }
-  if (verificationFilter !== "all") {
-    baseParams.set("statusVerifikasi", verificationFilter);
-  }
-  if (kecamatanFilterId !== "all") {
-    baseParams.set("kecamatanId", kecamatanFilterId);
-  }
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter, verificationFilter, kecamatanFilterId, rekPajakFilterId, limit]);
 
-  const baseQueryKey = baseParams.toString()
-    ? `/api/objek-pajak?${baseParams.toString()}`
-    : "/api/objek-pajak";
+  const objekPajakQueryKey = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    params.set("includeUnverified", "true");
+    if (debouncedSearch) params.set("q", debouncedSearch);
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (verificationFilter !== "all") params.set("statusVerifikasi", verificationFilter);
+    if (kecamatanFilterId !== "all") params.set("kecamatanId", kecamatanFilterId);
+    if (rekPajakFilterId !== "all") params.set("rekPajakId", rekPajakFilterId);
+    return `/api/objek-pajak?${params.toString()}`;
+  }, [debouncedSearch, kecamatanFilterId, limit, page, rekPajakFilterId, statusFilter, verificationFilter]);
 
-  const listParams = new URLSearchParams(baseParams);
-  if (activeTab !== "all") {
-    listParams.set("jenisPajak", activeTab);
-  }
-
-  const objekPajakQueryKey = listParams.toString()
-    ? `/api/objek-pajak?${listParams.toString()}`
-    : "/api/objek-pajak";
-
-  const { data: opList = [], isLoading } = useQuery<ObjekPajak[]>({
+  const { data: listResult, isLoading, isFetching } = useQuery<PaginatedResult<ObjekPajakListItem>>({
     queryKey: [objekPajakQueryKey],
+    placeholderData: keepPreviousData,
   });
+  const opList = listResult?.items ?? [];
+  const opMeta = listResult?.meta ?? {
+    page,
+    limit,
+    total: 0,
+    totalPages: 1,
+    hasNext: false,
+    hasPrev: false,
+  };
 
-  const { data: countBaseList = [] } = useQuery<ObjekPajak[]>({
-    queryKey: [baseQueryKey],
+  const { data: wpPage } = useQuery<PaginatedResult<WajibPajakListItem>>({
+    queryKey: ["/api/wajib-pajak?page=1&limit=100"],
   });
-
-  const { data: wpList = [] } = useQuery<WajibPajakWithBadanUsaha[]>({
-    queryKey: ["/api/wajib-pajak"],
-  });
+  const wpList = wpPage?.items ?? [];
 
   const { data: rekeningList = [] } = useQuery<MasterRekeningPajak[]>({
     queryKey: ["/api/master/rekening-pajak"],
@@ -1135,6 +1156,8 @@ export default function BackofficeObjekPajak() {
   const { toast } = useToast();
 
   const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canMutate) return;
+
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -1193,21 +1216,21 @@ export default function BackofficeObjekPajak() {
 
   const wpMap = new Map(wpList.map((wp) => [wp.id, wp]));
 
-  const filtered = opList.filter((op) => {
-    const q = searchQuery.toLowerCase();
-    const matchesSearch = !searchQuery ||
-      op.namaOp.toLowerCase().includes(q) ||
-      op.nopd.toLowerCase().includes(q) ||
-      op.jenisPajak.toLowerCase().includes(q) ||
-      op.alamatOp.toLowerCase().includes(q) ||
-      (op.kecamatan && op.kecamatan.toLowerCase().includes(q));
-    return matchesSearch;
-  });
-
-  const jenisCounts = JENIS_PAJAK_OPTIONS.reduce((acc, jp) => {
-    acc[jp] = countBaseList.filter((op) => op.jenisPajak === jp).length;
-    return acc;
-  }, {} as Record<string, number>);
+  const openEdit = async (id: number) => {
+    if (!canMutate) return;
+    try {
+      const response = await fetch(`/api/objek-pajak/${id}`, { credentials: "include" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({ message: "Gagal memuat detail OP" }));
+        throw new Error(typeof body?.message === "string" ? body.message : "Gagal memuat detail OP");
+      }
+      const body = (await response.json()) as ObjekPajak;
+      setEditOp(body);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal memuat detail OP";
+      toast({ title: "Gagal", description: message, variant: "destructive" });
+    }
+  };
 
   const shortLabel = (jenis: string) => {
     if (jenis.includes("Makanan")) return "MKN";
@@ -1256,7 +1279,7 @@ export default function BackofficeObjekPajak() {
               <Download className="w-4 h-4 mr-1" />
               EXPORT CSV
             </Button>
-            <Button
+            {canMutate && <Button
               variant="outline"
               className="rounded-none border-[3px] border-black bg-white text-black font-mono font-bold text-xs no-default-hover-elevate no-default-active-elevate"
               onClick={() => fileInputRef.current?.click()}
@@ -1264,15 +1287,15 @@ export default function BackofficeObjekPajak() {
             >
               <Upload className="w-4 h-4 mr-1" />
               IMPORT CSV
-            </Button>
-            <Button
+            </Button>}
+            {canMutate && <Button
               className="rounded-none border-[3px] border-[#FFFF00] bg-black text-[#FFFF00] font-mono font-bold no-default-hover-elevate no-default-active-elevate"
               onClick={() => setIsCreateOpen(true)}
               data-testid="button-add-op"
             >
               <Plus className="w-4 h-4 mr-2" />
               TAMBAH OP
-            </Button>
+            </Button>}
           </div>
         </div>
 
@@ -1282,18 +1305,36 @@ export default function BackofficeObjekPajak() {
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari nama objek, NOPD, jenis pajak, alamat..."
+              placeholder="Cari nama objek, NOPD, alamat..."
               className="pl-9 rounded-none border-[3px] border-black font-mono text-sm"
               data-testid="input-search-op"
             />
           </div>
           <Badge className="rounded-none border-[2px] border-black bg-black text-[#FFFF00] font-mono text-xs no-default-hover-elevate no-default-active-elevate">
-            {filtered.length} OP
+            {opMeta.total} OP
           </Badge>
         </div>
 
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <p className="font-mono text-[11px] text-gray-600">
+            Halaman {opMeta.page} dari {opMeta.totalPages}
+            {isFetching ? " - memperbarui..." : ""}
+          </p>
+          <Select value={String(limit)} onValueChange={(value) => setLimit(Number(value))}>
+            <SelectTrigger className="w-[130px] rounded-none border-[2px] border-black font-mono text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="rounded-none border-[2px] border-black">
+              <SelectItem value="10">10 / halaman</SelectItem>
+              <SelectItem value="25">25 / halaman</SelectItem>
+              <SelectItem value="50">50 / halaman</SelectItem>
+              <SelectItem value="100">100 / halaman</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}>
             <SelectTrigger className="w-[170px] rounded-none border-[2px] border-black font-mono text-xs" data-testid="select-filter-status-op">
               <SelectValue placeholder="Filter status" />
             </SelectTrigger>
@@ -1303,7 +1344,7 @@ export default function BackofficeObjekPajak() {
               <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={verificationFilter} onValueChange={setVerificationFilter}>
+          <Select value={verificationFilter} onValueChange={(value) => setVerificationFilter(value as typeof verificationFilter)}>
             <SelectTrigger className="w-[210px] rounded-none border-[2px] border-black font-mono text-xs" data-testid="select-filter-verification-op">
               <SelectValue placeholder="Filter verifikasi" />
             </SelectTrigger>
@@ -1312,6 +1353,19 @@ export default function BackofficeObjekPajak() {
               <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="verified">Verified</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={rekPajakFilterId} onValueChange={setRekPajakFilterId}>
+            <SelectTrigger className="w-[240px] rounded-none border-[2px] border-black font-mono text-xs">
+              <SelectValue placeholder="Filter rekening" />
+            </SelectTrigger>
+            <SelectContent className="rounded-none border-[2px] border-black">
+              <SelectItem value="all">Semua Rekening</SelectItem>
+              {rekeningList.map((rek) => (
+                <SelectItem key={rek.id} value={String(rek.id)}>
+                  {rek.kodeRekening} - {rek.namaRekening}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={kecamatanFilterId} onValueChange={setKecamatanFilterId}>
@@ -1327,7 +1381,7 @@ export default function BackofficeObjekPajak() {
               ))}
             </SelectContent>
           </Select>
-          {(statusFilter !== "all" || verificationFilter !== "all" || kecamatanFilterId !== "all") && (
+          {(statusFilter !== "all" || verificationFilter !== "all" || kecamatanFilterId !== "all" || rekPajakFilterId !== "all") && (
             <Button
               variant="outline"
               size="sm"
@@ -1336,6 +1390,7 @@ export default function BackofficeObjekPajak() {
                 setStatusFilter("all");
                 setVerificationFilter("all");
                 setKecamatanFilterId("all");
+                setRekPajakFilterId("all");
               }}
               data-testid="button-reset-filter-op"
             >
@@ -1343,35 +1398,8 @@ export default function BackofficeObjekPajak() {
             </Button>
           )}
         </div>
-        <div className="flex gap-1 mb-4 overflow-x-auto pb-1 flex-wrap">
-          <button
-            className={`font-mono text-[10px] font-bold px-3 py-1.5 border-[2px] border-black transition-colors whitespace-nowrap ${
-              activeTab === "all"
-                ? "bg-black text-[#FFFF00]"
-                : "bg-white text-black"
-            }`}
-            onClick={() => setActiveTab("all")}
-            data-testid="tab-all"
-          >
-            SEMUA ({countBaseList.length})
-          </button>
-          {JENIS_PAJAK_OPTIONS.map((jp) => (
-            <button
-              key={jp}
-              className={`font-mono text-[10px] font-bold px-3 py-1.5 border-[2px] border-black transition-colors whitespace-nowrap ${
-                activeTab === jp
-                  ? "bg-black text-[#FFFF00]"
-                  : "bg-white text-black"
-              }`}
-              onClick={() => setActiveTab(jp)}
-              data-testid={`tab-${shortLabel(jp).toLowerCase()}`}
-            >
-              {shortLabel(jp)} ({jenisCounts[jp] || 0})
-            </button>
-          ))}
-        </div>
 
-        <OPFormDialog
+        {canMutate && <OPFormDialog
           mode="create"
           wpList={wpList}
           rekeningList={rekeningList}
@@ -1379,9 +1407,9 @@ export default function BackofficeObjekPajak() {
           kelurahanList={kelurahanList}
           isOpen={isCreateOpen}
           onOpenChange={setIsCreateOpen}
-        />
+        />}
 
-        <OPFormDialog
+        {canMutate && <OPFormDialog
           mode="edit"
           editOp={editOp}
           wpList={wpList}
@@ -1390,7 +1418,7 @@ export default function BackofficeObjekPajak() {
           kelurahanList={kelurahanList}
           isOpen={!!editOp}
           onOpenChange={(open) => { if (!open) setEditOp(null); }}
-        />
+        />}
 
         {isLoading ? (
           <div className="flex items-center justify-center h-64" data-testid="loading-op">
@@ -1399,7 +1427,7 @@ export default function BackofficeObjekPajak() {
               <span className="font-mono text-sm font-bold text-[#FFFF00]">MEMUAT DATA...</span>
             </div>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : opList.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 border-[4px] border-dashed border-black" data-testid="empty-op">
             <div className="bg-black w-20 h-20 flex items-center justify-center border-[4px] border-[#FFFF00] mb-4">
               <Building2 className="w-10 h-10 text-[#FFFF00]" />
@@ -1425,13 +1453,13 @@ export default function BackofficeObjekPajak() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((op) => {
+                {opList.map((op) => {
                   const wp = op.wpId ? wpMap.get(op.wpId) : null;
-                  const hasDetail = op.detailPajak !== null && op.detailPajak !== undefined && Object.keys(op.detailPajak as object || {}).length > 0;
+                  const hasDetail = op.hasDetail;
                   return (
                     <TableRow
                       key={op.id}
-                      className="border-b-[1px] border-gray-200 hover:bg-gray-50"
+                      className="border-b-[1px] border-gray-200 hover:bg-gray-50 transition-all duration-150 animate-in fade-in"
                       data-testid={`row-op-${op.id}`}
                     >
                       <TableCell className="font-mono text-xs text-black" data-testid={`text-nopd-${op.id}`}>
@@ -1501,16 +1529,16 @@ export default function BackofficeObjekPajak() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Button
+                          {canMutate && <Button
                             size="icon"
                             variant="ghost"
                             className="rounded-none border-[2px] border-black no-default-hover-elevate no-default-active-elevate"
-                            onClick={() => setEditOp(op)}
+                            onClick={() => openEdit(op.id)}
                             data-testid={`button-edit-op-${op.id}`}
                           >
                             <Edit className="w-3.5 h-3.5 text-black" />
-                          </Button>
-                          <Button
+                          </Button>}
+                          {canMutate && <Button
                             size="icon"
                             variant="ghost"
                             className="rounded-none border-[2px] border-green-700 no-default-hover-elevate no-default-active-elevate"
@@ -1518,8 +1546,8 @@ export default function BackofficeObjekPajak() {
                             data-testid={`button-verify-op-${op.id}`}
                           >
                             <CheckCircle2 className="w-3.5 h-3.5 text-green-700" />
-                          </Button>
-                          <Button
+                          </Button>}
+                          {canMutate && <Button
                             size="icon"
                             variant="ghost"
                             className="rounded-none border-[2px] border-red-700 no-default-hover-elevate no-default-active-elevate"
@@ -1531,17 +1559,17 @@ export default function BackofficeObjekPajak() {
                             data-testid={`button-reject-op-${op.id}`}
                           >
                             <XCircle className="w-3.5 h-3.5 text-red-700" />
-                          </Button>
+                          </Button>}
                           <Button
                             size="icon"
                             variant="ghost"
                             className="rounded-none border-[2px] border-black no-default-hover-elevate no-default-active-elevate"
-                            onClick={() => setAuditTarget(op)}
+                            onClick={() => setAuditTargetId(op.id)}
                             data-testid={`button-audit-op-${op.id}`}
                           >
                             <History className="w-3.5 h-3.5 text-black" />
                           </Button>
-                          <Button
+                          {canMutate && <Button
                             size="icon"
                             variant="ghost"
                             className="rounded-none no-default-hover-elevate no-default-active-elevate"
@@ -1549,7 +1577,7 @@ export default function BackofficeObjekPajak() {
                             data-testid={`button-delete-op-${op.id}`}
                           >
                             <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                          </Button>
+                          </Button>}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1559,11 +1587,45 @@ export default function BackofficeObjekPajak() {
             </Table>
           </div>
         )}
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <p className="font-mono text-[11px] text-gray-600">
+            Menampilkan {opList.length} dari {opMeta.total} data
+          </p>
+          <Pagination className="w-auto">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (opMeta.hasPrev) setPage((prev) => Math.max(1, prev - 1));
+                  }}
+                  className={`rounded-none border-[2px] border-black font-mono text-xs ${opMeta.hasPrev ? "" : "pointer-events-none opacity-40"}`}
+                />
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationLink href="#" isActive className="rounded-none border-[2px] border-black font-mono text-xs">
+                  {opMeta.page}
+                </PaginationLink>
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (opMeta.hasNext) setPage((prev) => prev + 1);
+                  }}
+                  className={`rounded-none border-[2px] border-black font-mono text-xs ${opMeta.hasNext ? "" : "pointer-events-none opacity-40"}`}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
         <AuditHistoryDialog
-          open={!!auditTarget}
-          onOpenChange={(open) => !open && setAuditTarget(null)}
+          open={auditTargetId !== null}
+          onOpenChange={(open) => !open && setAuditTargetId(null)}
           entityType="objek_pajak"
-          entityId={auditTarget?.id ?? null}
+          entityId={auditTargetId}
           title="Riwayat Perubahan Objek Pajak"
         />
       </div>

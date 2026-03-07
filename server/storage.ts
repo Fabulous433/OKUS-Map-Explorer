@@ -2,6 +2,7 @@ import {
   type CreateWajibPajakInput,
   type InsertObjekPajak,
   type InsertUser,
+  type MapObjekPajakItem,
   type MasterKecamatan,
   masterKecamatan,
   type MasterKelurahan,
@@ -10,7 +11,10 @@ import {
   masterRekeningPajak,
   type ObjekPajak,
   type ObjekPajakDetail,
+  type ObjekPajakListItem,
   type ObjekPajakRow,
+  type PaginatedResult,
+  type PaginationMeta,
   objekPajak,
   opDetailPajakAirTanah,
   opDetailPajakReklame,
@@ -24,13 +28,14 @@ import {
   type User,
   users,
   type WajibPajak,
+  type WajibPajakListItem,
   wajibPajak,
   type WajibPajakWithBadanUsaha,
   type WpBadanUsaha,
   wpBadanUsaha,
   type WpBadanUsahaInput,
 } from "@shared/schema";
-import { and, asc, eq, ilike, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { env } from "./env";
@@ -57,6 +62,39 @@ type ObjekPajakFilter = {
   status?: string;
   kecamatan?: string;
   kecamatanId?: string;
+};
+
+type PaginationParams = {
+  page: number;
+  limit: number;
+};
+
+type WajibPajakListFilter = PaginationParams & {
+  q?: string;
+  jenisWp?: string;
+  peranWp?: string;
+  statusAktif?: string;
+};
+
+type ObjekPajakListFilter = PaginationParams & {
+  q?: string;
+  status?: string;
+  statusVerifikasi?: string;
+  kecamatanId?: string;
+  rekPajakId?: number;
+  jenisPajak?: string;
+};
+
+type ObjekPajakMapFilter = {
+  minLng: number;
+  minLat: number;
+  maxLng: number;
+  maxLat: number;
+  q?: string;
+  kecamatanId?: string;
+  rekPajakId?: number;
+  statusVerifikasi?: string;
+  limit: number;
 };
 
 function cleanDetailObject(input: DetailRecord | null | undefined) {
@@ -108,6 +146,19 @@ function buildWpDisplayName(wp: WajibPajak, badanUsaha: WpBadanUsaha | null) {
   const candidates = [wp.namaWp, wp.namaPengelola, badanUsaha?.namaBadanUsaha];
   const first = candidates.find((item) => item && item.trim().length > 0);
   return first ?? "(tanpa nama)";
+}
+
+function toPaginationMeta(page: number, limit: number, total: number): PaginationMeta {
+  const safeTotal = Math.max(0, total);
+  const totalPages = safeTotal === 0 ? 1 : Math.ceil(safeTotal / limit);
+  return {
+    page,
+    limit,
+    total: safeTotal,
+    totalPages,
+    hasNext: page < totalPages,
+    hasPrev: page > 1,
+  };
 }
 
 function mapWpRecord(record: { wp: WajibPajak; badanUsaha: WpBadanUsaha | null }): WajibPajakWithBadanUsaha {
@@ -442,6 +493,44 @@ function mapObjekPajakRecord(record: {
   };
 }
 
+function mapObjekPajakListRecord(record: {
+  op: ObjekPajakRow;
+  rekening: MasterRekeningPajak | null;
+  kecamatan: MasterKecamatan | null;
+  kelurahan: MasterKelurahan | null;
+  hasDetail: boolean;
+}): ObjekPajakListItem {
+  return {
+    id: record.op.id,
+    nopd: record.op.nopd,
+    wpId: record.op.wpId,
+    rekPajakId: record.op.rekPajakId,
+    namaOp: record.op.namaOp,
+    npwpOp: record.op.npwpOp,
+    alamatOp: record.op.alamatOp,
+    kecamatanId: record.op.kecamatanId,
+    kelurahanId: record.op.kelurahanId,
+    omsetBulanan: record.op.omsetBulanan,
+    tarifPersen: record.op.tarifPersen,
+    pajakBulanan: record.op.pajakBulanan,
+    latitude: record.op.latitude,
+    longitude: record.op.longitude,
+    status: record.op.status,
+    statusVerifikasi: record.op.statusVerifikasi,
+    catatanVerifikasi: record.op.catatanVerifikasi,
+    verifiedAt: record.op.verifiedAt,
+    verifiedBy: record.op.verifiedBy,
+    createdAt: record.op.createdAt,
+    updatedAt: record.op.updatedAt,
+    jenisPajak: record.rekening?.jenisPajak ?? "Pajak MBLB",
+    noRekPajak: record.rekening?.kodeRekening ?? "",
+    namaRekPajak: record.rekening?.namaRekening ?? "",
+    kecamatan: record.kecamatan?.cpmKecamatan ?? null,
+    kelurahan: record.kelurahan?.cpmKelurahan ?? null,
+    hasDetail: record.hasDetail,
+  };
+}
+
 async function assertKelurahanDalamKecamatan(kelurahanId: string, kecamatanId: string) {
   const [row] = await db
     .select({
@@ -498,6 +587,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
 
   getAllWajibPajak(): Promise<WajibPajakWithBadanUsaha[]>;
+  getWajibPajakPage(filters: WajibPajakListFilter): Promise<PaginatedResult<WajibPajakListItem>>;
   getWajibPajak(id: number): Promise<WajibPajakWithBadanUsaha | undefined>;
   createWajibPajak(wp: CreateWajibPajakInput): Promise<WajibPajakWithBadanUsaha>;
   updateWajibPajak(id: number, wp: UpdateWajibPajakPayload): Promise<WajibPajakWithBadanUsaha>;
@@ -508,6 +598,8 @@ export interface IStorage {
   getAllMasterRekeningPajak(): Promise<MasterRekeningPajak[]>;
 
   getAllObjekPajak(filters?: ObjekPajakFilter): Promise<ObjekPajak[]>;
+  getObjekPajakPage(filters: ObjekPajakListFilter): Promise<PaginatedResult<ObjekPajakListItem>>;
+  getObjekPajakMap(filters: ObjekPajakMapFilter): Promise<{ items: MapObjekPajakItem[]; totalInView: number; isCapped: boolean }>;
   getObjekPajak(id: number): Promise<ObjekPajak | undefined>;
   createObjekPajak(op: InsertObjekPajak): Promise<ObjekPajak>;
   updateObjekPajak(id: number, op: Partial<InsertObjekPajak>): Promise<ObjekPajak>;
@@ -538,6 +630,58 @@ export class DatabaseStorage implements IStorage {
       .orderBy(asc(wajibPajak.id));
 
     return rows.map(mapWpRecord);
+  }
+
+  async getWajibPajakPage(filters: WajibPajakListFilter): Promise<PaginatedResult<WajibPajakListItem>> {
+    const conditions: SQL[] = [];
+    const offset = (filters.page - 1) * filters.limit;
+
+    if (filters.jenisWp) {
+      conditions.push(eq(wajibPajak.jenisWp, filters.jenisWp));
+    }
+
+    if (filters.peranWp) {
+      conditions.push(eq(wajibPajak.peranWp, filters.peranWp));
+    }
+
+    if (filters.statusAktif) {
+      conditions.push(eq(wajibPajak.statusAktif, filters.statusAktif));
+    }
+
+    if (filters.q) {
+      const like = `%${filters.q}%`;
+      const searchCondition = or(
+        ilike(wajibPajak.namaWp, like),
+        ilike(wajibPajak.namaPengelola, like),
+        ilike(wajibPajak.npwpd, like),
+        ilike(wpBadanUsaha.namaBadanUsaha, like),
+        ilike(wpBadanUsaha.npwpBadanUsaha, like),
+      );
+      if (searchCondition) {
+        conditions.push(searchCondition);
+      }
+    }
+
+    const countQuery = db
+      .select({ count: sql<number>`cast(count(*) as int)` })
+      .from(wajibPajak)
+      .leftJoin(wpBadanUsaha, eq(wajibPajak.id, wpBadanUsaha.wpId));
+    const countRows = conditions.length > 0 ? await countQuery.where(and(...conditions)) : await countQuery;
+    const total = Number(countRows[0]?.count ?? 0);
+
+    const dataQuery = db
+      .select({ wp: wajibPajak, badanUsaha: wpBadanUsaha })
+      .from(wajibPajak)
+      .leftJoin(wpBadanUsaha, eq(wajibPajak.id, wpBadanUsaha.wpId))
+      .orderBy(desc(wajibPajak.updatedAt), desc(wajibPajak.id))
+      .limit(filters.limit)
+      .offset(offset);
+    const rows = conditions.length > 0 ? await dataQuery.where(and(...conditions)) : await dataQuery;
+
+    return {
+      items: rows.map(mapWpRecord),
+      meta: toPaginationMeta(filters.page, filters.limit, total),
+    };
   }
 
   async getWajibPajak(id: number): Promise<WajibPajakWithBadanUsaha | undefined> {
@@ -654,7 +798,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllObjekPajak(filters?: ObjekPajakFilter): Promise<ObjekPajak[]> {
-    const conditions = [];
+    const conditions: SQL[] = [];
 
     if (filters?.status) {
       conditions.push(eq(objekPajak.status, filters.status));
@@ -688,6 +832,163 @@ export class DatabaseStorage implements IStorage {
 
     const detailMap = await buildDetailMap(rows.map((row) => row.op.id));
     return rows.map((row) => mapObjekPajakRecord(row, detailMap.get(row.op.id) ?? null));
+  }
+
+  async getObjekPajakPage(filters: ObjekPajakListFilter): Promise<PaginatedResult<ObjekPajakListItem>> {
+    const conditions: SQL[] = [];
+    const offset = (filters.page - 1) * filters.limit;
+
+    if (filters.status) {
+      conditions.push(eq(objekPajak.status, filters.status));
+    }
+
+    if (filters.statusVerifikasi) {
+      conditions.push(eq(objekPajak.statusVerifikasi, filters.statusVerifikasi));
+    }
+
+    if (filters.kecamatanId) {
+      conditions.push(eq(objekPajak.kecamatanId, filters.kecamatanId));
+    }
+
+    if (filters.rekPajakId) {
+      conditions.push(eq(objekPajak.rekPajakId, filters.rekPajakId));
+    }
+
+    if (filters.jenisPajak) {
+      conditions.push(eq(masterRekeningPajak.jenisPajak, filters.jenisPajak));
+    }
+
+    if (filters.q) {
+      const like = `%${filters.q}%`;
+      const searchCondition = or(
+        ilike(objekPajak.namaOp, like),
+        ilike(objekPajak.nopd, like),
+        ilike(objekPajak.alamatOp, like),
+      );
+      if (searchCondition) {
+        conditions.push(searchCondition);
+      }
+    }
+
+    const countQuery = db
+      .select({ count: sql<number>`cast(count(*) as int)` })
+      .from(objekPajak)
+      .leftJoin(masterRekeningPajak, eq(objekPajak.rekPajakId, masterRekeningPajak.id));
+    const countRows = conditions.length > 0 ? await countQuery.where(and(...conditions)) : await countQuery;
+    const total = Number(countRows[0]?.count ?? 0);
+
+    const hasDetailExpr = sql<boolean>`
+      (
+        exists (select 1 from op_detail_pbjt_makan_minum d1 where d1.op_id = ${objekPajak.id}) or
+        exists (select 1 from op_detail_pbjt_perhotelan d2 where d2.op_id = ${objekPajak.id}) or
+        exists (select 1 from op_detail_pbjt_hiburan d3 where d3.op_id = ${objekPajak.id}) or
+        exists (select 1 from op_detail_pbjt_parkir d4 where d4.op_id = ${objekPajak.id}) or
+        exists (select 1 from op_detail_pbjt_tenaga_listrik d5 where d5.op_id = ${objekPajak.id}) or
+        exists (select 1 from op_detail_pajak_reklame d6 where d6.op_id = ${objekPajak.id}) or
+        exists (select 1 from op_detail_pajak_air_tanah d7 where d7.op_id = ${objekPajak.id}) or
+        exists (select 1 from op_detail_pajak_walet d8 where d8.op_id = ${objekPajak.id})
+      )
+    `;
+
+    const dataQuery = db
+      .select({
+        op: objekPajak,
+        rekening: masterRekeningPajak,
+        kecamatan: masterKecamatan,
+        kelurahan: masterKelurahan,
+        hasDetail: hasDetailExpr,
+      })
+      .from(objekPajak)
+      .leftJoin(masterRekeningPajak, eq(objekPajak.rekPajakId, masterRekeningPajak.id))
+      .leftJoin(masterKecamatan, eq(objekPajak.kecamatanId, masterKecamatan.cpmKecId))
+      .leftJoin(masterKelurahan, eq(objekPajak.kelurahanId, masterKelurahan.cpmKelId))
+      .orderBy(desc(objekPajak.updatedAt), desc(objekPajak.id))
+      .limit(filters.limit)
+      .offset(offset);
+    const rows = conditions.length > 0 ? await dataQuery.where(and(...conditions)) : await dataQuery;
+
+    return {
+      items: rows.map((row) => mapObjekPajakListRecord({ ...row, hasDetail: Boolean(row.hasDetail) })),
+      meta: toPaginationMeta(filters.page, filters.limit, total),
+    };
+  }
+
+  async getObjekPajakMap(filters: ObjekPajakMapFilter): Promise<{ items: MapObjekPajakItem[]; totalInView: number; isCapped: boolean }> {
+    const conditions: SQL[] = [
+      sql`${objekPajak.latitude} is not null`,
+      sql`${objekPajak.longitude} is not null`,
+      sql`cast(${objekPajak.latitude} as double precision) between ${filters.minLat} and ${filters.maxLat}`,
+      sql`cast(${objekPajak.longitude} as double precision) between ${filters.minLng} and ${filters.maxLng}`,
+    ];
+
+    if (filters.statusVerifikasi) {
+      conditions.push(eq(objekPajak.statusVerifikasi, filters.statusVerifikasi));
+    }
+
+    if (filters.kecamatanId) {
+      conditions.push(eq(objekPajak.kecamatanId, filters.kecamatanId));
+    }
+
+    if (filters.rekPajakId) {
+      conditions.push(eq(objekPajak.rekPajakId, filters.rekPajakId));
+    }
+
+    if (filters.q) {
+      const like = `%${filters.q}%`;
+      const searchCondition = or(
+        ilike(objekPajak.namaOp, like),
+        ilike(objekPajak.nopd, like),
+        ilike(objekPajak.alamatOp, like),
+      );
+      if (searchCondition) {
+        conditions.push(searchCondition);
+      }
+    }
+
+    const countQuery = db
+      .select({ count: sql<number>`cast(count(*) as int)` })
+      .from(objekPajak)
+      .leftJoin(masterRekeningPajak, eq(objekPajak.rekPajakId, masterRekeningPajak.id));
+    const countRows = await countQuery.where(and(...conditions));
+    const totalInView = Number(countRows[0]?.count ?? 0);
+
+    const rows = await db
+      .select({
+        id: objekPajak.id,
+        wpId: objekPajak.wpId,
+        nopd: objekPajak.nopd,
+        namaOp: objekPajak.namaOp,
+        alamatOp: objekPajak.alamatOp,
+        pajakBulanan: objekPajak.pajakBulanan,
+        statusVerifikasi: objekPajak.statusVerifikasi,
+        jenisPajak: masterRekeningPajak.jenisPajak,
+        latitude: sql<number>`cast(${objekPajak.latitude} as double precision)`,
+        longitude: sql<number>`cast(${objekPajak.longitude} as double precision)`,
+      })
+      .from(objekPajak)
+      .leftJoin(masterRekeningPajak, eq(objekPajak.rekPajakId, masterRekeningPajak.id))
+      .where(and(...conditions))
+      .orderBy(desc(objekPajak.updatedAt), desc(objekPajak.id))
+      .limit(filters.limit);
+
+    const items: MapObjekPajakItem[] = rows.map((row) => ({
+      id: row.id,
+      wpId: row.wpId,
+      nopd: row.nopd,
+      namaOp: row.namaOp,
+      jenisPajak: row.jenisPajak ?? "Pajak MBLB",
+      alamatOp: row.alamatOp,
+      pajakBulanan: row.pajakBulanan,
+      statusVerifikasi: row.statusVerifikasi,
+      latitude: row.latitude,
+      longitude: row.longitude,
+    }));
+
+    return {
+      items,
+      totalInView,
+      isCapped: totalInView > items.length,
+    };
   }
 
   async getObjekPajak(id: number): Promise<ObjekPajak | undefined> {
