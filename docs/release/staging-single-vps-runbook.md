@@ -55,6 +55,7 @@ Masukkan di service `okus-stg-app`:
 ```env
 NODE_ENV=production
 PORT=5000
+ENABLE_STARTUP_SEED=false
 DATABASE_URL=postgresql://<stg_user>:<stg_pass>@<stg_host>:<stg_port>/<stg_db>
 SESSION_SECRET=<SECRET_STAGING_PANJANG>
 SLOW_QUERY_MS=300
@@ -91,6 +92,7 @@ Di EasyPanel:
 Exit check:
 - URL staging terbuka.
 - `/backoffice/login` tampil.
+- `/health` mengembalikan status `healthy`.
 
 ## Step 5 — Inisialisasi Schema Staging
 Dari terminal/console service staging (EasyPanel):

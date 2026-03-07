@@ -86,11 +86,22 @@ app.use((req, res, next) => {
   next();
 });
 
+function shouldSeedOnStartup() {
+  const explicit = process.env.ENABLE_STARTUP_SEED?.trim().toLowerCase();
+  if (explicit === "true") return true;
+  if (explicit === "false") return false;
+  return process.env.NODE_ENV !== "production";
+}
+
 (async () => {
   await ensureDatabaseConnection();
 
-  const { seedDatabase } = await import("./seed");
-  await seedDatabase();
+  if (shouldSeedOnStartup()) {
+    const { seedDatabase } = await import("./seed");
+    await seedDatabase();
+  } else {
+    log("startup seed skipped", "seed");
+  }
   await registerRoutes(httpServer, app);
 
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {

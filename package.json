@@ -34,12 +34,13 @@
     "test:integration:dashboard-analytics": "tsx tests/integration/dashboard-analytics.integration.ts",
     "test:integration:dashboard-summary": "tsx tests/integration/dashboard-summary.integration.ts",
     "test:integration:observability": "tsx tests/integration/observability.integration.ts",
+    "test:integration:health": "tsx tests/integration/health.integration.ts",
     "test:integration:cache-etag": "tsx tests/integration/cache-etag.integration.ts",
     "test:integration:ops-lifecycle": "tsx tests/integration/ops-lifecycle.integration.ts",
     "test:integration:ops-report-export": "tsx tests/integration/ops-report-export.integration.ts",
     "test:integration:ops-smoke": "tsx tests/integration/ops-smoke-check.integration.ts",
     "test:integration:ops-post-launch": "tsx tests/integration/ops-post-launch.integration.ts",
-    "test:integration": "npm run test:integration:final-contract && npm run test:integration:csv-roundtrip && npm run test:integration:detail-validation && npm run test:integration:governance-quality && npm run test:integration:auth-rbac && npm run test:integration:auth-security-baseline && npm run test:integration:performance-hardening && npm run test:integration:dashboard-summary && npm run test:integration:dashboard-analytics && npm run test:integration:observability && npm run test:integration:cache-etag && npm run test:integration:ops-lifecycle && npm run test:integration:ops-report-export && npm run test:integration:ops-smoke && npm run test:integration:ops-post-launch"
+    "test:integration": "npm run test:integration:final-contract && npm run test:integration:csv-roundtrip && npm run test:integration:detail-validation && npm run test:integration:governance-quality && npm run test:integration:auth-rbac && npm run test:integration:auth-security-baseline && npm run test:integration:performance-hardening && npm run test:integration:dashboard-summary && npm run test:integration:dashboard-analytics && npm run test:integration:observability && npm run test:integration:health && npm run test:integration:cache-etag && npm run test:integration:ops-lifecycle && npm run test:integration:ops-report-export && npm run test:integration:ops-smoke && npm run test:integration:ops-post-launch"
   },
   "dependencies": {
     "@replit/vite-plugin-runtime-error-modal": "^0.0.3",

@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { type Server } from "http";
 import { createHash } from "node:crypto";
 import { and, asc, desc, eq, gte, ilike, lte, lt, or, sql, type SQL } from "drizzle-orm";
-import { db, storage } from "./storage";
+import { db, ensureDatabaseConnection, storage } from "./storage";
 import { env } from "./env";
 import {
   auditLog,
@@ -1139,6 +1139,30 @@ function buildDashboardSummaryCsv(summary: DashboardSummaryData) {
 }
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  const healthHandler = async (_req: Request, res: Response) => {
+    try {
+      await ensureDatabaseConnection();
+      return res.json({
+        status: "healthy",
+        service: "okus-map-explorer",
+        database: "up",
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown database connectivity error";
+      return res.status(503).json({
+        status: "degraded",
+        service: "okus-map-explorer",
+        database: "down",
+        timestamp: new Date().toISOString(),
+        message,
+      });
+    }
+  };
+
+  app.get("/health", healthHandler);
+  app.get("/api/health", healthHandler);
+
   app.post("/api/auth/login", async (req, res) => {
     const clientId = resolveLoginClientId(req);
     const rateLimit = loginSecurity.consumeRateLimit(clientId);

@@ -28,6 +28,7 @@ Copy-Item .env.example .env.local
 
 Tambahan observability:
 - `SLOW_QUERY_MS` (default `300`) untuk threshold logging slow query.
+- `ENABLE_STARTUP_SEED` (default `true` di local) untuk seed otomatis saat boot aplikasi.
 
 Tambahan security baseline login:
 - `AUTH_LOGIN_RATE_LIMIT_WINDOW_MS` (default `60000`)
@@ -86,6 +87,10 @@ docker exec -i okus-postgres psql -U okus_dev -d okus_map_explorer < script/phas
 npm run dev
 ```
 Aplikasi: `http://localhost:5000`
+
+Health check:
+- `http://localhost:5000/health`
+- `http://localhost:5000/api/health`
 
 ---
 
