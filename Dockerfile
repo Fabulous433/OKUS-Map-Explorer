@@ -21,6 +21,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=build /app/shared ./shared
 
 EXPOSE 5000
 

@@ -102,6 +102,7 @@ npm run db:push
 
 Catatan:
 - Script ini sekarang explicit memakai `drizzle.config.ts`, jadi tidak lagi fallback ke `drizzle.config.json`.
+- Image runtime Docker juga membawa `drizzle.config.ts` + folder `shared/`, sehingga `npm run db:push` bisa dijalankan dari console EasyPanel.
 
 Lalu restart service staging jika diperlukan.
 
