@@ -10,6 +10,12 @@ Menjalankan evidence collection final di staging secara terstruktur sebelum kepu
 - Post-launch snapshot baseline.
 - Pengisian readiness board + approval log.
 
+## Referensi Sebelum Mulai
+- Jika staging belum ada, jalankan dulu:
+  - `docs/release/staging-bootstrap-plan.md`
+- Jika pakai 1 VPS untuk production+staging:
+  - `docs/release/staging-single-vps-runbook.md`
+
 ## Prasyarat
 - Akses staging application + database.
 - Akun internal untuk smoke (`admin/editor`).
@@ -21,11 +27,11 @@ Menjalankan evidence collection final di staging secara terstruktur sebelum kepu
    - `npm run check`
    - `npm run test:integration`
 2. Backup baseline:
-   - `npm run ops:backup:daily`
+   - backup DB via platform hosting (EasyPanel DB backup/snapshot).
 3. Smoke critical path:
    - `npm run ops:smoke -- --base-url <staging-url>`
 4. Rollback simulation:
-   - `tsx script/ops-restore-drill.ts --file backups/daily/<backup-file>.sql.gz --cleanup`
+   - restore backup ke DB sementara (platform method), verifikasi data, lalu cleanup DB sementara.
 5. Reporting/export check:
    - `npm run ops:report:daily -- --base-url <staging-url>`
 6. Post-launch snapshot:
@@ -42,7 +48,7 @@ Menjalankan evidence collection final di staging secara terstruktur sebelum kepu
 
 ## Evidence Minimum per Window
 - Output command `ops:smoke`.
-- Output command `ops:restore:drill` (atau equivalent with file).
+- Bukti backup dan restore drill dari platform hosting.
 - Output command `ops:report:daily`.
 - Output command `ops:post-launch:snapshot`.
 - Readiness board terisi dan ditandatangani owner.

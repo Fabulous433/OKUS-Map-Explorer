@@ -18,6 +18,7 @@ Menentukan keputusan go/no-go release berdasarkan evidence teknis dan operasiona
   - Hasil smoke test terbaru.
   - Hasil rollback simulation/restore drill terbaru.
 - Jika salah satu evidence belum ada, status gate otomatis `NO-GO`.
+- Untuk environment EasyPanel, evidence backup/restore boleh menggunakan bukti snapshot + restore dari panel database service.
 
 ## Gate Checklist (Disarankan)
 - [ ] UAT critical path pass.
@@ -39,6 +40,10 @@ Menentukan keputusan go/no-go release berdasarkan evidence teknis dan operasiona
   - `docs/release/release-readiness-board-2026-03-07.md`
 - Gunakan runbook eksekusi staging:
   - `docs/release/staging-execution-window-runbook.md`
+- Jika belum ada environment staging:
+  - `docs/release/staging-bootstrap-plan.md`
+- Jika memakai 1 VPS:
+  - `docs/release/staging-single-vps-runbook.md`
 - Gunakan approval log + decision log:
   - `docs/release/owner-approval-log-template.md`
   - `docs/release/go-no-go-decision-log-template.md`

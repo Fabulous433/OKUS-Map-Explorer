@@ -27,6 +27,10 @@
 ## Phase 2.11 — Staging/Production Execution Window Pack (Docs Lock)
 
 ### Added
+- Bootstrap plan untuk membangun staging dari nol:
+  - `docs/release/staging-bootstrap-plan.md`
+- Runbook khusus skenario 1 VPS (production + staging):
+  - `docs/release/staging-single-vps-runbook.md`
 - Runbook eksekusi staging berurutan:
   - `docs/release/staging-execution-window-runbook.md`
 - Template approval owner:
@@ -36,6 +40,7 @@
 
 ### Improved
 - `docs/release/release-readiness-gate.md` kini menautkan artefak wajib untuk sign-off final.
+- Runbook staging diperbarui agar kompatibel format EasyPanel (service-based deploy + panel backup/restore).
 
 ### Fixed
 - Gap handoff eksekusi staging/prod yang sebelumnya belum punya urutan command + approval artifact baku.

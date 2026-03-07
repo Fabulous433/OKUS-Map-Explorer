@@ -49,6 +49,8 @@ Ringkasan fase yang sudah selesai sampai saat ini:
   - post-launch summary `docs/operations/post-launch-summary-2026-03-07.md`.
 - Active now: staging/prod execution window (non-dev environment evidence collection + owner approvals).
 - Execution pack ready:
+  - `docs/release/staging-bootstrap-plan.md`
+  - `docs/release/staging-single-vps-runbook.md` (EasyPanel-compatible)
   - `docs/release/staging-execution-window-runbook.md`
   - `docs/release/owner-approval-log-template.md`
   - `docs/release/go-no-go-decision-log-template.md`
