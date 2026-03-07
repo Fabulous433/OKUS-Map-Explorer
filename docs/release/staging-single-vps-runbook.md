@@ -43,6 +43,7 @@ Di EasyPanel:
 3. Pastikan Nixpacks membaca file:
    - `nixpacks.toml`
    - `.nvmrc`
+4. Build environment harus tetap meng-install `devDependencies` karena proses build memakai `vite` + `esbuild`.
 3. Build command:
 ```bash
 npm ci && npm run build
@@ -145,3 +146,4 @@ Di EasyPanel:
 3. Simpan secret hanya di EasyPanel env secret manager.
 4. Status release tetap ditentukan oleh readiness board + owner approval.
 5. Build sekarang memakai `node script/build.mjs`, bukan `tsx`, agar aman di environment build EasyPanel.
+6. `nixpacks.toml` di repo ini memaksa `npm ci --include=dev`; jangan override itu di EasyPanel.
