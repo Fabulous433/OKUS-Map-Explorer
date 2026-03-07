@@ -135,3 +135,6 @@ Lanjut pakai:
 ## Jalur Cepat (Jika Staging + Production 1 VPS)
 Gunakan runbook khusus:
 - `docs/release/staging-single-vps-runbook.md`
+
+Default rekomendasi untuk EasyPanel:
+- pakai `Dockerfile`, bukan `Nixpacks`.

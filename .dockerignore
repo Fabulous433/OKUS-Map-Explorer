@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+.env.local
+backups
+reports
+tmp-dev-out.log
+tmp-dev-err.log
+npm-debug.log*
+docs
+attached_assets
+_ai-context

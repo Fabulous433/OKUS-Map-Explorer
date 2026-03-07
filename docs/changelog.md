@@ -41,6 +41,7 @@
 ### Improved
 - `docs/release/release-readiness-gate.md` kini menautkan artefak wajib untuk sign-off final.
 - Runbook staging diperbarui agar kompatibel format EasyPanel (service-based deploy + panel backup/restore).
+- Jalur deploy EasyPanel sekarang direkomendasikan via `Dockerfile` multi-stage, bukan `Nixpacks`.
 
 ### Fixed
 - Gap handoff eksekusi staging/prod yang sebelumnya belum punya urutan command + approval artifact baku.

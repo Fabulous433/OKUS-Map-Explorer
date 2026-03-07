@@ -1,4 +1,4 @@
-# EasyPanel Single VPS Runbook (Production + Staging)
+# EasyPanel Single VPS Runbook (Production + Staging, Dockerfile)
 
 ## Tujuan
 Menjalankan production dan staging di 1 VPS berbasis EasyPanel, dengan isolasi yang aman dan alur release yang tetap disiplin.
@@ -40,19 +40,15 @@ Catatan:
 Di EasyPanel:
 1. Create app service dari GitHub repo `OKUS-Map-Explorer`.
 2. Branch: `main` (atau release branch khusus jika kamu pakai).
-3. Pastikan Nixpacks membaca file:
-   - `nixpacks.toml`
-   - `.nvmrc`
-4. Build environment harus tetap meng-install `devDependencies` karena proses build memakai `vite` + `esbuild`.
-3. Build command:
-```bash
-npm ci && npm run build
-```
-4. Start command:
-```bash
-npm run start
-```
-5. Internal port: `5000` (EasyPanel yang handle mapping).
+3. Build method: pilih `Dockerfile`.
+4. EasyPanel akan build dari file:
+   - `Dockerfile`
+   - `.dockerignore`
+5. Internal port: `5000`.
+
+Catatan:
+- Jalur `Dockerfile` lebih stabil untuk repo ini dibanding `Nixpacks`.
+- Tidak perlu isi build command/start command manual jika EasyPanel memakai Dockerfile standar repo.
 
 ## Step 3 — Isi Environment Variable Staging
 Masukkan di service `okus-stg-app`:
@@ -145,5 +141,4 @@ Di EasyPanel:
 2. Jangan expose DB ke publik internet.
 3. Simpan secret hanya di EasyPanel env secret manager.
 4. Status release tetap ditentukan oleh readiness board + owner approval.
-5. Build sekarang memakai `node script/build.mjs`, bukan `tsx`, agar aman di environment build EasyPanel.
-6. `nixpacks.toml` di repo ini memaksa `npm ci --include=dev`; jangan override itu di EasyPanel.
+5. Image runtime sekarang dibangun dari `Dockerfile` multi-stage dan start dengan `node dist/index.cjs`.
