@@ -3,7 +3,7 @@ import path from "path";
 import { and, eq } from "drizzle-orm";
 import { db, storage } from "./storage";
 import { masterKecamatan, masterKelurahan, masterRekeningPajak, users } from "@shared/schema";
-import { hashPassword } from "./auth";
+import { hashPassword, validatePasswordPolicy } from "./auth";
 
 type RawKecamatan = {
   CPM_KEC_ID: string;
@@ -58,6 +58,11 @@ const DEFAULT_AUTH_USERS = [
 
 async function seedAuthUsers() {
   for (const item of DEFAULT_AUTH_USERS) {
+    const passwordCheck = validatePasswordPolicy(item.password);
+    if (!passwordCheck.valid) {
+      throw new Error(`Default auth user "${item.username}" melanggar password policy: ${passwordCheck.errors.join("; ")}`);
+    }
+
     const [existing] = await db.select().from(users).where(eq(users.username, item.username)).limit(1);
     const hashed = hashPassword(item.password);
 
@@ -441,5 +446,4 @@ export async function seedDatabase() {
     log(`Seed error: ${err.message}`, "seed");
   }
 }
-
 

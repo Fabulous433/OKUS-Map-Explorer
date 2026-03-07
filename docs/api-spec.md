@@ -2,10 +2,33 @@
 
 Base URL: `http://localhost:5000/api`
 
+## Observability
+
+- Semua response API mengembalikan header `x-request-id`.
+- Client bisa mengirim `x-request-id` sendiri untuk correlation tracing lintas service.
+- Jika tidak dikirim client, server auto-generate `x-request-id`.
+- Saat terjadi error, payload error menyertakan `requestId` agar troubleshooting lebih cepat.
+
+## Conditional Fetch (ETag)
+
+- Endpoint list/master hot-path sekarang mengembalikan header `ETag` + `Cache-Control: private, max-age=0, must-revalidate`.
+- Client boleh kirim `If-None-Match` untuk conditional fetch:
+  - jika data belum berubah -> `304 Not Modified`
+  - jika data berubah -> `200` + payload baru + `ETag` baru
+- Endpoint yang sudah aktif ETag MVP:
+  - `GET /api/master/kecamatan`
+  - `GET /api/master/kelurahan`
+  - `GET /api/master/rekening-pajak`
+  - `GET /api/wajib-pajak`
+  - `GET /api/objek-pajak`
+  - `GET /api/objek-pajak/map`
+  - `GET /api/dashboard/summary`
+
 ## Authentication & RBAC
 
 ### Session Auth
 - `POST /api/auth/login`
+- `POST /api/auth/change-password`
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
 
@@ -20,15 +43,30 @@ Rule umum:
 - Endpoint baca internal: minimal login (`admin|editor|viewer`).
 - Endpoint OP publik (`GET /api/objek-pajak`) tetap terbuka untuk data `verified` default.
 
+### Login Security Baseline
+- `POST /api/auth/login`:
+  - rate limit berbasis client IP/fingerprint (`429`, `code=AUTH_RATE_LIMITED`).
+  - lockout ringan berbasis kombinasi `client + username` saat gagal berulang (`429`, `code=AUTH_LOCKED`).
+  - response lock/rate-limit menyertakan header `Retry-After`.
+- `POST /api/auth/change-password`:
+  - butuh session login (`admin|editor|viewer`).
+  - validasi `oldPassword` + `newPassword`.
+  - password policy minimum:
+    - panjang 8-72 karakter
+    - minimal 1 huruf
+    - minimal 1 angka
+  - violation -> `400` dengan `code=PASSWORD_POLICY_VIOLATION`.
+
 ## Wajib Pajak (WP)
 
 ### GET `/api/wajib-pajak`
 - Ambil daftar WP paginated (`items + meta`) dengan payload:
   - item: WP + `badanUsaha` (nullable) + `displayName`.
-  - meta: `{ page, limit, total, totalPages, hasNext, hasPrev }`.
+  - meta: `{ page, limit, total, totalPages, hasNext, hasPrev, mode, cursor, nextCursor }`.
 - Query:
   - `page` (default `1`, min `1`)
   - `limit` (default `25`, max `100`)
+  - `cursor` (opsional, mode cursor pagination)
   - `q` (opsional, trim, max 100 karakter)
   - `jenisWp` (`orang_pribadi|badan_usaha`)
   - `peranWp` (`pemilik|pengelola`)
@@ -67,6 +105,7 @@ Kolom CSV WP:
 Query:
 - `page`
 - `limit`
+- `cursor`
 - `q`
 - `status`
 - `kecamatanId`
@@ -77,7 +116,7 @@ Query:
 Perilaku default:
 - Response selalu paginated:
   - `items: ObjekPajakListItem[]` (ringkas, tanpa hydrate `detailPajak` penuh)
-  - `meta: { page, limit, total, totalPages, hasNext, hasPrev }`
+  - `meta: { page, limit, total, totalPages, hasNext, hasPrev, mode, cursor, nextCursor }`
 - Guardrails query:
   - `page` min `1`
   - `limit` max `100` (default `25`)
@@ -266,9 +305,75 @@ Contoh response:
 
 ---
 
+## Dashboard Analytics
+
+### GET `/api/dashboard/summary`
+- Ringkasan agregat + trend periodik dashboard tanpa load seluruh list OP/WP di frontend.
+- Auth: `admin|editor|viewer`.
+
+Query:
+- `includeUnverified` (`true|false`, default `false`)
+- `from` (`YYYY-MM-DD`, opsional, wajib berpasangan dengan `to`)
+- `to` (`YYYY-MM-DD`, opsional, wajib berpasangan dengan `from`)
+- `groupBy` (`day|week`, default `day`)
+
+Response:
+```json
+{
+  "generatedAt": "2026-03-07T03:00:00.000Z",
+  "includeUnverified": true,
+  "filters": {
+    "summaryWindow": {
+      "from": "2026-02-01",
+      "to": "2026-03-07"
+    },
+    "trendWindow": {
+      "from": "2026-02-01",
+      "to": "2026-03-07",
+      "groupBy": "day"
+    }
+  },
+  "totals": {
+    "totalWp": 120,
+    "totalOp": 340,
+    "totalUpdated": 250,
+    "totalPending": 90,
+    "overallPercentage": 74
+  },
+  "byJenis": [
+    {
+      "jenisPajak": "PBJT Makanan dan Minuman",
+      "total": 40,
+      "updated": 32,
+      "pending": 8,
+      "percentage": 80
+    }
+  ],
+  "trend": [
+    {
+      "periodStart": "2026-03-01",
+      "periodEnd": "2026-03-01",
+      "createdOp": 4,
+      "verifiedOp": 2
+    }
+  ]
+}
+```
+
+### GET `/api/dashboard/summary/export`
+- Export ringkasan dashboard ke CSV.
+- Auth: `admin|editor|viewer`.
+- Query sama dengan `GET /api/dashboard/summary`.
+- Response: `text/csv` (`dashboard_summary.csv`).
+
+---
+
 ## Notes
 - NOPD tetap unique.
 - NPWPD partial unique saat not null.
 - Validasi conditional bisnis kompleks tetap di layer aplikasi (Zod/service).
+- Pagination mode:
+  - Offset: pakai `page + limit`
+  - Cursor: pakai `cursor + limit` (`nextCursor` dipakai untuk request berikutnya)
 - **Breaking Phase 1.9**:
   - `GET /api/wajib-pajak` dan `GET /api/objek-pajak` kini wajib baca `items/meta` (bukan array langsung).

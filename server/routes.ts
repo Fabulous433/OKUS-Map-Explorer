@@ -1,11 +1,14 @@
 import type { Express, Request, Response } from "express";
 import { type Server } from "http";
+import { createHash } from "node:crypto";
 import { and, asc, desc, eq, gte, ilike, lte, lt, or, sql, type SQL } from "drizzle-orm";
 import { db, storage } from "./storage";
+import { env } from "./env";
 import {
   auditLog,
   createWajibPajakSchema,
   insertObjekPajakSchema,
+  JENIS_PAJAK_OPTIONS,
   masterKecamatan,
   masterKecamatanPayloadSchema,
   masterKelurahan,
@@ -17,6 +20,7 @@ import {
   qualityCheckInputSchema,
   STATUS_OPTIONS,
   updateWajibPajakPayloadSchema,
+  users,
   validateDetailByJenis,
   wajibPajak,
   wajibPajakResolvedSchema,
@@ -27,7 +31,8 @@ import {
 import { stringify } from "csv-stringify/sync";
 import { parse } from "csv-parse/sync";
 import multer from "multer";
-import { APP_ROLE_OPTIONS, isAppRole, verifyPassword, type AppRole, type SessionUser } from "./auth";
+import { APP_ROLE_OPTIONS, hashPassword, isAppRole, PASSWORD_POLICY, validatePasswordPolicy, verifyPassword, type AppRole, type SessionUser } from "./auth";
+import { LoginSecurityService, resolveLoginClientId } from "./auth-security";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
@@ -140,12 +145,54 @@ type Bbox = {
   maxLat: number;
 };
 
+type DashboardGroupBy = "day" | "week";
+
+type DashboardTrendPoint = {
+  periodStart: string;
+  periodEnd: string;
+  createdOp: number;
+  verifiedOp: number;
+};
+
+type DashboardSummaryData = {
+  generatedAt: string;
+  includeUnverified: boolean;
+  filters: {
+    summaryWindow: { from: string | null; to: string | null };
+    trendWindow: { from: string; to: string; groupBy: DashboardGroupBy };
+  };
+  totals: {
+    totalWp: number;
+    totalOp: number;
+    totalUpdated: number;
+    totalPending: number;
+    overallPercentage: number;
+  };
+  byJenis: Array<{
+    jenisPajak: string;
+    total: number;
+    updated: number;
+    pending: number;
+    percentage: number;
+  }>;
+  trend: DashboardTrendPoint[];
+};
+
 const VERIFICATION_STATUS_OPTIONS = ["draft", "verified", "rejected"] as const;
 const LIST_LIMIT_DEFAULT = 25;
 const LIST_LIMIT_MAX = 100;
 const MAP_LIMIT_DEFAULT = 500;
 const MAP_LIMIT_MAX = 1000;
 const SEARCH_QUERY_MAX_LENGTH = 100;
+const REVALIDATE_CACHE_HEADER = "private, max-age=0, must-revalidate";
+const DASHBOARD_TREND_DEFAULT_DAYS = 30;
+
+const loginSecurity = new LoginSecurityService({
+  windowMs: env.AUTH_LOGIN_RATE_LIMIT_WINDOW_MS,
+  maxRequestsPerWindow: env.AUTH_LOGIN_RATE_LIMIT_MAX_REQUESTS,
+  lockoutThreshold: env.AUTH_LOGIN_LOCKOUT_THRESHOLD,
+  lockoutMs: env.AUTH_LOGIN_LOCKOUT_MS,
+});
 
 function getActorName(req: Request) {
   const sessionUser = getSessionUser(req);
@@ -187,6 +234,102 @@ function parseDate(value: unknown) {
   if (typeof value !== "string" || value.trim().length === 0) return undefined;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function parseDashboardDate(value: unknown) {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value !== "string") return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+
+  const year = Number.parseInt(match[1], 10);
+  const monthIndex = Number.parseInt(match[2], 10) - 1;
+  const day = Number.parseInt(match[3], 10);
+  const parsed = new Date(Date.UTC(year, monthIndex, day));
+
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== monthIndex ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function toIsoDate(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function addUtcDays(value: Date, days: number) {
+  const next = new Date(value);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function startOfUtcDay(value: Date) {
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+}
+
+function endOfUtcDay(value: Date) {
+  const end = startOfUtcDay(value);
+  end.setUTCHours(23, 59, 59, 999);
+  return end;
+}
+
+function startOfUtcWeek(value: Date) {
+  const start = startOfUtcDay(value);
+  const day = start.getUTCDay();
+  const diff = day === 0 ? 6 : day - 1; // Monday as week start
+  start.setUTCDate(start.getUTCDate() - diff);
+  return start;
+}
+
+function formatDashboardTrendRange(rawFrom: Date | undefined, rawTo: Date | undefined, groupBy: DashboardGroupBy) {
+  const now = new Date();
+  const defaultTo = startOfUtcDay(now);
+  const defaultFrom = addUtcDays(defaultTo, -(DASHBOARD_TREND_DEFAULT_DAYS - 1));
+
+  let from = rawFrom ? startOfUtcDay(rawFrom) : defaultFrom;
+  let to = rawTo ? startOfUtcDay(rawTo) : defaultTo;
+
+  if (from > to) {
+    const copy = from;
+    from = to;
+    to = copy;
+  }
+
+  if (groupBy === "week") {
+    from = startOfUtcWeek(from);
+    to = startOfUtcWeek(to);
+  }
+
+  return { from, to };
+}
+
+function buildTrendTimeline(from: Date, to: Date, groupBy: DashboardGroupBy) {
+  const points: DashboardTrendPoint[] = [];
+  const stepDays = groupBy === "week" ? 7 : 1;
+
+  for (let cursor = new Date(from); cursor <= to; cursor = addUtcDays(cursor, stepDays)) {
+    const periodStart = toIsoDate(cursor);
+    const periodEnd = toIsoDate(addUtcDays(cursor, stepDays - 1));
+    points.push({
+      periodStart,
+      periodEnd,
+      createdOp: 0,
+      verifiedOp: 0,
+    });
+  }
+
+  return points;
+}
+
+function parseDashboardGroupBy(value: unknown): DashboardGroupBy | null {
+  if (value === undefined || value === null || value === "") return "day";
+  if (value === "day" || value === "week") return value;
+  return null;
 }
 
 function parseLimit(value: unknown, fallback = 25) {
@@ -265,6 +408,53 @@ function parseCursor(value: unknown) {
   if (typeof value !== "string") return undefined;
   const num = Number.parseInt(value, 10);
   return Number.isFinite(num) && num > 0 ? num : undefined;
+}
+
+function normalizeEtagToken(value: string) {
+  let token = value.trim();
+  if (token.startsWith("W/")) {
+    token = token.slice(2).trim();
+  }
+  if (token.startsWith("\"") && token.endsWith("\"") && token.length >= 2) {
+    token = token.slice(1, -1);
+  }
+  return token;
+}
+
+function buildWeakEtag(payload: unknown) {
+  const digest = createHash("sha1").update(JSON.stringify(payload)).digest("base64url");
+  return `W/"${digest}"`;
+}
+
+function isEtagMatch(ifNoneMatchRaw: string | undefined, etag: string) {
+  if (!ifNoneMatchRaw) return false;
+  const incoming = ifNoneMatchRaw.trim();
+  if (incoming === "*") return true;
+
+  const target = normalizeEtagToken(etag);
+  return incoming
+    .split(",")
+    .map((item) => normalizeEtagToken(item))
+    .some((item) => item.length > 0 && item === target);
+}
+
+function sendJsonWithEtag(
+  req: Request,
+  res: Response,
+  payload: unknown,
+  options?: {
+    etagPayload?: unknown;
+  },
+) {
+  const etag = buildWeakEtag(options?.etagPayload ?? payload);
+  res.setHeader("Cache-Control", REVALIDATE_CACHE_HEADER);
+  res.setHeader("ETag", etag);
+
+  if (isEtagMatch(req.header("if-none-match") ?? undefined, etag)) {
+    return res.status(304).end();
+  }
+
+  return res.json(payload);
 }
 
 function generateMasterId(prefix: string) {
@@ -689,8 +879,278 @@ function flattenDetailForCsv(detail: unknown) {
   };
 }
 
+async function buildDashboardSummaryData(params: {
+  includeUnverified: boolean;
+  summaryFrom?: Date;
+  summaryTo?: Date;
+  trendFrom?: Date;
+  trendTo?: Date;
+  groupBy: DashboardGroupBy;
+}): Promise<DashboardSummaryData> {
+  const summaryConditions: SQL[] = [];
+  if (!params.includeUnverified) {
+    summaryConditions.push(eq(objekPajak.statusVerifikasi, "verified"));
+  }
+
+  if (params.summaryFrom && params.summaryTo) {
+    summaryConditions.push(gte(objekPajak.createdAt, startOfUtcDay(params.summaryFrom)));
+    summaryConditions.push(lte(objekPajak.createdAt, endOfUtcDay(params.summaryTo)));
+  }
+
+  const hasDetailExpr = sql<boolean>`
+    (
+      exists (select 1 from op_detail_pbjt_makan_minum d1 where d1.op_id = ${objekPajak.id}) or
+      exists (select 1 from op_detail_pbjt_perhotelan d2 where d2.op_id = ${objekPajak.id}) or
+      exists (select 1 from op_detail_pbjt_hiburan d3 where d3.op_id = ${objekPajak.id}) or
+      exists (select 1 from op_detail_pbjt_parkir d4 where d4.op_id = ${objekPajak.id}) or
+      exists (select 1 from op_detail_pbjt_tenaga_listrik d5 where d5.op_id = ${objekPajak.id}) or
+      exists (select 1 from op_detail_pajak_reklame d6 where d6.op_id = ${objekPajak.id}) or
+      exists (select 1 from op_detail_pajak_air_tanah d7 where d7.op_id = ${objekPajak.id}) or
+      exists (select 1 from op_detail_pajak_walet d8 where d8.op_id = ${objekPajak.id})
+    )
+  `;
+
+  const byJenisQuery = db
+    .select({
+      jenisPajak: sql<string>`coalesce(${masterRekeningPajak.jenisPajak}, 'Pajak MBLB')`,
+      total: sql<number>`cast(count(*) as int)`,
+      updated: sql<number>`cast(sum(case when ${hasDetailExpr} then 1 else 0 end) as int)`,
+    })
+    .from(objekPajak)
+    .leftJoin(masterRekeningPajak, eq(objekPajak.rekPajakId, masterRekeningPajak.id))
+    .groupBy(sql`coalesce(${masterRekeningPajak.jenisPajak}, 'Pajak MBLB')`);
+
+  const byJenisRaw = summaryConditions.length > 0 ? await byJenisQuery.where(and(...summaryConditions)) : await byJenisQuery;
+
+  const byJenisMap = new Map(
+    byJenisRaw.map((row) => [
+      row.jenisPajak,
+      {
+        total: Number(row.total ?? 0),
+        updated: Number(row.updated ?? 0),
+      },
+    ]),
+  );
+
+  const byJenis: DashboardSummaryData["byJenis"] = JENIS_PAJAK_OPTIONS.map((jenisPajak) => {
+    const stats = byJenisMap.get(jenisPajak) ?? { total: 0, updated: 0 };
+    const pending = Math.max(0, stats.total - stats.updated);
+    const percentage = stats.total > 0 ? Math.round((stats.updated / stats.total) * 100) : 0;
+    return {
+      jenisPajak,
+      total: stats.total,
+      updated: stats.updated,
+      pending,
+      percentage,
+    };
+  });
+
+  for (const row of byJenisRaw) {
+    if (JENIS_PAJAK_OPTIONS.includes(row.jenisPajak as (typeof JENIS_PAJAK_OPTIONS)[number])) {
+      continue;
+    }
+    const total = Number(row.total ?? 0);
+    const updated = Number(row.updated ?? 0);
+    byJenis.push({
+      jenisPajak: row.jenisPajak,
+      total,
+      updated,
+      pending: Math.max(0, total - updated),
+      percentage: total > 0 ? Math.round((updated / total) * 100) : 0,
+    });
+  }
+
+  const totalOp = byJenis.reduce((acc, row) => acc + row.total, 0);
+  const totalUpdated = byJenis.reduce((acc, row) => acc + row.updated, 0);
+  const totalPending = Math.max(0, totalOp - totalUpdated);
+  const overallPercentage = totalOp > 0 ? Math.round((totalUpdated / totalOp) * 100) : 0;
+
+  const wpRows = await db.select({ count: sql<number>`cast(count(*) as int)` }).from(wajibPajak);
+  const totalWp = Number(wpRows[0]?.count ?? 0);
+
+  const trendWindow = formatDashboardTrendRange(params.trendFrom, params.trendTo, params.groupBy);
+  const trendStart = startOfUtcDay(trendWindow.from);
+  const trendEnd = endOfUtcDay(trendWindow.to);
+
+  const createdBucketExpr =
+    params.groupBy === "week"
+      ? sql`date_trunc('week', ${objekPajak.createdAt})`
+      : sql`date_trunc('day', ${objekPajak.createdAt})`;
+
+  const verifiedBucketExpr =
+    params.groupBy === "week"
+      ? sql`date_trunc('week', ${objekPajak.verifiedAt})`
+      : sql`date_trunc('day', ${objekPajak.verifiedAt})`;
+
+  const createdConditions: SQL[] = [
+    gte(objekPajak.createdAt, trendStart),
+    lte(objekPajak.createdAt, trendEnd),
+  ];
+  if (!params.includeUnverified) {
+    createdConditions.push(eq(objekPajak.statusVerifikasi, "verified"));
+  }
+
+  const createdTrendRows = await db
+    .select({
+      bucket: sql<string>`to_char(${createdBucketExpr}, 'YYYY-MM-DD')`,
+      count: sql<number>`cast(count(*) as int)`,
+    })
+    .from(objekPajak)
+    .where(and(...createdConditions))
+    .groupBy(createdBucketExpr)
+    .orderBy(createdBucketExpr);
+
+  const verifiedTrendRows = await db
+    .select({
+      bucket: sql<string>`to_char(${verifiedBucketExpr}, 'YYYY-MM-DD')`,
+      count: sql<number>`cast(count(*) as int)`,
+    })
+    .from(objekPajak)
+    .where(
+      and(
+        eq(objekPajak.statusVerifikasi, "verified"),
+        sql`${objekPajak.verifiedAt} is not null`,
+        gte(objekPajak.verifiedAt, trendStart),
+        lte(objekPajak.verifiedAt, trendEnd),
+      ),
+    )
+    .groupBy(verifiedBucketExpr)
+    .orderBy(verifiedBucketExpr);
+
+  const createdMap = new Map(createdTrendRows.map((row) => [row.bucket, Number(row.count ?? 0)]));
+  const verifiedMap = new Map(verifiedTrendRows.map((row) => [row.bucket, Number(row.count ?? 0)]));
+  const trend = buildTrendTimeline(trendWindow.from, trendWindow.to, params.groupBy).map((point) => ({
+    ...point,
+    createdOp: createdMap.get(point.periodStart) ?? 0,
+    verifiedOp: verifiedMap.get(point.periodStart) ?? 0,
+  }));
+
+  return {
+    generatedAt: new Date().toISOString(),
+    includeUnverified: params.includeUnverified,
+    filters: {
+      summaryWindow: {
+        from: params.summaryFrom ? toIsoDate(params.summaryFrom) : null,
+        to: params.summaryTo ? toIsoDate(params.summaryTo) : null,
+      },
+      trendWindow: {
+        from: toIsoDate(trendWindow.from),
+        to: toIsoDate(trendWindow.to),
+        groupBy: params.groupBy,
+      },
+    },
+    totals: {
+      totalWp,
+      totalOp,
+      totalUpdated,
+      totalPending,
+      overallPercentage,
+    },
+    byJenis,
+    trend,
+  };
+}
+
+function buildDashboardSummaryCsv(summary: DashboardSummaryData) {
+  const rows: Array<Record<string, string | number>> = [];
+
+  rows.push({
+    section: "totals",
+    jenis_pajak: "ALL",
+    total: summary.totals.totalOp,
+    updated: summary.totals.totalUpdated,
+    pending: summary.totals.totalPending,
+    percentage: summary.totals.overallPercentage,
+    period_start: "",
+    period_end: "",
+    created_op: "",
+    verified_op: "",
+    include_unverified: summary.includeUnverified ? "true" : "false",
+    summary_from: summary.filters.summaryWindow.from ?? "",
+    summary_to: summary.filters.summaryWindow.to ?? "",
+    trend_group_by: summary.filters.trendWindow.groupBy,
+    trend_from: summary.filters.trendWindow.from,
+    trend_to: summary.filters.trendWindow.to,
+  });
+
+  for (const row of summary.byJenis) {
+    rows.push({
+      section: "by_jenis",
+      jenis_pajak: row.jenisPajak,
+      total: row.total,
+      updated: row.updated,
+      pending: row.pending,
+      percentage: row.percentage,
+      period_start: "",
+      period_end: "",
+      created_op: "",
+      verified_op: "",
+      include_unverified: summary.includeUnverified ? "true" : "false",
+      summary_from: summary.filters.summaryWindow.from ?? "",
+      summary_to: summary.filters.summaryWindow.to ?? "",
+      trend_group_by: summary.filters.trendWindow.groupBy,
+      trend_from: summary.filters.trendWindow.from,
+      trend_to: summary.filters.trendWindow.to,
+    });
+  }
+
+  for (const point of summary.trend) {
+    rows.push({
+      section: "trend",
+      jenis_pajak: "",
+      total: "",
+      updated: "",
+      pending: "",
+      percentage: "",
+      period_start: point.periodStart,
+      period_end: point.periodEnd,
+      created_op: point.createdOp,
+      verified_op: point.verifiedOp,
+      include_unverified: summary.includeUnverified ? "true" : "false",
+      summary_from: summary.filters.summaryWindow.from ?? "",
+      summary_to: summary.filters.summaryWindow.to ?? "",
+      trend_group_by: summary.filters.trendWindow.groupBy,
+      trend_from: summary.filters.trendWindow.from,
+      trend_to: summary.filters.trendWindow.to,
+    });
+  }
+
+  return stringify(rows, {
+    header: true,
+    columns: [
+      "section",
+      "jenis_pajak",
+      "total",
+      "updated",
+      "pending",
+      "percentage",
+      "period_start",
+      "period_end",
+      "created_op",
+      "verified_op",
+      "include_unverified",
+      "summary_from",
+      "summary_to",
+      "trend_group_by",
+      "trend_from",
+      "trend_to",
+    ],
+  });
+}
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   app.post("/api/auth/login", async (req, res) => {
+    const clientId = resolveLoginClientId(req);
+    const rateLimit = loginSecurity.consumeRateLimit(clientId);
+    if (!rateLimit.allowed) {
+      res.setHeader("Retry-After", String(rateLimit.retryAfterSec));
+      return res.status(429).json({
+        code: "AUTH_RATE_LIMITED",
+        message: "Terlalu banyak request login. Coba lagi nanti.",
+        retryAfterSec: rateLimit.retryAfterSec,
+      });
+    }
+
     const username = cleanText((req.body as Record<string, unknown>)?.username);
     const password = cleanText((req.body as Record<string, unknown>)?.password);
 
@@ -698,10 +1158,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ message: "Username dan password wajib diisi" });
     }
 
+    const lockoutState = loginSecurity.getLockoutState(clientId, username);
+    if (lockoutState.locked) {
+      res.setHeader("Retry-After", String(lockoutState.retryAfterSec));
+      return res.status(429).json({
+        code: "AUTH_LOCKED",
+        message: "Akses login sementara dikunci karena terlalu banyak percobaan gagal.",
+        retryAfterSec: lockoutState.retryAfterSec,
+      });
+    }
+
     const user = await storage.getUserByUsername(username);
     if (!user || !verifyPassword(user.password, password)) {
+      const failureState = loginSecurity.registerFailedAttempt(clientId, username);
+      if (failureState.locked) {
+        res.setHeader("Retry-After", String(failureState.retryAfterSec));
+        return res.status(429).json({
+          code: "AUTH_LOCKED",
+          message: "Akses login sementara dikunci karena terlalu banyak percobaan gagal.",
+          retryAfterSec: failureState.retryAfterSec,
+        });
+      }
       return res.status(401).json({ message: "Username atau password salah" });
     }
+    loginSecurity.clearFailedAttempt(clientId, username);
 
     const rawRole = (user as { role?: unknown }).role;
     const role: AppRole = isAppRole(rawRole) ? rawRole : "viewer";
@@ -728,6 +1208,60 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         role,
       },
     });
+  });
+
+  app.post("/api/auth/change-password", async (req, res) => {
+    const sessionUser = requireRole(req, res, APP_ROLE_OPTIONS);
+    if (!sessionUser) return;
+
+    const oldPassword = cleanText((req.body as Record<string, unknown>)?.oldPassword);
+    const newPassword = cleanText((req.body as Record<string, unknown>)?.newPassword);
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ message: "oldPassword dan newPassword wajib diisi" });
+    }
+
+    if (oldPassword === newPassword) {
+      return res.status(400).json({ message: "Password baru harus berbeda dari password lama" });
+    }
+
+    const passwordCheck = validatePasswordPolicy(newPassword);
+    if (!passwordCheck.valid) {
+      return res.status(400).json({
+        code: "PASSWORD_POLICY_VIOLATION",
+        message: "Password baru tidak memenuhi kebijakan minimum",
+        errors: passwordCheck.errors,
+        policy: PASSWORD_POLICY,
+      });
+    }
+
+    const [user] = await db.select().from(users).where(eq(users.id, sessionUser.id)).limit(1);
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (!verifyPassword(user.password, oldPassword)) {
+      return res.status(401).json({ message: "Password lama tidak sesuai" });
+    }
+
+    await db
+      .update(users)
+      .set({
+        password: hashPassword(newPassword),
+      })
+      .where(eq(users.id, user.id));
+
+    await writeAuditLog({
+      entityType: "auth_user",
+      entityId: user.id,
+      action: "update",
+      actorName: sessionUser.username,
+      beforeData: null,
+      afterData: { id: user.id, username: user.username, role: user.role },
+      metadata: { source: "api", operation: "change_password" },
+    });
+
+    return res.json({ message: "Password berhasil diperbarui" });
   });
 
   app.post("/api/auth/logout", async (req, res) => {
@@ -766,6 +1300,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ message: "Query limit tidak valid" });
     }
 
+    const rawCursor = req.query.cursor;
+    const cursor = parseCursor(rawCursor);
+    if (rawCursor !== undefined && rawCursor !== null && rawCursor !== "" && !cursor) {
+      return res.status(400).json({ message: "Query cursor tidak valid" });
+    }
+
     const q = parseSearchQuery(req.query.q);
     if (q === null) {
       return res.status(400).json({ message: `Query q harus <= ${SEARCH_QUERY_MAX_LENGTH} karakter` });
@@ -789,12 +1329,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const data = await storage.getWajibPajakPage({
       page,
       limit,
+      cursor,
       q,
       jenisWp,
       peranWp,
       statusAktif,
     });
-    res.json(data);
+    return sendJsonWithEtag(req, res, data);
   });
 
   app.post("/api/wajib-pajak", async (req, res) => {
@@ -1024,11 +1565,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.get("/api/master/kecamatan", async (_req, res) => {
-    if (!requireRole(_req, res, APP_ROLE_OPTIONS)) return;
+  app.get("/api/master/kecamatan", async (req, res) => {
+    if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
 
     const data = await storage.getAllMasterKecamatan();
-    res.json(data);
+    return sendJsonWithEtag(req, res, data);
   });
 
   app.post("/api/master/kecamatan", async (req, res) => {
@@ -1178,7 +1719,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const kecamatanId = typeof req.query.kecamatanId === "string" ? req.query.kecamatanId : undefined;
     const data = await storage.getMasterKelurahan(kecamatanId);
-    res.json(data);
+    return sendJsonWithEtag(req, res, data);
   });
 
   app.post("/api/master/kelurahan", async (req, res) => {
@@ -1329,7 +1870,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const data = includeInactive
       ? await db.select().from(masterRekeningPajak).orderBy(asc(masterRekeningPajak.kodeRekening))
       : await storage.getAllMasterRekeningPajak();
-    res.json(data);
+    return sendJsonWithEtag(req, res, data);
   });
 
   app.post("/api/master/rekening-pajak", async (req, res) => {
@@ -1607,6 +2148,85 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  app.get("/api/dashboard/summary", async (req, res) => {
+    if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
+    const includeUnverified = parseBooleanFlag(req.query.includeUnverified);
+    if (includeUnverified === null) {
+      return res.status(400).json({ message: "includeUnverified harus true/false" });
+    }
+
+    const from = parseDashboardDate(req.query.from);
+    const to = parseDashboardDate(req.query.to);
+    if (from === null || to === null) {
+      return res.status(400).json({ message: "from/to harus format YYYY-MM-DD" });
+    }
+    if ((from && !to) || (!from && to)) {
+      return res.status(400).json({ message: "from dan to harus diisi berpasangan" });
+    }
+
+    const groupBy = parseDashboardGroupBy(req.query.groupBy);
+    if (!groupBy) {
+      return res.status(400).json({ message: "groupBy harus day/week" });
+    }
+
+    const summary = await buildDashboardSummaryData({
+      includeUnverified: includeUnverified !== false,
+      summaryFrom: from,
+      summaryTo: to,
+      trendFrom: from,
+      trendTo: to,
+      groupBy,
+    });
+
+    const stableData = {
+      includeUnverified: summary.includeUnverified,
+      filters: summary.filters,
+      totals: summary.totals,
+      byJenis: summary.byJenis,
+      trend: summary.trend,
+    };
+
+    return sendJsonWithEtag(req, res, summary, { etagPayload: stableData });
+  });
+
+  app.get("/api/dashboard/summary/export", async (req, res) => {
+    if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
+    const includeUnverified = parseBooleanFlag(req.query.includeUnverified);
+    if (includeUnverified === null) {
+      return res.status(400).json({ message: "includeUnverified harus true/false" });
+    }
+
+    const from = parseDashboardDate(req.query.from);
+    const to = parseDashboardDate(req.query.to);
+    if (from === null || to === null) {
+      return res.status(400).json({ message: "from/to harus format YYYY-MM-DD" });
+    }
+    if ((from && !to) || (!from && to)) {
+      return res.status(400).json({ message: "from dan to harus diisi berpasangan" });
+    }
+
+    const groupBy = parseDashboardGroupBy(req.query.groupBy);
+    if (!groupBy) {
+      return res.status(400).json({ message: "groupBy harus day/week" });
+    }
+
+    const summary = await buildDashboardSummaryData({
+      includeUnverified: includeUnverified !== false,
+      summaryFrom: from,
+      summaryTo: to,
+      trendFrom: from,
+      trendTo: to,
+      groupBy,
+    });
+
+    const csv = buildDashboardSummaryCsv(summary);
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=dashboard_summary.csv");
+    return res.send(csv);
+  });
+
   app.get("/api/objek-pajak", async (req, res) => {
     const page = parsePage(req.query.page);
     if (!page) {
@@ -1616,6 +2236,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const limit = parseListLimit(req.query.limit);
     if (!limit) {
       return res.status(400).json({ message: "Query limit tidak valid" });
+    }
+
+    const rawCursor = req.query.cursor;
+    const cursor = parseCursor(rawCursor);
+    if (rawCursor !== undefined && rawCursor !== null && rawCursor !== "" && !cursor) {
+      return res.status(400).json({ message: "Query cursor tidak valid" });
     }
 
     const q = parseSearchQuery(req.query.q);
@@ -1652,6 +2278,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const data = await storage.getObjekPajakPage({
       page,
       limit,
+      cursor,
       q,
       status,
       statusVerifikasi: effectiveStatusVerifikasi,
@@ -1659,7 +2286,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       rekPajakId: rekPajakId ?? undefined,
     });
 
-    res.json(data);
+    return sendJsonWithEtag(req, res, data);
   });
 
   app.get("/api/objek-pajak/map", async (req, res) => {
@@ -1716,7 +2343,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       limit,
     });
 
-    res.json({
+    return sendJsonWithEtag(req, res, {
       items: result.items,
       meta: {
         totalInView: result.totalInView,

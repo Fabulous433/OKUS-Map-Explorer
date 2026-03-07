@@ -29,6 +29,24 @@ async function run() {
     assert.equal(wpLimited.response.status, 200);
     assert.equal((wpLimited.body as JsonRecord).meta && ((wpLimited.body as JsonRecord).meta as JsonRecord).limit, 100);
 
+    const wpCursorFirst = await requestJson("/api/wajib-pajak?limit=2&cursor=999999999");
+    assert.equal(wpCursorFirst.response.status, 200);
+    const wpCursorFirstBody = wpCursorFirst.body as JsonRecord;
+    assert.equal(((wpCursorFirstBody.meta as JsonRecord).mode), "cursor");
+    const wpCursorFirstItems = wpCursorFirstBody.items as JsonRecord[];
+    assert.ok(wpCursorFirstItems.length >= 1, "Cursor page pertama WP harus berisi data");
+    const wpNextCursor = (wpCursorFirstBody.meta as JsonRecord).nextCursor;
+    if (typeof wpNextCursor === "number") {
+      const wpCursorSecond = await requestJson(`/api/wajib-pajak?limit=2&cursor=${wpNextCursor}`);
+      assert.equal(wpCursorSecond.response.status, 200);
+      const wpCursorSecondItems = ((wpCursorSecond.body as JsonRecord).items as JsonRecord[]);
+      if (wpCursorSecondItems.length > 0) {
+        const firstId = requiredNumber(wpCursorFirstItems[0]?.id, "id WP cursor pertama wajib ada");
+        const secondId = requiredNumber(wpCursorSecondItems[0]?.id, "id WP cursor kedua wajib ada");
+        assert.ok(secondId < firstId, "Cursor WP harus bergerak ke id yang lebih kecil");
+      }
+    }
+
     const rekeningResult = await requestJson("/api/master/rekening-pajak");
     assert.equal(rekeningResult.response.status, 200);
     assert.ok(Array.isArray(rekeningResult.body));
@@ -77,6 +95,24 @@ async function run() {
     assert.ok(found, "hasil search server-first harus menemukan OP");
     assert.equal("detailPajak" in (found as JsonRecord), false, "list tidak boleh hydrate detailPajak penuh");
     assert.equal(typeof (found as JsonRecord).hasDetail, "boolean");
+
+    const opCursorFirst = await requestJson("/api/objek-pajak?limit=2&cursor=999999999&includeUnverified=true");
+    assert.equal(opCursorFirst.response.status, 200);
+    const opCursorFirstBody = opCursorFirst.body as JsonRecord;
+    assert.equal(((opCursorFirstBody.meta as JsonRecord).mode), "cursor");
+    const opCursorFirstItems = opCursorFirstBody.items as JsonRecord[];
+    assert.ok(opCursorFirstItems.length >= 1, "Cursor page pertama OP harus berisi data");
+    const opNextCursor = (opCursorFirstBody.meta as JsonRecord).nextCursor;
+    if (typeof opNextCursor === "number") {
+      const opCursorSecond = await requestJson(`/api/objek-pajak?limit=2&cursor=${opNextCursor}&includeUnverified=true`);
+      assert.equal(opCursorSecond.response.status, 200);
+      const opCursorSecondItems = ((opCursorSecond.body as JsonRecord).items as JsonRecord[]);
+      if (opCursorSecondItems.length > 0) {
+        const firstId = requiredNumber(opCursorFirstItems[0]?.id, "id OP cursor pertama wajib ada");
+        const secondId = requiredNumber(opCursorSecondItems[0]?.id, "id OP cursor kedua wajib ada");
+        assert.ok(secondId < firstId, "Cursor OP harus bergerak ke id yang lebih kecil");
+      }
+    }
 
     const mapResult = await requestJson(
       `/api/objek-pajak/map?bbox=104.0000,-4.6000,104.1000,-4.4000&q=${encodeURIComponent(uniq)}&limit=50`,

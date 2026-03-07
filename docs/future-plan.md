@@ -1,67 +1,171 @@
-# Future Plan — Roadmap Pengembangan
+# Future Plan — Roadmap Menuju Production (8-10 Minggu)
 
-## Phase 1.5: Local DevEx Baseline (Completed)
-- Docker Compose PostgreSQL + Adminer
-- Environment local standar
-- Runbook dasar operasi DB
+## Current Baseline (Completed)
+Ringkasan fase yang sudah selesai sampai saat ini:
+- Phase 1.5-1.9: local DevEx, final contract WP/OP, governance, auth+RBAC, performance hardening.
+- Phase 2.0-2.5: cursor pagination rollout (offset tetap aktif), dashboard aggregation+analytics, observability, cache strategy, security baseline login.
+- Evidence utama: changelog sprint dan integration suite aktif di repository.
 
-## Phase 1.6: Data Alignment Sprint (Completed)
-- Refactor kontrak WP/OP final
-- Master wilayah/rekening terhubung FK
-- CSV WP/OP final contract + integration test baseline
+## Prioritas Program (Decision Locked)
+- `P0 / Must Do Before Production`:
+  - Hardening data lifecycle production.
+  - UAT + release readiness checklist.
+- `P1 / Should Do`:
+  - Reporting/export lanjutan (scheduled export + format operasional).
+- `Backlog (Post-Production)`:
+  - Deprecation plan offset pagination setelah stabil di production.
 
-## Phase 1.7: Governance & Quality (Completed)
-Output sprint:
-- Docs lock + runbook update
-- Master Data Management (CRUD kecamatan/kelurahan/rekening)
-- Audit Trail (`audit_log` + endpoint baca)
-- Workflow verifikasi OP (`draft|verified|rejected`)
-- Data Quality Guardrail (`/api/quality/check`, `/api/quality/report`)
-- FE backoffice safe cutover:
-  - halaman Master Data
-  - OP verification action + filter
-  - panel riwayat perubahan (WP/OP)
-  - warning quality sebelum submit
-- Integration suite ditambah untuk skenario governance-quality
+## Status Eksekusi Saat Ini
+- Active now: Wave 1 (Data Lifecycle Hardening).
+- Completed in this wave (docs baseline):
+  - backup retention policy,
+  - restore drill runbook,
+  - purge & retention policy,
+  - restore drill evidence template.
+- Prepared templates for next waves:
+  - UAT/smoke/rollback/rehearsal report.
+  - Release gate, SLO baseline, escalation matrix.
+  - Reporting/export operations and post-launch monitoring/review.
 
-## Phase 1.8: Auth + RBAC Hardening (Completed)
-Output sprint:
-- Session auth endpoint: `login/logout/me`.
-- RBAC backend untuk endpoint mutasi dan endpoint internal:
-  - `admin`: full access.
-  - `editor`: mutasi WP/OP + verification, baca master/audit.
-  - `viewer`: read-only.
-- Guard backoffice FE + halaman login + logout.
-- UI role-aware:
-  - `viewer` read-only di halaman WP/OP.
-  - menu Master Data hanya untuk `admin`.
-- Integration suite auth matrix: `auth-rbac.integration.ts`.
-- One-off SQL migration `script/phase-1.8-auth-rbac.sql`.
+## Roadmap 5 Gelombang (8-10 Minggu)
 
-## Phase 1.9: Performance & Query Hardening (Completed)
-Output sprint:
-- Hard cutover list WP/OP ke paginated response (`items + meta`).
-- Server-first search/filter untuk WP/OP.
-- Endpoint viewport map:
-  - `GET /api/objek-pajak/map?bbox=...`
-- Guardrails query:
-  - `page` min 1, `limit` bounded, `q` bounded, `bbox` validasi range.
-- FE backoffice WP/OP:
-  - server-driven pagination + filter + debounced search + keep-previous-data.
-- FE map:
-  - viewport query + debounced move/zoom + request cancel/replace.
-- One-off SQL index hardening:
-  - `script/phase-1.9-performance-query-hardening.sql`.
-- Integration suite tambahan:
-  - `performance-query-hardening.integration.ts`.
+### Wave 1 (Week 1-2) — Data Lifecycle Hardening (`Must Do`)
+Objective:
+- Menutup risiko kehilangan data dan memastikan recoverability terukur.
 
-## Next Priority (Phase 2.0)
-1. Cursor-based pagination migration untuk list WP/OP (pengganti offset).
-2. Endpoint agregasi dashboard (counter/stat) agar tidak bergantung page sampling.
-3. Observability query performance (slow query log + tracing id request).
-4. Cache strategy master + list query hot-path (ETag/conditional fetch).
-5. Security baseline lanjutan (rate limit login, password policy, lockout ringan).
+Deliverables:
+- Kebijakan backup retention final:
+  - daily 35 hari, weekly 12 minggu, monthly 12 bulan.
+- Runbook restore drill bulanan + template bukti hasil restore.
+- Purge policy terdokumentasi:
+  - soft-delete/archival policy,
+  - audit log retention minimal 365 hari.
+
+Exit Criteria:
+- Dokumen runbook backup/restore/purge disetujui.
+- Simulasi restore drill 1 siklus berhasil dan tercatat.
+- Owner operasional dan frekuensi eksekusi jelas.
+
+Dependency:
+- Akses environment staging/DB backup tooling.
+- Naming convention storage backup ditetapkan.
+
+Defer Candidates:
+- Otomasi lifecycle lintas region/multi-cloud.
+- Retention differential per jenis data non-kritis.
+
+### Wave 2 (Week 3-4) — UAT Framework + Smoke + Rollback Drill (`Must Do`)
+Objective:
+- Membuat kualitas rilis bisa dieksekusi berulang dengan checklist baku.
+
+Deliverables:
+- UAT checklist per domain (WP, OP, Master, Dashboard, Auth).
+- Smoke test checklist pre/post deploy.
+- Rollback checklist yang tervalidasi di staging.
+- Definisi release gate:
+  - `npm run check` pass,
+  - seluruh integration suite pass,
+  - smoke pass,
+  - rollback step tervalidasi.
+
+Exit Criteria:
+- 1 dry-run release rehearsal end-to-end selesai.
+- Semua checklist punya owner dan SLA tindak lanjut.
+
+Dependency:
+- Stabilitas staging environment.
+- Seed data UAT representatif.
+
+Defer Candidates:
+- E2E browser automation penuh untuk semua alur.
+- Chaos test lanjutan.
+
+### Wave 3 (Week 5-6) — Reporting/Export Operasional + Scheduling (`Should Do`)
+Objective:
+- Memastikan kebutuhan laporan operasional rutin bisa berjalan tanpa manual berat.
+
+Deliverables:
+- Standar format CSV operasional:
+  - header baku,
+  - timestamp export,
+  - identitas filter.
+- Kebijakan scheduled export:
+  - harian (operasional),
+  - mingguan (rekap manajemen).
+- Delivery mode:
+  - file drop terjadwal ke storage internal,
+  - runbook konsumsi laporan.
+
+Exit Criteria:
+- Simulasi 1 minggu schedule berjalan tanpa error kritis.
+- Format output tervalidasi oleh stakeholder operasional.
+
+Dependency:
+- Kejelasan lokasi storage internal tujuan.
+- Daftar laporan prioritas yang disepakati.
+
+Defer Candidates:
+- Integrasi notifikasi eksternal kompleks (email gateway/third-party workflow).
+
+### Wave 4 (Week 7-8) — Release Readiness Gate + Go-Live Rehearsal (`Must Do`)
+Objective:
+- Menutup gap terakhir sebelum go-live produksi.
+
+Deliverables:
+- Release readiness board final (go/no-go).
+- SLO baseline:
+  - availability 99.5%,
+  - p95 endpoint list/dashboard < 500ms pada baseline dataset internal.
+- Go-live rehearsal dengan skenario incident ringan.
+
+Exit Criteria:
+- Keputusan go/no-go terdokumentasi.
+- SLO baseline terukur dan disetujui.
+- Escalation path incident jelas.
+
+Dependency:
+- Data observability dari staging stabil.
+- Kesepakatan ownership on-call internal.
+
+Defer Candidates:
+- SLO per endpoint granular level lanjut.
+- Multi-channel incident management automation.
+
+### Wave 5 (Week 9-10) — Production Stabilization + Post-Launch Review (`Must Do`)
+Objective:
+- Menjaga kestabilan pasca go-live dan menyiapkan backlog iterasi berikutnya.
+
+Deliverables:
+- Monitoring harian minggu awal produksi.
+- Post-launch review:
+  - incident log,
+  - kapasitas,
+  - kualitas data.
+- Re-prioritization backlog termasuk item post-production.
+
+Exit Criteria:
+- Tidak ada incident P0/P1 berulang tanpa RCA.
+- Daftar perbaikan iterasi berikutnya disetujui.
+
+Dependency:
+- Data operasional produksi minimal 2 minggu.
+- Ketersediaan owner untuk review lintas fungsi.
+
+Defer Candidates:
+- Deprecation offset pagination (tetap backlog sampai stabil production).
+
+## Klasifikasi Inisiatif
+- `Must Do Before Production`:
+  - Data lifecycle hardening.
+  - UAT + release readiness + rollback validation.
+  - Release gate + go-live rehearsal + stabilization.
+- `Should Do`:
+  - Reporting/export lanjutan (scheduled + format operasional).
+- `Backlog (Post-Production)`:
+  - Deprecation offset pagination.
 
 ## Catatan
-- Perubahan 1.7 bersifat operasional internal (MVP governance).
-- Optimasi performa lanjutan berlanjut ke cursor pagination + observability.
+- Roadmap ini fokus ke kesiapan operasional produksi, bukan fitur domain baru.
+- Detail task-level dan scoring matrix ada di:
+  - `docs/plans/2026-03-07-production-readiness-master-plan.md`
+  - `docs/plans/2026-03-07-priority-defer-matrix.md`

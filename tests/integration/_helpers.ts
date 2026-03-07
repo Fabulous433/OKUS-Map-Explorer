@@ -5,6 +5,7 @@ import createMemoryStore from "memorystore";
 import { sql } from "drizzle-orm";
 
 import { registerRoutes } from "../../server/routes";
+import { createRequestContextMiddleware } from "../../server/observability";
 import { db, ensureDatabaseConnection } from "../../server/storage";
 import { seedDatabase } from "../../server/seed";
 
@@ -27,6 +28,7 @@ export async function createIntegrationServer(): Promise<IntegrationServer> {
 
   const MemoryStore = createMemoryStore(session);
   const app = express();
+  app.use(createRequestContextMiddleware());
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
   app.use(

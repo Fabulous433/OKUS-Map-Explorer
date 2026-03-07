@@ -24,8 +24,26 @@ function parsePort(rawPort: string | undefined): number {
   return port;
 }
 
+function parseOptionalPositiveInt(rawValue: string | undefined, fallback: number): number {
+  if (!rawValue || rawValue.trim().length === 0) {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(rawValue, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`Invalid numeric env value: ${rawValue}`);
+  }
+
+  return parsed;
+}
+
 export const env = {
   DATABASE_URL: requireEnv("DATABASE_URL"),
   SESSION_SECRET: requireEnv("SESSION_SECRET"),
   PORT: parsePort(process.env.PORT),
+  SLOW_QUERY_MS: parseOptionalPositiveInt(process.env.SLOW_QUERY_MS, 300),
+  AUTH_LOGIN_RATE_LIMIT_WINDOW_MS: parseOptionalPositiveInt(process.env.AUTH_LOGIN_RATE_LIMIT_WINDOW_MS, 60_000),
+  AUTH_LOGIN_RATE_LIMIT_MAX_REQUESTS: parseOptionalPositiveInt(process.env.AUTH_LOGIN_RATE_LIMIT_MAX_REQUESTS, 40),
+  AUTH_LOGIN_LOCKOUT_THRESHOLD: parseOptionalPositiveInt(process.env.AUTH_LOGIN_LOCKOUT_THRESHOLD, 5),
+  AUTH_LOGIN_LOCKOUT_MS: parseOptionalPositiveInt(process.env.AUTH_LOGIN_LOCKOUT_MS, 5 * 60_000),
 };

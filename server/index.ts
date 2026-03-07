@@ -6,6 +6,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { env } from "./env";
 import { ensureDatabaseConnection } from "./storage";
+import { createRequestContextMiddleware, getCurrentRequestId } from "./observability";
 
 const app = express();
 const httpServer = createServer(app);
@@ -16,6 +17,8 @@ declare module "http" {
     rawBody: unknown;
   }
 }
+
+app.use(createRequestContextMiddleware());
 
 app.use(
   express.json({
@@ -50,7 +53,9 @@ export function log(message: string, source = "express") {
     hour12: true,
   });
 
-  console.log(`${formattedTime} [${source}] ${message}`);
+  const requestId = getCurrentRequestId();
+  const requestTag = requestId ? ` [req:${requestId}]` : "";
+  console.log(`${formattedTime} [${source}]${requestTag} ${message}`);
 }
 
 app.use((req, res, next) => {
@@ -69,7 +74,9 @@ app.use((req, res, next) => {
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        const rawJson = JSON.stringify(capturedJsonResponse);
+        const normalizedJson = rawJson.length > 600 ? `${rawJson.slice(0, 600)}...` : rawJson;
+        logLine += ` :: ${normalizedJson}`;
       }
 
       log(logLine);
@@ -86,9 +93,10 @@ app.use((req, res, next) => {
   await seedDatabase();
   await registerRoutes(httpServer, app);
 
-  app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
+  app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
+    const requestId = req.requestId ?? getCurrentRequestId();
 
     console.error("Internal Server Error:", err);
 
@@ -96,7 +104,7 @@ app.use((req, res, next) => {
       return next(err);
     }
 
-    return res.status(status).json({ message });
+    return res.status(status).json({ message, requestId });
   });
 
   if (process.env.NODE_ENV === "production") {

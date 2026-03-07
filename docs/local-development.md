@@ -26,6 +26,15 @@ Credential default Adminer:
 Copy-Item .env.example .env.local
 ```
 
+Tambahan observability:
+- `SLOW_QUERY_MS` (default `300`) untuk threshold logging slow query.
+
+Tambahan security baseline login:
+- `AUTH_LOGIN_RATE_LIMIT_WINDOW_MS` (default `60000`)
+- `AUTH_LOGIN_RATE_LIMIT_MAX_REQUESTS` (default `40`)
+- `AUTH_LOGIN_LOCKOUT_THRESHOLD` (default `5`)
+- `AUTH_LOGIN_LOCKOUT_MS` (default `300000`)
+
 ## 3) Install dependency
 ```bash
 npm install
@@ -77,11 +86,33 @@ npm run check
 npm run test:integration
 ```
 
+Verifikasi observability cepat:
+- Kirim request dengan header `x-request-id: local-debug-001` lalu cek response header sama.
+- Cek log backend untuk event:
+  - `slow-query request_id=...`
+  - `query-error request_id=...`
+
+Verifikasi conditional fetch (ETag):
+- Request pertama ambil ETag:
+```bash
+curl -i "http://localhost:5000/api/wajib-pajak?page=1&limit=25" -H "Cookie: connect.sid=<session>"
+```
+- Request kedua dengan `If-None-Match` dari response sebelumnya:
+```bash
+curl -i "http://localhost:5000/api/wajib-pajak?page=1&limit=25" -H "Cookie: connect.sid=<session>" -H "If-None-Match: W/\"...\""
+```
+- Expected: `304 Not Modified` saat data belum berubah.
+
 Verifikasi endpoint cepat:
+- `POST /api/auth/change-password`
 - `GET /api/wajib-pajak?page=1&limit=25`
+- `GET /api/wajib-pajak?limit=25&cursor=2147483647`
 - `GET /api/objek-pajak?page=1&limit=25&includeUnverified=true`
+- `GET /api/objek-pajak?limit=25&cursor=2147483647&includeUnverified=true`
 - `GET /api/objek-pajak/map?bbox=104,-4.6,104.1,-4.4&limit=100`
 - `GET /api/master/rekening-pajak?includeInactive=true`
+- `GET /api/dashboard/summary?includeUnverified=true&from=2026-01-01&to=2026-12-31&groupBy=week`
+- `GET /api/dashboard/summary/export?includeUnverified=true&from=2026-01-01&to=2026-12-31&groupBy=week`
 - `GET /api/audit-log?limit=5`
 - `GET /api/quality/report`
 
@@ -104,3 +135,15 @@ npm run db:reset
 ```
 
 `db:reset` bersifat destruktif (hapus volume).
+
+---
+
+## Runbook Production Baseline
+- Backup retention policy:
+  - `docs/runbooks/backup-retention-policy.md`
+- Restore drill runbook:
+  - `docs/runbooks/restore-drill-runbook.md`
+- Data purge & retention policy:
+  - `docs/runbooks/data-purge-retention-policy.md`
+- Restore drill evidence template:
+  - `docs/runbooks/restore-drill-evidence-template.md`

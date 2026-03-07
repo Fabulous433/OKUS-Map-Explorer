@@ -10,6 +10,8 @@
 ## Verification Note
 - Label "e2e test passed" merepresentasikan verifikasi historis sesi sebelumnya.
 - Artefak test automation belum tersimpan di repository saat ini.
+- Tracker Sync Date: 2026-03-07
+- Source of truth utama untuk sinkronisasi status phase: `docs/future-plan.md`
 
 ---
 
@@ -80,24 +82,28 @@
 ## Phase 2: Enhancements (Backlog)
 
 ### T011: Autentikasi Backoffice
-- **Status**: [ ] Belum
+- **Status**: [x] Selesai
 - **Acceptance**: Login page, session management, proteksi route backoffice
 - **Priority**: High (sebelum production)
+- **Verified**: Ya (Session auth + RBAC hardening aktif)
 
 ### T012: Responsive / Mobile Support
-- **Status**: [ ] Belum
+- **Status**: [~] Parsial
 - **Acceptance**: Peta dan backoffice bisa digunakan di mobile
 - **Priority**: Medium
+- **Verified**: Parsial (responsive utility class sudah ada, acceptance formal lintas device belum ditutup)
 
 ### T013: Filter Peta per Jenis Pajak
 - **Status**: [ ] Belum
 - **Acceptance**: Toggle visibility marker per jenis pajak di peta publik
 - **Priority**: Low
+- **Verified**: Belum (filter explicit per jenis/toggle marker belum tersedia)
 
 ### T014: Audit Trail
-- **Status**: [ ] Belum
+- **Status**: [x] Selesai
 - **Acceptance**: Log setiap perubahan data (siapa, kapan, apa yang berubah)
 - **Priority**: Medium (setelah auth)
+- **Verified**: Ya (endpoint audit + panel riwayat WP/OP tersedia)
 
 
 ---

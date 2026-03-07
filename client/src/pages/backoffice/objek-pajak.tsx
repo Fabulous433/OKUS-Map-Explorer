@@ -84,6 +84,7 @@ type OPFormValues = z.infer<typeof opFormSchema>;
 type OPDetailValue = string | number | null;
 type OPDetailRecord = Record<string, OPDetailValue>;
 type QualityWarning = { level: string; code: string; message: string; relatedIds: Array<string | number> };
+const INITIAL_CURSOR = 2147483647;
 
 function getDetailRecord(form: UseFormReturn<OPFormValues>): OPDetailRecord {
   const detail = form.watch("detailPajak");
@@ -1102,17 +1103,21 @@ export default function BackofficeObjekPajak() {
   const [rekPajakFilterId, setRekPajakFilterId] = useState<string>("all");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
+  const [cursorHistory, setCursorHistory] = useState<number[]>([INITIAL_CURSOR]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
+  const activeCursor = cursorHistory[cursorHistory.length - 1] ?? INITIAL_CURSOR;
 
   useEffect(() => {
     setPage(1);
+    setCursorHistory([INITIAL_CURSOR]);
   }, [debouncedSearch, statusFilter, verificationFilter, kecamatanFilterId, rekPajakFilterId, limit]);
 
   const objekPajakQueryKey = useMemo(() => {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
+    params.set("cursor", String(activeCursor));
     params.set("includeUnverified", "true");
     if (debouncedSearch) params.set("q", debouncedSearch);
     if (statusFilter !== "all") params.set("status", statusFilter);
@@ -1120,7 +1125,7 @@ export default function BackofficeObjekPajak() {
     if (kecamatanFilterId !== "all") params.set("kecamatanId", kecamatanFilterId);
     if (rekPajakFilterId !== "all") params.set("rekPajakId", rekPajakFilterId);
     return `/api/objek-pajak?${params.toString()}`;
-  }, [debouncedSearch, kecamatanFilterId, limit, page, rekPajakFilterId, statusFilter, verificationFilter]);
+  }, [activeCursor, debouncedSearch, kecamatanFilterId, limit, page, rekPajakFilterId, statusFilter, verificationFilter]);
 
   const { data: listResult, isLoading, isFetching } = useQuery<PaginatedResult<ObjekPajakListItem>>({
     queryKey: [objekPajakQueryKey],
@@ -1134,6 +1139,9 @@ export default function BackofficeObjekPajak() {
     totalPages: 1,
     hasNext: false,
     hasPrev: false,
+    mode: "cursor" as const,
+    cursor: activeCursor,
+    nextCursor: null,
   };
 
   const { data: wpPage } = useQuery<PaginatedResult<WajibPajakListItem>>({
@@ -1317,7 +1325,7 @@ export default function BackofficeObjekPajak() {
 
         <div className="mb-3 flex items-center justify-between gap-3">
           <p className="font-mono text-[11px] text-gray-600">
-            Halaman {opMeta.page} dari {opMeta.totalPages}
+            Halaman {page} dari {opMeta.totalPages}
             {isFetching ? " - memperbarui..." : ""}
           </p>
           <Select value={String(limit)} onValueChange={(value) => setLimit(Number(value))}>
@@ -1598,14 +1606,17 @@ export default function BackofficeObjekPajak() {
                   href="#"
                   onClick={(event) => {
                     event.preventDefault();
-                    if (opMeta.hasPrev) setPage((prev) => Math.max(1, prev - 1));
+                    if (cursorHistory.length > 1) {
+                      setCursorHistory((prev) => prev.slice(0, -1));
+                      setPage((prev) => Math.max(1, prev - 1));
+                    }
                   }}
-                  className={`rounded-none border-[2px] border-black font-mono text-xs ${opMeta.hasPrev ? "" : "pointer-events-none opacity-40"}`}
+                  className={`rounded-none border-[2px] border-black font-mono text-xs ${cursorHistory.length > 1 ? "" : "pointer-events-none opacity-40"}`}
                 />
               </PaginationItem>
               <PaginationItem>
                 <PaginationLink href="#" isActive className="rounded-none border-[2px] border-black font-mono text-xs">
-                  {opMeta.page}
+                  {page}
                 </PaginationLink>
               </PaginationItem>
               <PaginationItem>
@@ -1613,9 +1624,13 @@ export default function BackofficeObjekPajak() {
                   href="#"
                   onClick={(event) => {
                     event.preventDefault();
-                    if (opMeta.hasNext) setPage((prev) => prev + 1);
+                    const nextCursor = opMeta.nextCursor;
+                    if (typeof nextCursor === "number") {
+                      setCursorHistory((prev) => [...prev, nextCursor]);
+                      setPage((prev) => prev + 1);
+                    }
                   }}
-                  className={`rounded-none border-[2px] border-black font-mono text-xs ${opMeta.hasNext ? "" : "pointer-events-none opacity-40"}`}
+                  className={`rounded-none border-[2px] border-black font-mono text-xs ${opMeta.nextCursor ? "" : "pointer-events-none opacity-40"}`}
                 />
               </PaginationItem>
             </PaginationContent>

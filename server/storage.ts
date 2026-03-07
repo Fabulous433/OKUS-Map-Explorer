@@ -35,14 +35,16 @@ import {
   wpBadanUsaha,
   type WpBadanUsahaInput,
 } from "@shared/schema";
-import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, lt, or, sql, type SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { env } from "./env";
+import { instrumentPoolForSlowQueryLogging } from "./observability";
 
 const pool = new pg.Pool({
   connectionString: env.DATABASE_URL,
 });
+instrumentPoolForSlowQueryLogging(pool, env.SLOW_QUERY_MS);
 
 export async function ensureDatabaseConnection() {
   try {
@@ -67,6 +69,7 @@ type ObjekPajakFilter = {
 type PaginationParams = {
   page: number;
   limit: number;
+  cursor?: number;
 };
 
 type WajibPajakListFilter = PaginationParams & {
@@ -148,16 +151,29 @@ function buildWpDisplayName(wp: WajibPajak, badanUsaha: WpBadanUsaha | null) {
   return first ?? "(tanpa nama)";
 }
 
-function toPaginationMeta(page: number, limit: number, total: number): PaginationMeta {
+function toPaginationMeta(
+  page: number,
+  limit: number,
+  total: number,
+  options?: {
+    mode?: "offset" | "cursor";
+    cursor?: number | null;
+    nextCursor?: number | null;
+  },
+): PaginationMeta {
   const safeTotal = Math.max(0, total);
   const totalPages = safeTotal === 0 ? 1 : Math.ceil(safeTotal / limit);
+  const mode = options?.mode ?? "offset";
   return {
     page,
     limit,
     total: safeTotal,
     totalPages,
-    hasNext: page < totalPages,
-    hasPrev: page > 1,
+    hasNext: mode === "cursor" ? Boolean(options?.nextCursor) : page < totalPages,
+    hasPrev: mode === "cursor" ? options?.cursor !== null && options?.cursor !== undefined : page > 1,
+    mode,
+    cursor: options?.cursor ?? null,
+    nextCursor: options?.nextCursor ?? null,
   };
 }
 
@@ -633,19 +649,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getWajibPajakPage(filters: WajibPajakListFilter): Promise<PaginatedResult<WajibPajakListItem>> {
-    const conditions: SQL[] = [];
+    const baseConditions: SQL[] = [];
+    const cursor = filters.cursor ?? null;
     const offset = (filters.page - 1) * filters.limit;
+    const useCursor = cursor !== null;
 
     if (filters.jenisWp) {
-      conditions.push(eq(wajibPajak.jenisWp, filters.jenisWp));
+      baseConditions.push(eq(wajibPajak.jenisWp, filters.jenisWp));
     }
 
     if (filters.peranWp) {
-      conditions.push(eq(wajibPajak.peranWp, filters.peranWp));
+      baseConditions.push(eq(wajibPajak.peranWp, filters.peranWp));
     }
 
     if (filters.statusAktif) {
-      conditions.push(eq(wajibPajak.statusAktif, filters.statusAktif));
+      baseConditions.push(eq(wajibPajak.statusAktif, filters.statusAktif));
     }
 
     if (filters.q) {
@@ -658,29 +676,51 @@ export class DatabaseStorage implements IStorage {
         ilike(wpBadanUsaha.npwpBadanUsaha, like),
       );
       if (searchCondition) {
-        conditions.push(searchCondition);
+        baseConditions.push(searchCondition);
       }
+    }
+
+    const dataConditions = [...baseConditions];
+    if (useCursor && cursor !== null) {
+      dataConditions.push(lt(wajibPajak.id, cursor));
     }
 
     const countQuery = db
       .select({ count: sql<number>`cast(count(*) as int)` })
       .from(wajibPajak)
       .leftJoin(wpBadanUsaha, eq(wajibPajak.id, wpBadanUsaha.wpId));
-    const countRows = conditions.length > 0 ? await countQuery.where(and(...conditions)) : await countQuery;
+    const countRows = baseConditions.length > 0 ? await countQuery.where(and(...baseConditions)) : await countQuery;
     const total = Number(countRows[0]?.count ?? 0);
 
-    const dataQuery = db
-      .select({ wp: wajibPajak, badanUsaha: wpBadanUsaha })
-      .from(wajibPajak)
-      .leftJoin(wpBadanUsaha, eq(wajibPajak.id, wpBadanUsaha.wpId))
-      .orderBy(desc(wajibPajak.updatedAt), desc(wajibPajak.id))
-      .limit(filters.limit)
-      .offset(offset);
-    const rows = conditions.length > 0 ? await dataQuery.where(and(...conditions)) : await dataQuery;
+    const baseDataQuery = (
+      useCursor
+        ? db
+            .select({ wp: wajibPajak, badanUsaha: wpBadanUsaha })
+            .from(wajibPajak)
+            .leftJoin(wpBadanUsaha, eq(wajibPajak.id, wpBadanUsaha.wpId))
+            .orderBy(desc(wajibPajak.id))
+            .limit(filters.limit + 1)
+        : db
+            .select({ wp: wajibPajak, badanUsaha: wpBadanUsaha })
+            .from(wajibPajak)
+            .leftJoin(wpBadanUsaha, eq(wajibPajak.id, wpBadanUsaha.wpId))
+            .orderBy(desc(wajibPajak.updatedAt), desc(wajibPajak.id))
+            .limit(filters.limit)
+            .offset(offset)
+    ).$dynamic();
+
+    const rows = dataConditions.length > 0 ? await baseDataQuery.where(and(...dataConditions)) : await baseDataQuery;
+    const hasNext = useCursor ? rows.length > filters.limit : filters.page * filters.limit < total;
+    const normalizedRows = useCursor ? rows.slice(0, filters.limit) : rows;
+    const nextCursor = useCursor && hasNext ? normalizedRows[normalizedRows.length - 1]?.wp.id ?? null : null;
 
     return {
-      items: rows.map(mapWpRecord),
-      meta: toPaginationMeta(filters.page, filters.limit, total),
+      items: normalizedRows.map(mapWpRecord),
+      meta: toPaginationMeta(filters.page, filters.limit, total, {
+        mode: useCursor ? "cursor" : "offset",
+        cursor,
+        nextCursor,
+      }),
     };
   }
 
@@ -835,27 +875,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getObjekPajakPage(filters: ObjekPajakListFilter): Promise<PaginatedResult<ObjekPajakListItem>> {
-    const conditions: SQL[] = [];
+    const baseConditions: SQL[] = [];
+    const cursor = filters.cursor ?? null;
     const offset = (filters.page - 1) * filters.limit;
+    const useCursor = cursor !== null;
 
     if (filters.status) {
-      conditions.push(eq(objekPajak.status, filters.status));
+      baseConditions.push(eq(objekPajak.status, filters.status));
     }
 
     if (filters.statusVerifikasi) {
-      conditions.push(eq(objekPajak.statusVerifikasi, filters.statusVerifikasi));
+      baseConditions.push(eq(objekPajak.statusVerifikasi, filters.statusVerifikasi));
     }
 
     if (filters.kecamatanId) {
-      conditions.push(eq(objekPajak.kecamatanId, filters.kecamatanId));
+      baseConditions.push(eq(objekPajak.kecamatanId, filters.kecamatanId));
     }
 
     if (filters.rekPajakId) {
-      conditions.push(eq(objekPajak.rekPajakId, filters.rekPajakId));
+      baseConditions.push(eq(objekPajak.rekPajakId, filters.rekPajakId));
     }
 
     if (filters.jenisPajak) {
-      conditions.push(eq(masterRekeningPajak.jenisPajak, filters.jenisPajak));
+      baseConditions.push(eq(masterRekeningPajak.jenisPajak, filters.jenisPajak));
     }
 
     if (filters.q) {
@@ -866,15 +908,20 @@ export class DatabaseStorage implements IStorage {
         ilike(objekPajak.alamatOp, like),
       );
       if (searchCondition) {
-        conditions.push(searchCondition);
+        baseConditions.push(searchCondition);
       }
+    }
+
+    const dataConditions = [...baseConditions];
+    if (useCursor && cursor !== null) {
+      dataConditions.push(lt(objekPajak.id, cursor));
     }
 
     const countQuery = db
       .select({ count: sql<number>`cast(count(*) as int)` })
       .from(objekPajak)
       .leftJoin(masterRekeningPajak, eq(objekPajak.rekPajakId, masterRekeningPajak.id));
-    const countRows = conditions.length > 0 ? await countQuery.where(and(...conditions)) : await countQuery;
+    const countRows = baseConditions.length > 0 ? await countQuery.where(and(...baseConditions)) : await countQuery;
     const total = Number(countRows[0]?.count ?? 0);
 
     const hasDetailExpr = sql<boolean>`
@@ -890,26 +937,51 @@ export class DatabaseStorage implements IStorage {
       )
     `;
 
-    const dataQuery = db
-      .select({
-        op: objekPajak,
-        rekening: masterRekeningPajak,
-        kecamatan: masterKecamatan,
-        kelurahan: masterKelurahan,
-        hasDetail: hasDetailExpr,
-      })
-      .from(objekPajak)
-      .leftJoin(masterRekeningPajak, eq(objekPajak.rekPajakId, masterRekeningPajak.id))
-      .leftJoin(masterKecamatan, eq(objekPajak.kecamatanId, masterKecamatan.cpmKecId))
-      .leftJoin(masterKelurahan, eq(objekPajak.kelurahanId, masterKelurahan.cpmKelId))
-      .orderBy(desc(objekPajak.updatedAt), desc(objekPajak.id))
-      .limit(filters.limit)
-      .offset(offset);
-    const rows = conditions.length > 0 ? await dataQuery.where(and(...conditions)) : await dataQuery;
+    const baseDataQuery = (
+      useCursor
+        ? db
+            .select({
+              op: objekPajak,
+              rekening: masterRekeningPajak,
+              kecamatan: masterKecamatan,
+              kelurahan: masterKelurahan,
+              hasDetail: hasDetailExpr,
+            })
+            .from(objekPajak)
+            .leftJoin(masterRekeningPajak, eq(objekPajak.rekPajakId, masterRekeningPajak.id))
+            .leftJoin(masterKecamatan, eq(objekPajak.kecamatanId, masterKecamatan.cpmKecId))
+            .leftJoin(masterKelurahan, eq(objekPajak.kelurahanId, masterKelurahan.cpmKelId))
+            .orderBy(desc(objekPajak.id))
+            .limit(filters.limit + 1)
+        : db
+            .select({
+              op: objekPajak,
+              rekening: masterRekeningPajak,
+              kecamatan: masterKecamatan,
+              kelurahan: masterKelurahan,
+              hasDetail: hasDetailExpr,
+            })
+            .from(objekPajak)
+            .leftJoin(masterRekeningPajak, eq(objekPajak.rekPajakId, masterRekeningPajak.id))
+            .leftJoin(masterKecamatan, eq(objekPajak.kecamatanId, masterKecamatan.cpmKecId))
+            .leftJoin(masterKelurahan, eq(objekPajak.kelurahanId, masterKelurahan.cpmKelId))
+            .orderBy(desc(objekPajak.updatedAt), desc(objekPajak.id))
+            .limit(filters.limit)
+            .offset(offset)
+    ).$dynamic();
+
+    const rows = dataConditions.length > 0 ? await baseDataQuery.where(and(...dataConditions)) : await baseDataQuery;
+    const hasNext = useCursor ? rows.length > filters.limit : filters.page * filters.limit < total;
+    const normalizedRows = useCursor ? rows.slice(0, filters.limit) : rows;
+    const nextCursor = useCursor ? (hasNext ? normalizedRows[normalizedRows.length - 1]?.op.id ?? null : null) : null;
 
     return {
-      items: rows.map((row) => mapObjekPajakListRecord({ ...row, hasDetail: Boolean(row.hasDetail) })),
-      meta: toPaginationMeta(filters.page, filters.limit, total),
+      items: normalizedRows.map((row) => mapObjekPajakListRecord({ ...row, hasDetail: Boolean(row.hasDetail) })),
+      meta: toPaginationMeta(filters.page, filters.limit, total, {
+        mode: useCursor ? "cursor" : "offset",
+        cursor,
+        nextCursor,
+      }),
     };
   }
 

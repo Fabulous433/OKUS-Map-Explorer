@@ -99,6 +99,7 @@ const wpSchema = z
 
 type WpFormValues = z.infer<typeof wpSchema>;
 type QualityWarning = { level: string; code: string; message: string; relatedIds: Array<string | number> };
+const INITIAL_CURSOR = 2147483647;
 
 function normalize(value?: string) {
   const v = (value ?? "").trim();
@@ -249,6 +250,7 @@ export default function BackofficeWajibPajak() {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
+  const [cursorHistory, setCursorHistory] = useState<number[]>([INITIAL_CURSOR]);
   const [jenisWpFilter, setJenisWpFilter] = useState<"all" | "orang_pribadi" | "badan_usaha">("all");
   const [peranWpFilter, setPeranWpFilter] = useState<"all" | "pemilik" | "pengelola">("all");
   const [statusAktifFilter, setStatusAktifFilter] = useState<"all" | "active" | "inactive">("all");
@@ -259,21 +261,24 @@ export default function BackofficeWajibPajak() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const debouncedQ = useDebouncedValue(q, 300);
+  const activeCursor = cursorHistory[cursorHistory.length - 1] ?? INITIAL_CURSOR;
 
   useEffect(() => {
     setPage(1);
+    setCursorHistory([INITIAL_CURSOR]);
   }, [debouncedQ, jenisWpFilter, peranWpFilter, statusAktifFilter, limit]);
 
   const listQueryKey = useMemo(() => {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
+    params.set("cursor", String(activeCursor));
     if (debouncedQ) params.set("q", debouncedQ);
     if (jenisWpFilter !== "all") params.set("jenisWp", jenisWpFilter);
     if (peranWpFilter !== "all") params.set("peranWp", peranWpFilter);
     if (statusAktifFilter !== "all") params.set("statusAktif", statusAktifFilter);
     return `/api/wajib-pajak?${params.toString()}`;
-  }, [debouncedQ, jenisWpFilter, limit, page, peranWpFilter, statusAktifFilter]);
+  }, [activeCursor, debouncedQ, jenisWpFilter, limit, page, peranWpFilter, statusAktifFilter]);
 
   const invalidateWajibPajakQueries = () => {
     queryClient.invalidateQueries({
@@ -296,6 +301,9 @@ export default function BackofficeWajibPajak() {
     totalPages: 1,
     hasNext: false,
     hasPrev: false,
+    mode: "cursor" as const,
+    cursor: activeCursor,
+    nextCursor: null,
   };
   const addForm = useForm<WpFormValues>({ resolver: zodResolver(wpSchema), defaultValues: defaults() });
   const editForm = useForm<WpFormValues>({ resolver: zodResolver(wpSchema), defaultValues: defaults() });
@@ -448,7 +456,7 @@ export default function BackofficeWajibPajak() {
         </div>
         <div className="mb-4 flex items-center justify-between">
           <p className="font-mono text-[11px] text-gray-600">
-            Halaman {meta.page} dari {meta.totalPages}
+            Halaman {page} dari {meta.totalPages}
             {isFetching ? " - memperbarui..." : ""}
           </p>
           <Select value={String(limit)} onValueChange={(value) => setLimit(Number(value))}>
@@ -494,14 +502,17 @@ export default function BackofficeWajibPajak() {
                   href="#"
                   onClick={(event) => {
                     event.preventDefault();
-                    if (meta.hasPrev) setPage((prev) => Math.max(1, prev - 1));
+                    if (cursorHistory.length > 1) {
+                      setCursorHistory((prev) => prev.slice(0, -1));
+                      setPage((prev) => Math.max(1, prev - 1));
+                    }
                   }}
-                  className={`rounded-none border-[2px] border-black font-mono text-xs ${meta.hasPrev ? "" : "pointer-events-none opacity-40"}`}
+                  className={`rounded-none border-[2px] border-black font-mono text-xs ${cursorHistory.length > 1 ? "" : "pointer-events-none opacity-40"}`}
                 />
               </PaginationItem>
               <PaginationItem>
                 <PaginationLink href="#" isActive className="rounded-none border-[2px] border-black font-mono text-xs">
-                  {meta.page}
+                  {page}
                 </PaginationLink>
               </PaginationItem>
               <PaginationItem>
@@ -509,9 +520,13 @@ export default function BackofficeWajibPajak() {
                   href="#"
                   onClick={(event) => {
                     event.preventDefault();
-                    if (meta.hasNext) setPage((prev) => prev + 1);
+                    const nextCursor = meta.nextCursor;
+                    if (typeof nextCursor === "number") {
+                      setCursorHistory((prev) => [...prev, nextCursor]);
+                      setPage((prev) => prev + 1);
+                    }
                   }}
-                  className={`rounded-none border-[2px] border-black font-mono text-xs ${meta.hasNext ? "" : "pointer-events-none opacity-40"}`}
+                  className={`rounded-none border-[2px] border-black font-mono text-xs ${meta.nextCursor ? "" : "pointer-events-none opacity-40"}`}
                 />
               </PaginationItem>
             </PaginationContent>

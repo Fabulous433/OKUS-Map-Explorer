@@ -3,6 +3,13 @@ import { pbkdf2Sync, randomBytes, timingSafeEqual } from "node:crypto";
 export const APP_ROLE_OPTIONS = ["admin", "editor", "viewer"] as const;
 export type AppRole = (typeof APP_ROLE_OPTIONS)[number];
 
+export const PASSWORD_POLICY = {
+  minLength: 8,
+  maxLength: 72,
+  requireLetter: true,
+  requireNumber: true,
+} as const;
+
 const HASH_PREFIX = "pbkdf2";
 const ITERATIONS = 120_000;
 const KEY_LEN = 32;
@@ -55,4 +62,29 @@ export function verifyPassword(stored: string, plain: string): boolean {
   }
 
   return timingSafeEqual(expected, derived);
+}
+
+export function validatePasswordPolicy(password: string) {
+  const errors: string[] = [];
+
+  if (password.length < PASSWORD_POLICY.minLength) {
+    errors.push(`Password minimal ${PASSWORD_POLICY.minLength} karakter`);
+  }
+
+  if (password.length > PASSWORD_POLICY.maxLength) {
+    errors.push(`Password maksimal ${PASSWORD_POLICY.maxLength} karakter`);
+  }
+
+  if (PASSWORD_POLICY.requireLetter && !/[A-Za-z]/.test(password)) {
+    errors.push("Password harus mengandung huruf");
+  }
+
+  if (PASSWORD_POLICY.requireNumber && !/\d/.test(password)) {
+    errors.push("Password harus mengandung angka");
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
 }

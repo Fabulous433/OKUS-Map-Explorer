@@ -1,14 +1,53 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { ChevronDown, ChevronUp, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import BackofficeLayout from "./layout";
-import type { ObjekPajakListItem, PaginatedResult, WajibPajakListItem } from "@shared/schema";
-import { JENIS_PAJAK_OPTIONS } from "@shared/schema";
+
+type DashboardJenisRow = {
+  jenisPajak: string;
+  total: number;
+  updated: number;
+  pending: number;
+  percentage: number;
+};
+
+type DashboardSummary = {
+  generatedAt: string;
+  includeUnverified: boolean;
+  filters: {
+    summaryWindow: { from: string | null; to: string | null };
+    trendWindow: { from: string; to: string; groupBy: "day" | "week" };
+  };
+  totals: {
+    totalWp: number;
+    totalOp: number;
+    totalUpdated: number;
+    totalPending: number;
+    overallPercentage: number;
+  };
+  byJenis: DashboardJenisRow[];
+  trend: Array<{
+    periodStart: string;
+    periodEnd: string;
+    createdOp: number;
+    verifiedOp: number;
+  }>;
+};
 
 const JENIS_PAJAK_COLORS: Record<string, string> = {
   "PBJT Makanan dan Minuman": "#FF6B00",
@@ -22,7 +61,7 @@ const JENIS_PAJAK_COLORS: Record<string, string> = {
   "Pajak MBLB": "#6B7280",
 };
 
-function getShortLabel(jenis: string): string {
+function getShortLabel(jenis: string) {
   const map: Record<string, string> = {
     "PBJT Makanan dan Minuman": "MKN",
     "PBJT Jasa Perhotelan": "HTL",
@@ -34,257 +73,234 @@ function getShortLabel(jenis: string): string {
     "Pajak Sarang Burung Walet": "WLT",
     "Pajak MBLB": "MBLB",
   };
-  return map[jenis] || jenis.substring(0, 3).toUpperCase();
+  return map[jenis] ?? jenis.slice(0, 3).toUpperCase();
 }
 
-function formatCurrency(value: string | number | null | undefined): string {
-  if (!value) return "-";
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  if (isNaN(num)) return "-";
-  return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(num);
+function toDateInputValue(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export default function BackofficeDashboard() {
-  const [expandedJenis, setExpandedJenis] = useState<string | null>(null);
+  const today = new Date();
+  const fromDefault = new Date(today);
+  fromDefault.setDate(fromDefault.getDate() - 29);
 
-  const { data: opList = [], isLoading: opLoading } = useQuery<ObjekPajakListItem[]>({
-    queryKey: ["dashboard:objek-pajak:all"],
-    queryFn: async ({ signal }) => {
-      const rows: ObjekPajakListItem[] = [];
-      let page = 1;
-      const limit = 100;
+  const [fromDate, setFromDate] = useState(toDateInputValue(fromDefault));
+  const [toDate, setToDate] = useState(toDateInputValue(today));
+  const [groupBy, setGroupBy] = useState<"day" | "week">("day");
 
-      while (true) {
-        const response = await fetch(`/api/objek-pajak?page=${page}&limit=${limit}&includeUnverified=true`, {
-          credentials: "include",
-          signal,
-        });
-        if (!response.ok) {
-          throw new Error(await response.text());
-        }
+  const summaryUrl = useMemo(() => {
+    const query = new URLSearchParams({
+      includeUnverified: "true",
+      from: fromDate,
+      to: toDate,
+      groupBy,
+    });
+    return `/api/dashboard/summary?${query.toString()}`;
+  }, [fromDate, toDate, groupBy]);
 
-        const body = (await response.json()) as PaginatedResult<ObjekPajakListItem>;
-        rows.push(...body.items);
-
-        if (!body.meta.hasNext) break;
-        page += 1;
-        if (page > 200) break;
-      }
-
-      return rows;
-    },
+  const { data, isLoading } = useQuery<DashboardSummary>({
+    queryKey: [summaryUrl],
   });
 
-  const { data: wpList = [], isLoading: wpLoading } = useQuery<WajibPajakListItem[]>({
-    queryKey: ["dashboard:wajib-pajak:all"],
-    queryFn: async ({ signal }) => {
-      const rows: WajibPajakListItem[] = [];
-      let page = 1;
-      const limit = 100;
+  const exportUrl = useMemo(() => {
+    const query = new URLSearchParams({
+      includeUnverified: "true",
+      from: fromDate,
+      to: toDate,
+      groupBy,
+    });
+    return `/api/dashboard/summary/export?${query.toString()}`;
+  }, [fromDate, toDate, groupBy]);
 
-      while (true) {
-        const response = await fetch(`/api/wajib-pajak?page=${page}&limit=${limit}`, {
-          credentials: "include",
-          signal,
-        });
-        if (!response.ok) {
-          throw new Error(await response.text());
-        }
-
-        const body = (await response.json()) as PaginatedResult<WajibPajakListItem>;
-        rows.push(...body.items);
-
-        if (!body.meta.hasNext) break;
-        page += 1;
-        if (page > 200) break;
-      }
-
-      return rows;
-    },
-  });
-
-  const isLoading = opLoading || wpLoading;
-
-  const wpMap = new Map<number, WajibPajakListItem>();
-  wpList.forEach((wp) => wpMap.set(wp.id, wp));
-
-  const jenisStats = JENIS_PAJAK_OPTIONS.map((jenis) => {
-    const ops = opList.filter((op) => op.jenisPajak === jenis);
-    const total = ops.length;
-    const updated = ops.filter((op) => op.hasDetail).length;
-    const pending = total - updated;
-    const percentage = total > 0 ? Math.round((updated / total) * 100) : 0;
-    return { jenis, ops, total, updated, pending, percentage };
-  });
-
-  const totalOP = opList.length;
-  const totalUpdated = opList.filter((op) => op.hasDetail).length;
-  const totalPending = totalOP - totalUpdated;
-  const overallPercentage = totalOP > 0 ? Math.round((totalUpdated / totalOP) * 100) : 0;
-
-  const toggleExpand = (jenis: string) => {
-    setExpandedJenis(expandedJenis === jenis ? null : jenis);
+  const summary = data?.totals ?? {
+    totalWp: 0,
+    totalOp: 0,
+    totalUpdated: 0,
+    totalPending: 0,
+    overallPercentage: 0,
   };
+  const byJenis = data?.byJenis ?? [];
+  const trend = data?.trend ?? [];
 
   return (
     <BackofficeLayout>
-      <div className="p-6 space-y-6" data-testid="backoffice-dashboard">
+      <div className="space-y-6 p-6" data-testid="backoffice-dashboard">
         <div className="border-b-[3px] border-black pb-4">
           <h2 className="font-serif text-2xl font-black" data-testid="text-dashboard-title">
             DASHBOARD PENDATAAN
           </h2>
-          <p className="font-mono text-xs text-muted-foreground mt-1">
-            Progress pendataan objek pajak per jenis pajak
+          <p className="mt-1 font-mono text-xs text-muted-foreground">
+            Ringkasan + trend periodik langsung dari agregasi server.
           </p>
         </div>
 
+        <Card className="border-[2px] border-black p-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <label className="flex flex-col gap-1 font-mono text-xs">
+                Dari Tanggal
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(event) => setFromDate(event.target.value)}
+                  className="h-9 border-[2px] border-black px-2 font-mono text-xs"
+                  data-testid="input-dashboard-from-date"
+                />
+              </label>
+              <label className="flex flex-col gap-1 font-mono text-xs">
+                Sampai Tanggal
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(event) => setToDate(event.target.value)}
+                  className="h-9 border-[2px] border-black px-2 font-mono text-xs"
+                  data-testid="input-dashboard-to-date"
+                />
+              </label>
+              <label className="flex flex-col gap-1 font-mono text-xs">
+                Group By
+                <select
+                  value={groupBy}
+                  onChange={(event) => setGroupBy(event.target.value === "week" ? "week" : "day")}
+                  className="h-9 border-[2px] border-black px-2 font-mono text-xs"
+                  data-testid="select-dashboard-group-by"
+                >
+                  <option value="day">Harian</option>
+                  <option value="week">Mingguan</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                className="rounded-none border-[2px] border-black font-mono text-xs font-bold"
+                onClick={() => {
+                  window.location.href = exportUrl;
+                }}
+                data-testid="button-dashboard-export-csv"
+              >
+                EXPORT CSV
+              </Button>
+            </div>
+          </div>
+          <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+            Window aktif: {data?.filters.trendWindow.from ?? fromDate} s/d {data?.filters.trendWindow.to ?? toDate} ({groupBy})
+          </p>
+        </Card>
+
         {isLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-24 w-full" />
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+            {[1, 2, 3, 4, 5].map((item) => (
+              <Skeleton key={item} className="h-24 w-full" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="summary-stats">
-            <Card className="p-4 border-[2px] border-black">
-              <p className="font-mono text-xs text-muted-foreground uppercase tracking-wide">Total OP</p>
-              <p className="font-serif text-3xl font-black mt-1" data-testid="text-total-op">{totalOP}</p>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-5" data-testid="summary-stats">
+            <Card className="border-[2px] border-black p-4">
+              <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">Total WP</p>
+              <p className="mt-1 font-serif text-3xl font-black">{summary.totalWp}</p>
             </Card>
-            <Card className="p-4 border-[2px] border-black">
-              <p className="font-mono text-xs text-muted-foreground uppercase tracking-wide">Sudah Update</p>
-              <p className="font-serif text-3xl font-black mt-1 text-green-700" data-testid="text-total-updated">{totalUpdated}</p>
+            <Card className="border-[2px] border-black p-4">
+              <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">Total OP</p>
+              <p className="mt-1 font-serif text-3xl font-black">{summary.totalOp}</p>
             </Card>
-            <Card className="p-4 border-[2px] border-black">
-              <p className="font-mono text-xs text-muted-foreground uppercase tracking-wide">Belum Update</p>
-              <p className="font-serif text-3xl font-black mt-1 text-orange-600" data-testid="text-total-pending">{totalPending}</p>
+            <Card className="border-[2px] border-black p-4">
+              <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">Sudah Update</p>
+              <p className="mt-1 font-serif text-3xl font-black text-green-700">{summary.totalUpdated}</p>
             </Card>
-            <Card className="p-4 border-[2px] border-black">
-              <p className="font-mono text-xs text-muted-foreground uppercase tracking-wide">Overall Progress</p>
-              <p className="font-serif text-3xl font-black mt-1" data-testid="text-overall-percentage">{overallPercentage}%</p>
-              <Progress value={overallPercentage} className="mt-2 h-2" />
+            <Card className="border-[2px] border-black p-4">
+              <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">Belum Update</p>
+              <p className="mt-1 font-serif text-3xl font-black text-orange-600">{summary.totalPending}</p>
+            </Card>
+            <Card className="border-[2px] border-black p-4">
+              <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">Overall Progress</p>
+              <p className="mt-1 font-serif text-3xl font-black">{summary.overallPercentage}%</p>
+              <Progress value={summary.overallPercentage} className="mt-2 h-2" />
             </Card>
           </div>
         )}
 
         <div className="space-y-3" data-testid="progress-table">
-          <h3 className="font-serif text-lg font-black border-b-[2px] border-black pb-2">
-            PROGRESS PER JENIS PAJAK
-          </h3>
+          <h3 className="border-b-[2px] border-black pb-2 font-serif text-lg font-black">PROGRESS PER JENIS PAJAK</h3>
 
           {isLoading ? (
             <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-20 w-full" />
+              {[1, 2, 3].map((item) => (
+                <Skeleton key={item} className="h-16 w-full" />
               ))}
             </div>
           ) : (
-            jenisStats.map(({ jenis, total, updated, pending, percentage, ops }) => (
-              <div key={jenis} className="border-[2px] border-black rounded-md overflow-hidden" data-testid={`progress-row-${getShortLabel(jenis)}`}>
-                <button
-                  onClick={() => toggleExpand(jenis)}
-                  className="w-full text-left p-4 flex items-center gap-4 bg-white hover:bg-gray-50 transition-colors"
-                  data-testid={`button-expand-${getShortLabel(jenis)}`}
-                >
-                  <Badge
-                    className="font-mono text-xs font-bold text-white border-0 no-default-hover-elevate no-default-active-elevate"
-                    style={{ backgroundColor: JENIS_PAJAK_COLORS[jenis] || "#6B7280" }}
-                  >
-                    {getShortLabel(jenis)}
-                  </Badge>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-mono text-sm font-bold truncate">{jenis}</p>
-                    <div className="flex items-center gap-4 mt-1 flex-wrap">
-                      <span className="font-mono text-xs text-muted-foreground">{total} total</span>
-                      <span className="font-mono text-xs text-green-700">{updated} sudah update</span>
-                      <span className="font-mono text-xs text-orange-600">{pending} belum update</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <div className="w-32 hidden sm:block">
-                      <Progress value={percentage} className="h-2" />
-                    </div>
-                    <span className="font-mono text-sm font-bold w-12 text-right">{percentage}%</span>
-                    {expandedJenis === jenis ? (
-                      <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                    )}
-                  </div>
-                </button>
+            <div className="overflow-x-auto rounded-md border-[2px] border-black">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b-[2px] border-black">
+                    <TableHead className="font-mono text-xs font-bold">Jenis Pajak</TableHead>
+                    <TableHead className="font-mono text-xs font-bold text-right">Total</TableHead>
+                    <TableHead className="font-mono text-xs font-bold text-right">Updated</TableHead>
+                    <TableHead className="font-mono text-xs font-bold text-right">Pending</TableHead>
+                    <TableHead className="font-mono text-xs font-bold text-right">Progress</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {byJenis.map((row) => (
+                    <TableRow key={row.jenisPajak} className="border-b border-black/10">
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            className="border-0 font-mono text-xs font-bold text-white no-default-hover-elevate no-default-active-elevate"
+                            style={{ backgroundColor: JENIS_PAJAK_COLORS[row.jenisPajak] ?? "#111827" }}
+                          >
+                            {getShortLabel(row.jenisPajak)}
+                          </Badge>
+                          <span className="font-mono text-xs">{row.jenisPajak}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs">{row.total}</TableCell>
+                      <TableCell className="text-right font-mono text-xs text-green-700">{row.updated}</TableCell>
+                      <TableCell className="text-right font-mono text-xs text-orange-600">{row.pending}</TableCell>
+                      <TableCell className="w-[180px]">
+                        <div className="flex items-center gap-3">
+                          <Progress value={row.percentage} className="h-2 flex-1" />
+                          <span className="w-10 text-right font-mono text-xs font-bold">{row.percentage}%</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
 
-                {expandedJenis === jenis && (
-                  <div className="border-t-[2px] border-black overflow-x-auto" data-testid={`table-${getShortLabel(jenis)}`}>
-                    {ops.length === 0 ? (
-                      <div className="p-6 text-center">
-                        <p className="font-mono text-sm text-muted-foreground">Belum ada objek pajak untuk jenis ini</p>
-                      </div>
-                    ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="border-b-[2px] border-black">
-                            <TableHead className="font-mono text-xs font-bold">NOPD</TableHead>
-                            <TableHead className="font-mono text-xs font-bold">Nama Objek</TableHead>
-                            <TableHead className="font-mono text-xs font-bold">Alamat</TableHead>
-                            <TableHead className="font-mono text-xs font-bold">Kecamatan</TableHead>
-                            <TableHead className="font-mono text-xs font-bold text-right">Tarif</TableHead>
-                            <TableHead className="font-mono text-xs font-bold text-right">Pajak Bulanan</TableHead>
-                            <TableHead className="font-mono text-xs font-bold text-center">Status</TableHead>
-                            <TableHead className="font-mono text-xs font-bold text-center">Detail</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {ops.map((op) => {
-                            const hasDetail = op.hasDetail;
-                            const wp = op.wpId ? wpMap.get(op.wpId) : null;
-                            return (
-                              <TableRow
-                                key={op.id}
-                                className={`border-b border-black/10 ${hasDetail ? "bg-green-50/50" : "bg-orange-50/50"}`}
-                                data-testid={`row-op-${op.id}`}
-                              >
-                                <TableCell className="font-mono text-xs">{op.nopd}</TableCell>
-                                <TableCell>
-                                  <div>
-                                    <p className="font-mono text-xs font-bold">{op.namaOp}</p>
-                                    {wp && (
-                                      <p className="font-mono text-[10px] text-muted-foreground">WP: {wp.displayName}</p>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="font-mono text-xs max-w-[200px] truncate">{op.alamatOp}</TableCell>
-                                <TableCell className="font-mono text-xs">{op.kecamatan || "-"}</TableCell>
-                                <TableCell className="font-mono text-xs text-right">{op.tarifPersen ? `${op.tarifPersen}%` : "-"}</TableCell>
-                                <TableCell className="font-mono text-xs text-right">{formatCurrency(op.pajakBulanan)}</TableCell>
-                                <TableCell className="text-center">
-                                  <Badge
-                                    variant={op.status === "active" ? "default" : "secondary"}
-                                    className="font-mono text-[10px]"
-                                  >
-                                    {op.status}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  {hasDetail ? (
-                                    <CheckCircle2 className="w-4 h-4 text-green-600 mx-auto" data-testid={`icon-updated-${op.id}`} />
-                                  ) : (
-                                    <XCircle className="w-4 h-4 text-orange-500 mx-auto" data-testid={`icon-pending-${op.id}`} />
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    )}
-                  </div>
-                )}
+        <div className="space-y-3" data-testid="trend-chart">
+          <h3 className="border-b-[2px] border-black pb-2 font-serif text-lg font-black">TREND PERIODIK OP</h3>
+
+          {isLoading ? (
+            <Skeleton className="h-[320px] w-full" />
+          ) : (
+            <Card className="border-[2px] border-black p-4">
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer>
+                  <LineChart data={trend}>
+                    <CartesianGrid strokeDasharray="2 2" stroke="#11111133" />
+                    <XAxis dataKey="periodStart" tick={{ fontSize: 11 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="createdOp" name="OP Dibuat" stroke="#FF6B00" strokeWidth={3} dot={false} />
+                    <Line type="monotone" dataKey="verifiedOp" name="OP Terverifikasi" stroke="#16A34A" strokeWidth={3} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
-            ))
+            </Card>
           )}
         </div>
       </div>
     </BackofficeLayout>
   );
 }
-
-

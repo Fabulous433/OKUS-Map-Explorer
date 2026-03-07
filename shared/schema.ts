@@ -684,6 +684,9 @@ export type PaginationMeta = {
   totalPages: number;
   hasNext: boolean;
   hasPrev: boolean;
+  mode?: "offset" | "cursor";
+  cursor?: number | null;
+  nextCursor?: number | null;
 };
 
 export type PaginatedResult<T> = {
