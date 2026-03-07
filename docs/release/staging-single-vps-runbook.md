@@ -100,6 +100,9 @@ Dari terminal/console service staging (EasyPanel):
 npm run db:push
 ```
 
+Catatan:
+- Script ini sekarang explicit memakai `drizzle.config.ts`, jadi tidak lagi fallback ke `drizzle.config.json`.
+
 Lalu restart service staging jika diperlukan.
 
 ## Step 6 — Validasi Operasional Staging
