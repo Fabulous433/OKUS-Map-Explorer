@@ -18,6 +18,20 @@ Menjamin data dapat dipulihkan saat incident dengan kebijakan backup yang konsis
 - Weekly: setiap Minggu pukul 02:00.
 - Monthly: tanggal 1 setiap bulan pukul 03:00.
 
+## Command Baseline
+Gunakan command berikut untuk operasi manual:
+```bash
+npm run ops:backup:daily
+npm run ops:backup:weekly
+npm run ops:backup:monthly
+npm run ops:backup:prune
+```
+
+Dry-run pruning:
+```bash
+npm run ops:backup:prune:dry
+```
+
 ## Format Nama File
 Gunakan pola:
 `okus-map-explorer_<env>_<frequency>_<YYYYMMDD-HHMMSS>.sql.gz`
@@ -60,6 +74,10 @@ Jika backup gagal:
 2. Retry maksimal 3 kali dalam 60 menit.
 3. Jika tetap gagal, eskalasi ke owner DB + owner aplikasi.
 4. Laporkan dampak pada daily ops report.
+
+## Catatan Kompatibilitas
+- Script pruning baseline hanya mengelola file dengan pola nama standar.
+- File backup legacy/manual di luar pola standar ditandai `skipped` dan perlu ditata manual.
 
 ## Review Cadence
 - Review mingguan: status keberhasilan backup.

@@ -13,6 +13,7 @@ Memastikan rollback bisa dijalankan cepat dan aman ketika release gagal.
 - Release version:
 - Executor:
 - Approver:
+- Environment:
 
 ## Langkah Rollback
 
@@ -27,11 +28,18 @@ Memastikan rollback bisa dijalankan cepat dan aman ketika release gagal.
 ### 3) App rollback
 - [ ] Redeploy artifact versi stabil terakhir.
 - [ ] Validasi service health endpoint.
+- [ ] Jalankan smoke critical path pasca rollback.
 
 ### 4) DB rollback (jika dibutuhkan)
 - [ ] Konfirmasi backup point-in-time yang akan dipakai.
 - [ ] Restore ke DB target sesuai runbook restore.
 - [ ] Verifikasi integritas data minimum.
+
+Command baseline (lokal/staging):
+```bash
+npm run ops:backup:daily
+tsx script/ops-restore-drill.ts --file backups/daily/<backup-file>.sql.gz --cleanup
+```
 
 ### 5) Pasca rollback
 - [ ] Jalankan smoke test checklist.

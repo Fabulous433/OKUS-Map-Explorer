@@ -16,6 +16,13 @@ Mensimulasikan hari-H go-live secara end-to-end sebelum production release.
 - [ ] Eksekusi rollback sesuai checklist.
 - [ ] Verifikasi sistem kembali normal.
 
+Command baseline:
+```bash
+npm run ops:smoke
+npm run ops:backup:daily
+tsx script/ops-restore-drill.ts --file backups/daily/<backup-file>.sql.gz --cleanup
+```
+
 ## Metrik yang Dicatat
 - Durasi deploy.
 - Durasi deteksi incident.

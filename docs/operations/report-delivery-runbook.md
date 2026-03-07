@@ -7,8 +7,8 @@ Memastikan file export terjadwal dikirim ke lokasi tujuan yang disepakati dan bi
 - File drop ke storage internal terstruktur per tanggal dan jenis laporan.
 
 Struktur path contoh:
-- `/reports/daily/YYYY/MM/DD/`
-- `/reports/weekly/YYYY/MM/DD/`
+- `reports/daily/YYYY/MM/DD/`
+- `reports/weekly/YYYY/MM/DD/`
 
 ## Langkah Delivery
 1. Generate file report sesuai standard.
@@ -16,6 +16,12 @@ Struktur path contoh:
 3. Upload/move file ke path target.
 4. Catat metadata delivery (timestamp, file path, status).
 5. Kirim notifikasi internal sederhana (log/board) jika diperlukan.
+
+Command baseline:
+```bash
+npm run ops:report:daily
+npm run ops:report:weekly
+```
 
 ## Validasi Pasca Delivery
 - File dapat diakses oleh tim yang berwenang.

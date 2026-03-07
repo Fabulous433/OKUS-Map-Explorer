@@ -5,6 +5,7 @@
 - Environment:
 - Kandidat release:
 - Tim pelaksana:
+- Ticket rehearsal:
 
 ## Scope Rehearsal
 - [ ] Deploy kandidat release
@@ -16,15 +17,22 @@
 - Start time:
 - End time:
 - Durasi total:
+- Evidence commands:
+  - `npm run check`
+  - `npm run test:integration`
+  - `npm run ops:backup:daily`
+  - `tsx script/ops-restore-drill.ts --file ... --cleanup`
 
 ## Hasil Smoke
 - Status: PASS / FAIL
 - Temuan utama:
+- Referensi smoke checklist:
 
 ## Hasil Rollback Simulation
 - Status: PASS / FAIL
 - Durasi rollback:
 - Temuan utama:
+- Referensi rollback checklist:
 
 ## Risiko yang Terdeteksi
 1.

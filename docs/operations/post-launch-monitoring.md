@@ -10,6 +10,11 @@ Memastikan stabilisasi produksi pasca go-live dengan monitoring terstruktur.
 - Slow query frequency.
 - Job export harian/mingguan.
 
+Command baseline:
+```bash
+npm run ops:post-launch:snapshot
+```
+
 ## Daily Checklist
 - [ ] Tidak ada incident P0/P1 aktif.
 - [ ] Backup job sukses.
@@ -28,3 +33,8 @@ Memastikan stabilisasi produksi pasca go-live dengan monitoring terstruktur.
 - Availability < target harian.
 - p95 > 2x baseline selama > 30 menit.
 - Error rate critical path meningkat berulang.
+
+## Evidence
+- Simpan snapshot harian ke:
+  - `reports/post-launch/YYYY/MM/DD/post-launch-snapshot_<timestamp>.json`
+- Ringkas hasil ke dokumen post-launch summary periodik.

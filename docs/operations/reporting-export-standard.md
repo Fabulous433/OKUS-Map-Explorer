@@ -16,6 +16,14 @@ Semua file export wajib menyertakan:
 - `filter_snapshot`
 - `generated_by` (system/user)
 
+Implementasi baseline:
+- Script: `script/ops-report-export.ts`
+- Command:
+```bash
+npm run ops:report:daily
+npm run ops:report:weekly
+```
+
 ## Naming Convention
 `<report_name>_<frequency>_<YYYYMMDD-HHMMSS>.csv`
 
@@ -34,3 +42,9 @@ Contoh:
   - tulis error log dengan request id,
   - tandai job status gagal,
   - retry sesuai policy schedule.
+
+## Output Directory Baseline
+- Root default: `reports/`
+- Struktur:
+  - `reports/daily/YYYY/MM/DD/`
+  - `reports/weekly/YYYY/MM/DD/`

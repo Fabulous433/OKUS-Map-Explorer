@@ -6,4 +6,7 @@ vite.config.ts.*
 *.tar.gz
 .env.local
 .env
+backups/**/okus-map-explorer_*.sql.gz
+backups/integration-ops-*/
+reports/**
 

@@ -1,6 +1,124 @@
 # Changelog
 
-## Phase 2.6 — Data Lifecycle Hardening (In Progress)
+## Phase 2.10 — Production Stabilization + Post-Launch Review (Completed Dry-Run Baseline)
+
+### Added
+- Post-launch snapshot automation:
+  - `script/ops-post-launch-snapshot.ts`
+- npm command:
+  - `ops:post-launch:snapshot`
+- Integration suite baru:
+  - `tests/integration/ops-post-launch.integration.ts`
+- Evidence doc:
+  - `docs/operations/post-launch-summary-2026-03-07.md`
+
+### Improved
+- Wave 5 docs diperkuat agar operasional pasca-launch punya command baseline dan evidence path:
+  - `docs/operations/post-launch-monitoring.md`
+  - `docs/operations/incident-review-template.md`
+  - `docs/operations/post-launch-summary.md`
+
+### Fixed
+- Gap monitoring pasca-launch yang sebelumnya hanya template tanpa snapshot automation.
+
+### Breaking
+- Tidak ada breaking API; perubahan fokus pada operasi pasca go-live.
+
+## Phase 2.11 — Staging/Production Execution Window Pack (Docs Lock)
+
+### Added
+- Runbook eksekusi staging berurutan:
+  - `docs/release/staging-execution-window-runbook.md`
+- Template approval owner:
+  - `docs/release/owner-approval-log-template.md`
+- Template decision log:
+  - `docs/release/go-no-go-decision-log-template.md`
+
+### Improved
+- `docs/release/release-readiness-gate.md` kini menautkan artefak wajib untuk sign-off final.
+
+### Fixed
+- Gap handoff eksekusi staging/prod yang sebelumnya belum punya urutan command + approval artifact baku.
+
+### Breaking
+- Tidak ada breaking API; perubahan fokus pada governance release execution.
+
+## Phase 2.9 — Release Readiness Gate + Go-Live Rehearsal (Completed Dry-Run Baseline)
+
+### Added
+- Smoke automation script:
+  - `script/ops-smoke-check.ts`
+- npm command:
+  - `ops:smoke`
+- Integration suite baru:
+  - `tests/integration/ops-smoke-check.integration.ts`
+- Evidence docs:
+  - `docs/release/go-live-rehearsal-report-2026-03-07.md`
+  - `docs/release/release-readiness-board-2026-03-07.md`
+
+### Improved
+- Dokumen Wave 4 diperkuat dengan command baseline dan evidence board:
+  - `docs/release/go-live-rehearsal-checklist.md`
+  - `docs/release/release-readiness-gate.md`
+  - `docs/release/slo-baseline.md`
+
+### Fixed
+- Gap validasi smoke critical path yang sebelumnya belum punya automation command khusus.
+
+### Breaking
+- Tidak ada breaking API; perubahan fokus pada governance release.
+
+## Phase 2.8 — Reporting/Export Operasional + Scheduling (Completed)
+
+### Added
+- Script scheduled export operasional:
+  - `script/ops-report-export.ts`
+- npm commands:
+  - `ops:report:daily`
+  - `ops:report:weekly`
+- Integration suite baru:
+  - `tests/integration/ops-report-export.integration.ts`
+- Evidence report:
+  - `docs/operations/reporting-export-evidence-2026-03-07.md`
+- Baseline env reporting ops:
+  - `REPORT_EXPORT_*` pada `.env.example`
+
+### Improved
+- `docs/operations/*` sekarang selaras dengan command runnable (daily/weekly export) dan output directory baseline `reports/<frequency>/YYYY/MM/DD`.
+- Katalog laporan operasional kini lock ke artifact naming actual dari script.
+
+### Fixed
+- Gap antara policy scheduled export dan implementasi executable untuk generate artifact CSV.
+
+### Breaking
+- Tidak ada breaking API; perubahan fokus pada operasional reporting/export.
+
+## Phase 2.7 — UAT Framework + Smoke + Rollback Drill (Completed)
+
+### Added
+- Evidence report rehearsal:
+  - `docs/uat/release-rehearsal-report-2026-03-07.md`
+- Gate lock section pada release readiness:
+  - `docs/release/release-readiness-gate.md`
+- Penguatan checklist operasional:
+  - `docs/uat/uat-checklist.md`
+  - `docs/uat/smoke-test-checklist.md`
+  - `docs/runbooks/rollback-checklist.md`
+  - `docs/uat/release-rehearsal-report-template.md`
+
+### Improved
+- Acceptance Wave 2 sekarang punya evidence eksplisit:
+  - dry-run rehearsal,
+  - smoke pass,
+  - rollback simulation pass.
+
+### Fixed
+- Gap antara template checklist dan bukti eksekusi rehearsal.
+
+### Breaking
+- Tidak ada breaking API; perubahan fokus pada release governance dan operasional.
+
+## Phase 2.6 — Data Lifecycle Hardening (Completed)
 
 ### Added
 - Baseline runbook data lifecycle:
@@ -8,10 +126,19 @@
   - `docs/runbooks/restore-drill-runbook.md`
   - `docs/runbooks/data-purge-retention-policy.md`
   - `docs/runbooks/restore-drill-evidence-template.md`
+  - `docs/runbooks/restore-drill-evidence-2026-03-07.md`
 - Template dokumen eksekusi production readiness:
   - `docs/uat/*` (UAT, smoke, release rehearsal)
   - `docs/release/*` (gate, rehearsal checklist, SLO, escalation)
   - `docs/operations/*` (reporting/export ops, post-launch monitoring/review)
+- Script automation Wave 1:
+  - `script/ops-backup.ts`
+  - `script/ops-backup-prune.ts`
+  - `script/ops-restore-drill.ts`
+- Integration suite baru:
+  - `tests/integration/ops-lifecycle.integration.ts`
+- npm command baseline:
+  - `ops:backup:*`, `ops:backup:prune*`, `ops:restore:drill`
 
 ### Improved
 - `docs/local-development.md` sekarang menautkan seluruh runbook production baseline untuk backup/restore/purge.

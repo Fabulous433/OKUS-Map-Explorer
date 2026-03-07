@@ -35,6 +35,27 @@ Tambahan security baseline login:
 - `AUTH_LOGIN_LOCKOUT_THRESHOLD` (default `5`)
 - `AUTH_LOGIN_LOCKOUT_MS` (default `300000`)
 
+Tambahan data lifecycle ops:
+- `BACKUP_DIR` (default `backups`)
+- `BACKUP_ENV` (default `local`)
+- `BACKUP_CONTAINER` (default `okus-postgres`)
+- `BACKUP_DB_NAME` (default `okus_map_explorer`)
+- `BACKUP_DB_USER` (default `okus_dev`)
+- `BACKUP_RETENTION_DAYS_DAILY` (default `35`)
+- `BACKUP_RETENTION_WEEKS_WEEKLY` (default `12`)
+- `BACKUP_RETENTION_MONTHS_MONTHLY` (default `12`)
+- `RESTORE_DRILL_DB_NAME` (default `okus_restore_drill`)
+
+Tambahan reporting/export ops:
+- `REPORT_EXPORT_BASE_URL` (default `http://127.0.0.1:5000`)
+- `REPORT_EXPORT_OUTPUT_DIR` (default `reports`)
+- `REPORT_EXPORT_USERNAME` (default `admin`)
+- `REPORT_EXPORT_PASSWORD` (default `admin123`)
+- `REPORT_EXPORT_GENERATED_BY` (default `system`)
+- `REPORT_EXPORT_RETRY_ATTEMPTS` (default `3`)
+- `REPORT_EXPORT_RETRY_DELAY_MS` (default `300000`)
+- `REPORT_EXPORT_TIMEOUT_MS` (default `600000`)
+
 ## 3) Install dependency
 ```bash
 npm install
@@ -136,6 +157,29 @@ npm run db:reset
 
 `db:reset` bersifat destruktif (hapus volume).
 
+Operasional backup/restore baseline:
+```bash
+npm run ops:backup:daily
+npm run ops:backup:prune:dry
+npm run ops:restore:drill
+```
+
+Operasional smoke checklist baseline:
+```bash
+npm run ops:smoke
+```
+
+Operasional post-launch monitoring baseline:
+```bash
+npm run ops:post-launch:snapshot
+```
+
+Operasional reporting/export baseline:
+```bash
+npm run ops:report:daily
+npm run ops:report:weekly
+```
+
 ---
 
 ## Runbook Production Baseline
@@ -147,3 +191,33 @@ npm run db:reset
   - `docs/runbooks/data-purge-retention-policy.md`
 - Restore drill evidence template:
   - `docs/runbooks/restore-drill-evidence-template.md`
+- Release rehearsal report template:
+  - `docs/uat/release-rehearsal-report-template.md`
+- Release rehearsal evidence sample:
+  - `docs/uat/release-rehearsal-report-2026-03-07.md`
+- Reporting export standard:
+  - `docs/operations/reporting-export-standard.md`
+- Scheduled export policy:
+  - `docs/operations/scheduled-export-policy.md`
+- Report delivery runbook:
+  - `docs/operations/report-delivery-runbook.md`
+- Reporting export evidence sample:
+  - `docs/operations/reporting-export-evidence-2026-03-07.md`
+- Go-live rehearsal checklist:
+  - `docs/release/go-live-rehearsal-checklist.md`
+- Go-live rehearsal report sample:
+  - `docs/release/go-live-rehearsal-report-2026-03-07.md`
+- Release readiness board sample:
+  - `docs/release/release-readiness-board-2026-03-07.md`
+- Staging execution window runbook:
+  - `docs/release/staging-execution-window-runbook.md`
+- Owner approval log template:
+  - `docs/release/owner-approval-log-template.md`
+- GO/NO-GO decision log template:
+  - `docs/release/go-no-go-decision-log-template.md`
+- Post-launch monitoring guide:
+  - `docs/operations/post-launch-monitoring.md`
+- Post-launch summary template:
+  - `docs/operations/post-launch-summary.md`
+- Post-launch summary evidence sample:
+  - `docs/operations/post-launch-summary-2026-03-07.md`

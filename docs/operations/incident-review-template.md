@@ -17,6 +17,12 @@
 2. Waktu - Event
 3. Waktu - Event
 
+## Evidence Link
+- Request ID terkait:
+- Log query/app:
+- Snapshot referensi (`ops:post-launch:snapshot`):
+- Link runbook rollback/restore:
+
 ## Root Cause Analysis
 - Primary cause:
 - Contributing factors:

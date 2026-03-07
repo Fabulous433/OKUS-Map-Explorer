@@ -14,6 +14,7 @@ Memvalidasi alur bisnis utama sebelum release ke production.
 - Build version:
 - Tester:
 - Reviewer:
+- Defect tracker:
 
 ## Domain Checklist
 
@@ -48,6 +49,16 @@ Memvalidasi alur bisnis utama sebelum release ke production.
 ### 6) Audit & Quality
 - [ ] Mutasi WP/OP/master tercatat di audit log.
 - [ ] Quality check/report mengembalikan warning expected.
+
+## Rule Keputusan UAT
+- Critical fail (`Auth`, `WP`, `OP`, `Master`) -> status UAT otomatis `BELUM LULUS`.
+- Semua critical pass + tidak ada defect blocker -> status UAT `LULUS`.
+- Defect non-blocker wajib punya owner dan target fix date.
+
+## Evidence Wajib
+- Screenshot/video singkat alur critical (opsional tetapi disarankan).
+- Log hasil test API/integration terkait.
+- Referensi ke smoke test dan release rehearsal report terbaru.
 
 ## Sign-off
 - UAT Status: LULUS / BELUM LULUS

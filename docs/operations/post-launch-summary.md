@@ -16,6 +16,7 @@
 - p95 list/dashboard:
 - Total incident:
 - Total rollback:
+- Snapshot health status (`healthy/degraded`):
 
 ## Incident Recap
 - P0:
@@ -39,3 +40,7 @@
 2. Item:
    Priority:
    Owner:
+
+## Referensi Evidence
+- `reports/post-launch/.../post-launch-snapshot_*.json`
+- `docs/operations/incident-review-template.md`

@@ -28,3 +28,14 @@ Menetapkan baseline SLO minimum untuk monitoring readiness produksi.
 ## Review Cadence
 - Weekly review selama 1 bulan pertama production.
 - Setelah stabil: review bulanan.
+
+## Baseline Measurement Procedure
+1. Jalankan smoke/API critical path:
+   - `npm run ops:smoke`
+2. Jalankan regression integration:
+   - `npm run test:integration`
+3. Ambil sampel log `slow-query` dan response timing untuk endpoint SLI kandidat.
+4. Catat hasil ke report rehearsal/go-live board.
+
+## Acceptance Rule
+- Jika ada indikasi p95 > 500ms konsisten pada endpoint list/dashboard di staging baseline dataset, status release harus `NO-GO` sampai RCA + perbaikan selesai.

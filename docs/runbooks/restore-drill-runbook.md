@@ -68,6 +68,17 @@ npm run test:integration
 docker exec -i okus-postgres psql -U okus_dev -d postgres -c "DROP DATABASE IF EXISTS okus_restore_drill;"
 ```
 
+## Command Baseline (Script)
+Alternatif otomatis:
+```bash
+npm run ops:restore:drill
+```
+
+Dengan file spesifik + cleanup otomatis:
+```bash
+tsx script/ops-restore-drill.ts --file backups/daily/<backup-file>.sql.gz --cleanup
+```
+
 ## Kriteria Lulus Drill
 - Restore selesai tanpa error fatal.
 - Validasi tabel dan data minimum lolos.

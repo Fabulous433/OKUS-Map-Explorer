@@ -16,12 +16,42 @@ Ringkasan fase yang sudah selesai sampai saat ini:
   - Deprecation plan offset pagination setelah stabil di production.
 
 ## Status Eksekusi Saat Ini
-- Active now: Wave 1 (Data Lifecycle Hardening).
+- Completed: Wave 1 (Data Lifecycle Hardening).
+- Completed: Wave 2 dry-run baseline (UAT framework + smoke + rollback checklist + rehearsal report).
 - Completed in this wave (docs baseline):
   - backup retention policy,
   - restore drill runbook,
   - purge & retention policy,
   - restore drill evidence template.
+- Completed in this wave (automation baseline):
+  - backup script (`daily/weekly/monthly`),
+  - retention prune script,
+  - restore drill helper script.
+- Completed in this wave (execution evidence):
+  - restore drill evidence `docs/runbooks/restore-drill-evidence-2026-03-07.md` (backup restore + row count validation lulus).
+- Completed in Wave 2 (execution evidence):
+  - release rehearsal report `docs/uat/release-rehearsal-report-2026-03-07.md`.
+  - smoke/rollback gate baseline dikunci di `docs/release/release-readiness-gate.md`.
+- Completed: Wave 3 MVP baseline (scheduled export script + ops integration test + reporting docs lock).
+- Completed in Wave 3 (execution evidence):
+  - integration test `tests/integration/ops-report-export.integration.ts`.
+  - command baseline `npm run ops:report:daily` / `npm run ops:report:weekly`.
+  - reporting export docs baseline (`docs/operations/*`) tersinkron.
+  - evidence report `docs/operations/reporting-export-evidence-2026-03-07.md`.
+- Completed: Wave 4 dry-run baseline (smoke automation + release readiness board + go-live rehearsal report).
+- Completed in Wave 4 (execution evidence):
+  - integration test `tests/integration/ops-smoke-check.integration.ts`.
+  - go-live rehearsal report `docs/release/go-live-rehearsal-report-2026-03-07.md`.
+  - release readiness board `docs/release/release-readiness-board-2026-03-07.md`.
+- Completed: Wave 5 dry-run baseline (post-launch snapshot automation + summary pack).
+- Completed in Wave 5 (execution evidence):
+  - integration test `tests/integration/ops-post-launch.integration.ts`.
+  - post-launch summary `docs/operations/post-launch-summary-2026-03-07.md`.
+- Active now: staging/prod execution window (non-dev environment evidence collection + owner approvals).
+- Execution pack ready:
+  - `docs/release/staging-execution-window-runbook.md`
+  - `docs/release/owner-approval-log-template.md`
+  - `docs/release/go-no-go-decision-log-template.md`
 - Prepared templates for next waves:
   - UAT/smoke/rollback/rehearsal report.
   - Release gate, SLO baseline, escalation matrix.

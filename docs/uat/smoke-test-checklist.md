@@ -8,6 +8,7 @@ Verifikasi cepat bahwa sistem sehat setelah deploy dan siap digunakan.
 - Environment:
 - Build:
 - Executor:
+- Ticket release:
 
 ## Pre-Deploy
 - [ ] Backup terbaru tersedia.
@@ -33,6 +34,10 @@ Verifikasi cepat bahwa sistem sehat setelah deploy dan siap digunakan.
 - [ ] Header `x-request-id` muncul di response API.
 - [ ] Slow query log tidak menunjukkan spike abnormal.
 - [ ] Tidak ada error burst di log aplikasi pasca deploy.
+
+## Pass Criteria
+- Semua item `Post-Deploy (Critical Path)` harus `PASS`.
+- Jika satu critical path gagal, status smoke otomatis `FAIL` dan rollback dieksekusi.
 
 ## Keputusan
 - Smoke Status: PASS / FAIL

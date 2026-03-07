@@ -17,6 +17,11 @@ Menetapkan jadwal export rutin untuk kebutuhan operasional dan manajemen.
 - Backoff: 5 menit antar percobaan.
 - Timeout generation per report: 10 menit.
 
+Konfigurasi env default:
+- `REPORT_EXPORT_RETRY_ATTEMPTS=3`
+- `REPORT_EXPORT_RETRY_DELAY_MS=300000`
+- `REPORT_EXPORT_TIMEOUT_MS=600000`
+
 ## Job Status
 Setiap job harus mencatat:
 - `job_id`
@@ -34,3 +39,16 @@ Setiap job harus mencatat:
 ## Manual Trigger
 - Boleh dijalankan on-demand oleh role internal.
 - Wajib mencatat actor dan alasan trigger manual.
+
+Command baseline manual:
+```bash
+npm run ops:report:daily
+npm run ops:report:weekly
+```
+
+## Scheduler Baseline (Example)
+Contoh pseudo-cron:
+- Daily 06:00:
+  - `npm run ops:report:daily`
+- Weekly Senin 07:00:
+  - `npm run ops:report:weekly`
