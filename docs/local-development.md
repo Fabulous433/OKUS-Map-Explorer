@@ -220,6 +220,8 @@ npm run ops:report:weekly
   - `docs/release/staging-bootstrap-plan.md`
 - Single VPS + EasyPanel runbook:
   - `docs/release/staging-single-vps-runbook.md`
+- Local -> staging -> production flow:
+  - `docs/release/local-to-deploy-flow.md`
 - Owner approval log template:
   - `docs/release/owner-approval-log-template.md`
 - GO/NO-GO decision log template:

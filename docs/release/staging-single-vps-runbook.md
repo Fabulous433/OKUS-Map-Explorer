@@ -10,6 +10,12 @@ Menjalankan production dan staging di 1 VPS berbasis EasyPanel, dengan isolasi y
 4. Environment variables terpisah.
 5. Backup evidence terpisah.
 
+## Branch Deploy
+1. Staging mengikuti branch `codex/staging`.
+2. Production mengikuti branch `main`.
+3. Flow detail promosi code ada di:
+   - `docs/release/local-to-deploy-flow.md`
+
 ## Struktur di EasyPanel (Recommended)
 Di 1 project EasyPanel, buat:
 1. PostgreSQL service production.
@@ -39,7 +45,7 @@ Catatan:
 ## Step 2 — Buat App Service Staging
 Di EasyPanel:
 1. Create app service dari GitHub repo `OKUS-Map-Explorer`.
-2. Branch: `main` (atau release branch khusus jika kamu pakai).
+2. Branch: `codex/staging`.
 3. Build method: pilih `Dockerfile`.
 4. EasyPanel akan build dari file:
    - `Dockerfile`
@@ -109,10 +115,20 @@ Catatan:
 Lalu restart service staging jika diperlukan.
 
 ## Step 6 — Validasi Operasional Staging
-Masih dari terminal service staging:
+Validasi dibagi 2 layer:
+
+### 6A. Pre-deploy gate (local/CI, bukan dari runtime container staging)
 ```bash
 npm run check
 npm run test:integration
+```
+
+Catatan:
+- `npm run check` memakai `typescript/tsc` yang ada di environment dev/build, bukan di runtime container hasil deploy.
+- Docker image repo ini sekarang menjalankan `npm run check && npm run build` saat build. Jadi jika typecheck gagal, image staging tidak akan terbangun.
+
+### 6B. Post-deploy check (dari terminal service staging atau dari operator)
+```bash
 npm run ops:smoke -- --base-url https://staging-map.domainkamu.com
 npm run ops:report:daily -- --base-url https://staging-map.domainkamu.com
 npm run ops:post-launch:snapshot -- --base-url https://staging-map.domainkamu.com

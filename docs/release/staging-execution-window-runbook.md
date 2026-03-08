@@ -11,6 +11,8 @@ Menjalankan evidence collection final di staging secara terstruktur sebelum kepu
 - Pengisian readiness board + approval log.
 
 ## Referensi Sebelum Mulai
+- Flow promosi code:
+  - `docs/release/local-to-deploy-flow.md`
 - Jika staging belum ada, jalankan dulu:
   - `docs/release/staging-bootstrap-plan.md`
 - Jika pakai 1 VPS untuk production+staging:
@@ -24,8 +26,8 @@ Menjalankan evidence collection final di staging secara terstruktur sebelum kepu
 
 ## Run Order (Wajib)
 1. Validasi build gate:
-   - `npm run check`
-   - `npm run test:integration`
+   - `npm run check` (local/CI sebelum deploy)
+   - `npm run test:integration` (local/CI sebelum deploy)
 2. Backup baseline:
    - backup DB via platform hosting (EasyPanel DB backup/snapshot).
 3. Smoke critical path:

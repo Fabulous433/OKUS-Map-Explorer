@@ -52,6 +52,7 @@ Ringkasan fase yang sudah selesai sampai saat ini:
   - `docs/release/staging-bootstrap-plan.md`
   - `docs/release/staging-single-vps-runbook.md` (EasyPanel-compatible)
   - `docs/release/staging-execution-window-runbook.md`
+  - `docs/release/local-to-deploy-flow.md`
   - `docs/release/owner-approval-log-template.md`
   - `docs/release/go-no-go-decision-log-template.md`
 - Prepared templates for next waves:
