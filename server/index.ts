@@ -12,6 +12,10 @@ const app = express();
 const httpServer = createServer(app);
 const MemoryStore = createMemoryStore(session);
 
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
@@ -33,6 +37,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(
   session({
     secret: env.SESSION_SECRET,
+    proxy: process.env.NODE_ENV === "production",
     resave: false,
     saveUninitialized: false,
     store: new MemoryStore({ checkPeriod: 86_400_000 }),

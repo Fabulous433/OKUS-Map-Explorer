@@ -21,26 +21,34 @@ export type IntegrationServer = {
   close: () => Promise<void>;
 };
 
-export async function createIntegrationServer(): Promise<IntegrationServer> {
+type CreateIntegrationServerOptions = {
+  productionProxy?: boolean;
+};
+
+export async function createIntegrationServer(options: CreateIntegrationServerOptions = {}): Promise<IntegrationServer> {
   await ensureDatabaseConnection();
   await db.execute(sql`alter table users add column if not exists role varchar(20) not null default 'viewer'`);
   await seedDatabase();
 
   const MemoryStore = createMemoryStore(session);
   const app = express();
+  if (options.productionProxy) {
+    app.set("trust proxy", 1);
+  }
   app.use(createRequestContextMiddleware());
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
   app.use(
     session({
       secret: process.env.SESSION_SECRET ?? "integration-test-secret",
+      proxy: options.productionProxy ?? false,
       resave: false,
       saveUninitialized: false,
       store: new MemoryStore({ checkPeriod: 86_400_000 }),
       cookie: {
         httpOnly: true,
         sameSite: "lax",
-        secure: false,
+        secure: options.productionProxy ?? false,
         maxAge: 1000 * 60 * 60 * 8,
       },
     }),
@@ -85,6 +93,9 @@ export async function createIntegrationServer(): Promise<IntegrationServer> {
 
   const withCookie = (init?: RequestInit): RequestInit => {
     const headers = new Headers(init?.headers ?? {});
+    if (options.productionProxy && !headers.has("x-forwarded-proto")) {
+      headers.set("x-forwarded-proto", "https");
+    }
     if (cookieHeader) {
       headers.set("cookie", cookieHeader);
     }
