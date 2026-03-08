@@ -22,7 +22,12 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=build /app/tsconfig.json ./tsconfig.json
 COPY --from=build /app/shared ./shared
+COPY --from=build /app/server ./server
+COPY --from=build /app/script ./script
+COPY --from=build /app/docs/PATDA_MST_KECAMATAN.json ./docs/PATDA_MST_KECAMATAN.json
+COPY --from=build /app/docs/PATDA_MST_KELURAHAN.json ./docs/PATDA_MST_KELURAHAN.json
 
 EXPOSE 5000
 

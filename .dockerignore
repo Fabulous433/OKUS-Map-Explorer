@@ -9,6 +9,8 @@ reports
 tmp-dev-out.log
 tmp-dev-err.log
 npm-debug.log*
-docs
+docs/*
+!docs/PATDA_MST_KECAMATAN.json
+!docs/PATDA_MST_KELURAHAN.json
 attached_assets
 _ai-context

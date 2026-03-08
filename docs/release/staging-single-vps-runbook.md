@@ -98,11 +98,13 @@ Exit check:
 Dari terminal/console service staging (EasyPanel):
 ```bash
 npm run db:push
+npm run seed:bootstrap:staging
 ```
 
 Catatan:
 - Script ini sekarang explicit memakai `drizzle.config.ts`, jadi tidak lagi fallback ke `drizzle.config.json`.
-- Image runtime Docker juga membawa `drizzle.config.ts` + folder `shared/`, sehingga `npm run db:push` bisa dijalankan dari console EasyPanel.
+- Image runtime Docker juga membawa `drizzle.config.ts`, `tsconfig.json`, folder `shared/`, `server/`, `script/`, dan file master wilayah JSON, sehingga command operasional bisa dijalankan dari console EasyPanel.
+- `seed:bootstrap:staging` hanya mengisi `master data` + `auth users` default, tanpa dummy WP/OP.
 
 Lalu restart service staging jika diperlukan.
 

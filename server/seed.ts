@@ -56,7 +56,7 @@ const DEFAULT_AUTH_USERS = [
   { username: "viewer", password: "viewer123", role: "viewer" as const },
 ] as const;
 
-async function seedAuthUsers() {
+export async function seedAuthUsers() {
   for (const item of DEFAULT_AUTH_USERS) {
     const passwordCheck = validatePasswordPolicy(item.password);
     if (!passwordCheck.valid) {
@@ -89,7 +89,7 @@ async function seedAuthUsers() {
   }
 }
 
-async function seedMasterWilayah() {
+export async function seedMasterWilayah() {
   const docsDir = path.resolve(process.cwd(), "docs");
 
   const rawKecamatan = await fs.readFile(path.join(docsDir, "PATDA_MST_KECAMATAN.json"), "utf-8");
@@ -122,7 +122,7 @@ async function seedMasterWilayah() {
   }
 }
 
-async function seedMasterRekening() {
+export async function seedMasterRekening() {
   for (const row of REKENING_DOC_ROWS) {
     await db
       .insert(masterRekeningPajak)
@@ -446,4 +446,3 @@ export async function seedDatabase() {
     log(`Seed error: ${err.message}`, "seed");
   }
 }
-
