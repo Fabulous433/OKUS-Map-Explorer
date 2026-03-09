@@ -15,6 +15,11 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import {
+  ATTACHMENT_ENTITY_TYPES,
+  entityAttachmentResponseSchema,
+  entityAttachmentUploadMetadataSchema,
+} from "./attachments";
+import {
   PBJT_HIBURAN_JENIS_HIBURAN_OPTIONS,
   PBJT_MAKANAN_MINUMAN_JENIS_USAHA_OPTIONS,
   PBJT_MAKANAN_MINUMAN_KLASIFIKASI_RESTORAN_OPTIONS,
@@ -201,6 +206,20 @@ export const auditLog = pgTable("audit_log", {
   afterData: jsonb("after_data"),
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const entityAttachment = pgTable("entity_attachment", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  entityType: varchar("entity_type", { length: 40 }).notNull(),
+  entityId: integer("entity_id").notNull(),
+  documentType: varchar("document_type", { length: 40 }).notNull(),
+  fileName: varchar("file_name", { length: 255 }).notNull(),
+  mimeType: varchar("mime_type", { length: 120 }).notNull(),
+  fileSize: integer("file_size").notNull(),
+  storagePath: varchar("storage_path", { length: 500 }).notNull(),
+  uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+  uploadedBy: varchar("uploaded_by", { length: 120 }).notNull().default("system"),
+  notes: text("notes"),
 });
 
 export const opDetailPbjtMakanMinum = pgTable("op_detail_pbjt_makan_minum", {
@@ -715,6 +734,12 @@ export const qualityCheckInputSchema = z.object({
   alamat: z.string().trim().max(500).optional(),
 });
 
+export const entityAttachmentEntityTypeSchema = z.enum(ATTACHMENT_ENTITY_TYPES);
+export const entityAttachmentUploadSchema = entityAttachmentUploadMetadataSchema.extend({
+  entityType: entityAttachmentEntityTypeSchema,
+  entityId: z.coerce.number().int().positive(),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
@@ -733,12 +758,15 @@ export type MasterKecamatan = typeof masterKecamatan.$inferSelect;
 export type MasterKelurahan = typeof masterKelurahan.$inferSelect;
 export type MasterRekeningPajak = typeof masterRekeningPajak.$inferSelect;
 export type AuditLog = typeof auditLog.$inferSelect;
+export type EntityAttachment = typeof entityAttachment.$inferSelect;
 
 export type MasterKecamatanPayload = z.infer<typeof masterKecamatanPayloadSchema>;
 export type MasterKelurahanPayload = z.infer<typeof masterKelurahanPayloadSchema>;
 export type MasterRekeningPayload = z.infer<typeof masterRekeningPayloadSchema>;
 export type ObjekPajakVerificationPayload = z.infer<typeof objekPajakVerificationSchema>;
 export type QualityCheckInput = z.infer<typeof qualityCheckInputSchema>;
+export type EntityAttachmentUpload = z.infer<typeof entityAttachmentUploadSchema>;
+export type EntityAttachmentResponse = z.infer<typeof entityAttachmentResponseSchema>;
 
 export type InsertObjekPajak = z.infer<typeof insertObjekPajakSchema>;
 export type ObjekPajakRow = typeof objekPajak.$inferSelect;
