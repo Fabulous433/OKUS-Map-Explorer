@@ -14,6 +14,28 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import {
+  PBJT_HIBURAN_JENIS_HIBURAN_OPTIONS,
+  PBJT_MAKANAN_MINUMAN_JENIS_USAHA_OPTIONS,
+  PBJT_MAKANAN_MINUMAN_KLASIFIKASI_RESTORAN_OPTIONS,
+  PBJT_PARKIR_JENIS_LOKASI_OPTIONS,
+  PBJT_PARKIR_JENIS_USAHA_OPTIONS,
+  PBJT_PERHOTELAN_JENIS_USAHA_OPTIONS,
+  PBJT_PERHOTELAN_KLASIFIKASI_OPTIONS,
+  PBJT_PERHOTELAN_KLASIFIKASI_REQUIRED_JENIS,
+  PBJT_TENAGA_LISTRIK_JENIS_USAHA_OPTIONS,
+} from "./pbjt-options";
+export {
+  PBJT_HIBURAN_JENIS_HIBURAN_OPTIONS,
+  PBJT_MAKANAN_MINUMAN_JENIS_USAHA_OPTIONS,
+  PBJT_MAKANAN_MINUMAN_KLASIFIKASI_RESTORAN_OPTIONS,
+  PBJT_PARKIR_JENIS_LOKASI_OPTIONS,
+  PBJT_PARKIR_JENIS_USAHA_OPTIONS,
+  PBJT_PERHOTELAN_JENIS_USAHA_OPTIONS,
+  PBJT_PERHOTELAN_KLASIFIKASI_OPTIONS,
+  PBJT_PERHOTELAN_KLASIFIKASI_REQUIRED_JENIS,
+  PBJT_TENAGA_LISTRIK_JENIS_USAHA_OPTIONS,
+} from "./pbjt-options";
 
 export const STATUS_OPTIONS = ["active", "inactive"] as const;
 export const REKLAME_STATUS_OPTIONS = ["baru", "perpanjangan"] as const;
@@ -186,6 +208,7 @@ export const opDetailPbjtMakanMinum = pgTable("op_detail_pbjt_makan_minum", {
     .primaryKey()
     .references(() => objekPajak.id, { onDelete: "cascade" }),
   jenisUsaha: text("jenis_usaha").notNull(),
+  klasifikasi: text("klasifikasi"),
   kapasitasTempat: integer("kapasitas_tempat").notNull(),
   jumlahKaryawan: integer("jumlah_karyawan"),
   rata2Pengunjung: integer("rata2_pengunjung"),
@@ -203,7 +226,7 @@ export const opDetailPbjtPerhotelan = pgTable("op_detail_pbjt_perhotelan", {
   jenisUsaha: text("jenis_usaha").notNull(),
   jumlahKamar: integer("jumlah_kamar").notNull(),
   klasifikasi: text("klasifikasi"),
-  fasilitas: text("fasilitas"),
+  fasilitas: text("fasilitas").array(),
   rata2PengunjungHarian: integer("rata2_pengunjung_harian"),
   hargaTermurah: decimal("harga_termurah", { precision: 15, scale: 2 }),
   hargaTermahal: decimal("harga_termahal", { precision: 15, scale: 2 }),
@@ -225,6 +248,7 @@ export const opDetailPbjtParkir = pgTable("op_detail_pbjt_parkir", {
   opId: integer("op_id")
     .primaryKey()
     .references(() => objekPajak.id, { onDelete: "cascade" }),
+  jenisUsaha: text("jenis_usaha").notNull(),
   jenisLokasi: text("jenis_lokasi").notNull(),
   kapasitasKendaraan: integer("kapasitas_kendaraan").notNull(),
   tarifParkir: decimal("tarif_parkir", { precision: 15, scale: 2 }),
@@ -247,7 +271,9 @@ export const opDetailPajakReklame = pgTable("op_detail_pajak_reklame", {
     .primaryKey()
     .references(() => objekPajak.id, { onDelete: "cascade" }),
   jenisReklame: text("jenis_reklame").notNull(),
-  ukuranReklame: decimal("ukuran_reklame", { precision: 15, scale: 2 }).notNull(),
+  ukuranPanjang: decimal("ukuran_panjang", { precision: 15, scale: 2 }).notNull(),
+  ukuranLebar: decimal("ukuran_lebar", { precision: 15, scale: 2 }).notNull(),
+  ukuranTinggi: decimal("ukuran_tinggi", { precision: 15, scale: 2 }).notNull(),
   judulReklame: text("judul_reklame"),
   masaBerlaku: text("masa_berlaku"),
   statusReklame: varchar("status_reklame", { length: 20 }).notNull(),
@@ -435,7 +461,8 @@ export const updateWajibPajakPayloadSchema = z
 
 export const detailPbjtMakananSchema = z
   .object({
-    jenisUsaha: z.string().trim().min(1),
+    jenisUsaha: z.enum(PBJT_MAKANAN_MINUMAN_JENIS_USAHA_OPTIONS),
+    klasifikasi: z.enum(PBJT_MAKANAN_MINUMAN_KLASIFIKASI_RESTORAN_OPTIONS).optional(),
     kapasitasTempat: z.coerce.number().int().positive(),
     jumlahKaryawan: z.coerce.number().int().positive().optional(),
     rata2Pengunjung: z.coerce.number().int().positive().optional(),
@@ -444,19 +471,57 @@ export const detailPbjtMakananSchema = z
     hargaTermurah: z.coerce.number().positive().optional(),
     hargaTermahal: z.coerce.number().positive().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.jenisUsaha === "Restoran" && !data.klasifikasi) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["klasifikasi"],
+        message: "Klasifikasi wajib dipilih untuk jenis usaha Restoran",
+      });
+    }
+
+    if (data.jenisUsaha !== "Restoran" && data.klasifikasi) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["klasifikasi"],
+        message: "Klasifikasi hanya berlaku untuk jenis usaha Restoran",
+      });
+    }
+  });
 
 export const detailPbjtPerhotelanSchema = z
   .object({
-    jenisUsaha: z.string().trim().min(1),
+    jenisUsaha: z.enum(PBJT_PERHOTELAN_JENIS_USAHA_OPTIONS),
     jumlahKamar: z.coerce.number().int().positive(),
-    klasifikasi: z.string().trim().min(1).optional(),
-    fasilitas: z.string().trim().min(1).optional(),
+    klasifikasi: z.enum(PBJT_PERHOTELAN_KLASIFIKASI_OPTIONS).optional(),
+    fasilitas: z.array(z.string().trim().min(1)).min(1).optional(),
     rata2PengunjungHarian: z.coerce.number().int().positive().optional(),
     hargaTermurah: z.coerce.number().positive().optional(),
     hargaTermahal: z.coerce.number().positive().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((data, ctx) => {
+    const requiresKlasifikasi = PBJT_PERHOTELAN_KLASIFIKASI_REQUIRED_JENIS.includes(
+      data.jenisUsaha as (typeof PBJT_PERHOTELAN_KLASIFIKASI_REQUIRED_JENIS)[number],
+    );
+
+    if (requiresKlasifikasi && !data.klasifikasi) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["klasifikasi"],
+        message: "Klasifikasi wajib dipilih untuk Hotel/Hostel atau Motel/Losmen",
+      });
+    }
+
+    if (!requiresKlasifikasi && data.klasifikasi) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["klasifikasi"],
+        message: "Klasifikasi hanya berlaku untuk Hotel/Hostel atau Motel/Losmen",
+      });
+    }
+  });
 
 export const detailPbjtHiburanSchema = z
   .object({
@@ -465,11 +530,21 @@ export const detailPbjtHiburanSchema = z
     jamOperasional: z.string().trim().min(1).optional(),
     jumlahKaryawan: z.coerce.number().int().positive().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.jenisHiburan === "Lainnya") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["jenisHiburan"],
+        message: "Jenis hiburan lainnya wajib diisi",
+      });
+    }
+  });
 
 export const detailPbjtParkirSchema = z
   .object({
-    jenisLokasi: z.string().trim().min(1),
+    jenisUsaha: z.enum(PBJT_PARKIR_JENIS_USAHA_OPTIONS),
+    jenisLokasi: z.enum(PBJT_PARKIR_JENIS_LOKASI_OPTIONS),
     kapasitasKendaraan: z.coerce.number().int().positive(),
     tarifParkir: z.coerce.number().positive().optional(),
     rata2Pengunjung: z.coerce.number().int().positive().optional(),
@@ -478,7 +553,7 @@ export const detailPbjtParkirSchema = z
 
 export const detailPbjtTenagaListrikSchema = z
   .object({
-    jenisTenagaListrik: z.string().trim().min(1),
+    jenisTenagaListrik: z.enum(PBJT_TENAGA_LISTRIK_JENIS_USAHA_OPTIONS),
     dayaListrik: z.coerce.number().positive(),
     kapasitas: z.coerce.number().positive().optional(),
   })
@@ -487,7 +562,9 @@ export const detailPbjtTenagaListrikSchema = z
 export const detailPajakReklameSchema = z
   .object({
     jenisReklame: z.string().trim().min(1),
-    ukuranReklame: z.coerce.number().positive(),
+    ukuranPanjang: z.coerce.number().positive(),
+    ukuranLebar: z.coerce.number().positive(),
+    ukuranTinggi: z.coerce.number().positive(),
     judulReklame: z.string().trim().min(1).optional(),
     masaBerlaku: z.string().trim().min(1).optional(),
     statusReklame: z.enum(REKLAME_STATUS_OPTIONS),
@@ -632,6 +709,7 @@ export const qualityCheckInputSchema = z.object({
   nikPengelola: z.string().trim().max(32).optional(),
   npwpBadanUsaha: z.string().trim().max(32).optional(),
   npwpd: z.string().trim().max(30).optional(),
+  excludeWpId: z.number().int().positive().optional(),
   nopd: z.string().trim().max(30).optional(),
   nama: z.string().trim().max(255).optional(),
   alamat: z.string().trim().max(500).optional(),
@@ -747,3 +825,4 @@ export type OpDetailPbjtTenagaListrik = typeof opDetailPbjtTenagaListrik.$inferS
 export type OpDetailPajakReklame = typeof opDetailPajakReklame.$inferSelect;
 export type OpDetailPajakAirTanah = typeof opDetailPajakAirTanah.$inferSelect;
 export type OpDetailPajakWalet = typeof opDetailPajakWalet.$inferSelect;
+

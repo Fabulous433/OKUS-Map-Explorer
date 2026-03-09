@@ -107,6 +107,21 @@ Aturan `NOPD` final:
 - Create/update/import dengan `nopd` manual: wajib tetap mengikuti format resmi
 - `nopd` tetap unique; duplikasi ditolak sebagai hard error
 
+Contract detail OP final:
+- `PBJT Makanan dan Minuman`: `jenisUsaha, klasifikasi, kapasitasTempat, jumlahKaryawan, rata2Pengunjung, jamBuka, jamTutup, hargaTermurah, hargaTermahal`
+  - `jenisUsaha` controlled option: `Restoran | Jasa Boga/Katering`
+  - `klasifikasi` hanya untuk `jenisUsaha = Restoran`
+- `PBJT Jasa Perhotelan`: `jenisUsaha, jumlahKamar, klasifikasi, fasilitas[] , rata2PengunjungHarian, hargaTermurah, hargaTermahal`
+  - `jenisUsaha` controlled option mengikuti master PBJT hotel
+  - `klasifikasi` hanya untuk `Hotel/Hostel` dan `Motel/Losmen`
+- `PBJT Jasa Kesenian dan Hiburan`: `jenisHiburan, kapasitas, jamOperasional, jumlahKaryawan`
+- `PBJT Jasa Parkir`: `jenisUsaha, jenisLokasi, kapasitasKendaraan, tarifParkir, rata2Pengunjung`
+- `PBJT Tenaga Listrik`: `jenisTenagaListrik, dayaListrik, kapasitas`
+- `Pajak Reklame`: `jenisReklame, judulReklame, ukuranPanjang, ukuranLebar, ukuranTinggi, masaBerlaku, statusReklame, namaBiroJasa`
+- `Pajak Air Tanah`: `jenisAirTanah, rata2UkuranPemakaian, kriteriaAirTanah, kelompokUsaha`
+- `Pajak Sarang Burung Walet`: `jenisBurungWalet, panenPerTahun, rata2BeratPanen`
+- `Pajak MBLB`: belum punya tabel detail khusus di fase ini
+
 ### GET `/api/objek-pajak`
 Query:
 - `page`
@@ -226,6 +241,11 @@ Aturan:
 - `POST /api/objek-pajak/import`
 - Auth export: `admin|editor|viewer`
 - Auth import: `admin|editor`
+- `detail_fasilitas` untuk perhotelan memakai format satu kolom dengan delimiter `|`
+- reklame tidak lagi memakai `detail_ukuran_reklame`, tetapi:
+  - `detail_ukuran_panjang`
+  - `detail_ukuran_lebar`
+  - `detail_ukuran_tinggi`
 - Import OP menolak `nopd` yang tidak mengikuti format resmi `AA.BB.CC.XXXX`.
 - Error import dikembalikan per baris dalam bentuk pesan yang sudah dinormalisasi, misalnya:
   - `Baris 4: Format NOPD salah, mohon diperiksa kembali`

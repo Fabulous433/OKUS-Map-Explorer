@@ -11,20 +11,23 @@ const DETAIL_SCENARIOS: DetailScenario[] = [
   {
     jenisPajak: "PBJT Makanan dan Minuman",
     validDetail: {
-      jenisUsaha: "Rumah Makan",
+      jenisUsaha: "Restoran",
+      klasifikasi: "Rumah Makan",
       kapasitasTempat: 40,
     },
   },
   {
     jenisPajak: "PBJT Jasa Perhotelan",
     validDetail: {
-      jenisUsaha: "Hotel",
+      jenisUsaha: "Hotel/Hostel",
       jumlahKamar: 20,
+      klasifikasi: "Bintang 3",
     },
   },
   {
     jenisPajak: "PBJT Jasa Parkir",
     validDetail: {
+      jenisUsaha: "Parkir Swasta",
       jenisLokasi: "Lahan Terbuka",
       kapasitasKendaraan: 25,
     },
@@ -32,14 +35,14 @@ const DETAIL_SCENARIOS: DetailScenario[] = [
   {
     jenisPajak: "PBJT Jasa Kesenian dan Hiburan",
     validDetail: {
-      jenisHiburan: "Karaoke",
+      jenisHiburan: "Tontonan Bioskop",
       kapasitas: 50,
     },
   },
   {
     jenisPajak: "PBJT Tenaga Listrik",
     validDetail: {
-      jenisTenagaListrik: "PLN",
+      jenisTenagaListrik: "Konsumsi PLN",
       dayaListrik: 4400,
     },
   },
@@ -47,7 +50,9 @@ const DETAIL_SCENARIOS: DetailScenario[] = [
     jenisPajak: "Pajak Reklame",
     validDetail: {
       jenisReklame: "Billboard",
-      ukuranReklame: 24,
+      ukuranPanjang: 6,
+      ukuranLebar: 4,
+      ukuranTinggi: 8,
       statusReklame: "baru",
     },
   },
@@ -165,7 +170,8 @@ async function run() {
       kelurahanId,
       status: "active",
       detailPajak: {
-        jenisLokasi: "Gedung",
+        jenisUsaha: "Parkir Swasta",
+        jenisLokasi: "Hotel",
         kapasitasKendaraan: 15,
         tarifParkir: "abc",
       },
@@ -183,6 +189,60 @@ async function run() {
       ),
       "fieldErrors harus menunjuk field numerik yang salah",
     );
+
+    const rekeningMakanan = rekeningList.find((item) => item.jenisPajak === "PBJT Makanan dan Minuman");
+    assert.ok(rekeningMakanan, "Master rekening makanan wajib ada");
+
+    const invalidRestoranKlasifikasi = await jsonRequest("/api/objek-pajak", "POST", {
+      wpId,
+      rekPajakId: requiredNumber(rekeningMakanan!.id, "rek_pajak_id makanan wajib number"),
+      namaOp: `IT Invalid Restoran ${Date.now()}`,
+      alamatOp: "Jl. Invalid Restoran",
+      kecamatanId,
+      kelurahanId,
+      status: "active",
+      detailPajak: {
+        jenisUsaha: "Restoran",
+        kapasitasTempat: 20,
+      },
+    });
+    assert.equal(invalidRestoranKlasifikasi.response.status, 400, "Restoran tanpa klasifikasi harus ditolak");
+
+    const rekeningHotel = rekeningList.find((item) => item.jenisPajak === "PBJT Jasa Perhotelan");
+    assert.ok(rekeningHotel, "Master rekening hotel wajib ada");
+
+    const invalidHotelKlasifikasi = await jsonRequest("/api/objek-pajak", "POST", {
+      wpId,
+      rekPajakId: requiredNumber(rekeningHotel!.id, "rek_pajak_id hotel wajib number"),
+      namaOp: `IT Invalid Hotel ${Date.now()}`,
+      alamatOp: "Jl. Invalid Hotel",
+      kecamatanId,
+      kelurahanId,
+      status: "active",
+      detailPajak: {
+        jenisUsaha: "Hotel/Hostel",
+        jumlahKamar: 12,
+      },
+    });
+    assert.equal(invalidHotelKlasifikasi.response.status, 400, "Hotel/Hostel tanpa klasifikasi harus ditolak");
+
+    const rekeningHiburan = rekeningList.find((item) => item.jenisPajak === "PBJT Jasa Kesenian dan Hiburan");
+    assert.ok(rekeningHiburan, "Master rekening hiburan wajib ada");
+
+    const invalidHiburanLainnya = await jsonRequest("/api/objek-pajak", "POST", {
+      wpId,
+      rekPajakId: requiredNumber(rekeningHiburan!.id, "rek_pajak_id hiburan wajib number"),
+      namaOp: `IT Invalid Hiburan ${Date.now()}`,
+      alamatOp: "Jl. Invalid Hiburan",
+      kecamatanId,
+      kelurahanId,
+      status: "active",
+      detailPajak: {
+        jenisHiburan: "Lainnya",
+        kapasitas: 30,
+      },
+    });
+    assert.equal(invalidHiburanLainnya.response.status, 400, "Jenis hiburan Lainnya tanpa isian bebas harus ditolak");
   } finally {
     for (const id of createdIds) {
       await jsonRequest(`/api/objek-pajak/${id}`, "DELETE");

@@ -108,7 +108,11 @@ type ObjekPajakMapFilter = {
 function cleanDetailObject(input: DetailRecord | null | undefined) {
   if (!input) return null;
   const cleaned = Object.fromEntries(
-    Object.entries(input).filter(([, value]) => value !== null && value !== undefined && value !== ""),
+    Object.entries(input).filter(([, value]) => {
+      if (value === null || value === undefined || value === "") return false;
+      if (Array.isArray(value) && value.length === 0) return false;
+      return true;
+    }),
   );
   return Object.keys(cleaned).length > 0 ? cleaned : null;
 }
@@ -143,6 +147,18 @@ function toTimeString(value: unknown) {
   if (value === null || value === undefined || value === "") return undefined;
   const str = String(value).trim();
   return str.length > 0 ? str : undefined;
+}
+
+function toStringArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized = value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter((item) => item.length > 0);
+
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 function hasAnyBadanUsahaValue(input: WpBadanUsahaInput | null | undefined) {
@@ -294,6 +310,7 @@ async function upsertDetailByJenis(opId: number, jenisPajak: string, detail: unk
     const values = {
       opId,
       jenisUsaha: String(detailValue.jenisUsaha ?? ""),
+      klasifikasi: (detailValue.klasifikasi as string | undefined) ?? null,
       kapasitasTempat: toInteger(detailValue.kapasitasTempat) ?? 0,
       jumlahKaryawan: toInteger(detailValue.jumlahKaryawan),
       rata2Pengunjung: toInteger(detailValue.rata2Pengunjung),
@@ -316,7 +333,7 @@ async function upsertDetailByJenis(opId: number, jenisPajak: string, detail: unk
       jenisUsaha: String(detailValue.jenisUsaha ?? ""),
       jumlahKamar: toInteger(detailValue.jumlahKamar) ?? 0,
       klasifikasi: (detailValue.klasifikasi as string | undefined) ?? null,
-      fasilitas: (detailValue.fasilitas as string | undefined) ?? null,
+      fasilitas: toStringArray(detailValue.fasilitas) ?? null,
       rata2PengunjungHarian: toInteger(detailValue.rata2PengunjungHarian),
       hargaTermurah: toDecimalString(detailValue.hargaTermurah),
       hargaTermahal: toDecimalString(detailValue.hargaTermahal),
@@ -332,6 +349,7 @@ async function upsertDetailByJenis(opId: number, jenisPajak: string, detail: unk
   if (kind === "parkir") {
     const values = {
       opId,
+      jenisUsaha: String(detailValue.jenisUsaha ?? ""),
       jenisLokasi: String(detailValue.jenisLokasi ?? ""),
       kapasitasKendaraan: toInteger(detailValue.kapasitasKendaraan) ?? 0,
       tarifParkir: toDecimalString(detailValue.tarifParkir),
@@ -380,7 +398,9 @@ async function upsertDetailByJenis(opId: number, jenisPajak: string, detail: unk
     const values = {
       opId,
       jenisReklame: String(detailValue.jenisReklame ?? ""),
-      ukuranReklame: toDecimalString(detailValue.ukuranReklame) ?? "0",
+      ukuranPanjang: toDecimalString(detailValue.ukuranPanjang) ?? "0",
+      ukuranLebar: toDecimalString(detailValue.ukuranLebar) ?? "0",
+      ukuranTinggi: toDecimalString(detailValue.ukuranTinggi) ?? "0",
       judulReklame: (detailValue.judulReklame as string | undefined) ?? null,
       masaBerlaku: (detailValue.masaBerlaku as string | undefined) ?? null,
       statusReklame: String(detailValue.statusReklame ?? "baru"),
@@ -449,6 +469,7 @@ async function buildDetailMap(opIds: number[]) {
       row.opId,
       cleanDetailObject({
         jenisUsaha: row.jenisUsaha,
+        klasifikasi: row.klasifikasi,
         kapasitasTempat: row.kapasitasTempat,
         jumlahKaryawan: row.jumlahKaryawan,
         rata2Pengunjung: row.rata2Pengunjung,
@@ -467,7 +488,7 @@ async function buildDetailMap(opIds: number[]) {
         jenisUsaha: row.jenisUsaha,
         jumlahKamar: row.jumlahKamar,
         klasifikasi: row.klasifikasi,
-        fasilitas: row.fasilitas,
+        fasilitas: row.fasilitas ?? undefined,
         rata2PengunjungHarian: row.rata2PengunjungHarian,
         hargaTermurah: row.hargaTermurah,
         hargaTermahal: row.hargaTermahal,
@@ -479,6 +500,7 @@ async function buildDetailMap(opIds: number[]) {
     detailMap.set(
       row.opId,
       cleanDetailObject({
+        jenisUsaha: row.jenisUsaha,
         jenisLokasi: row.jenisLokasi,
         kapasitasKendaraan: row.kapasitasKendaraan,
         tarifParkir: row.tarifParkir,
@@ -515,7 +537,9 @@ async function buildDetailMap(opIds: number[]) {
       row.opId,
       cleanDetailObject({
         jenisReklame: row.jenisReklame,
-        ukuranReklame: row.ukuranReklame,
+        ukuranPanjang: row.ukuranPanjang,
+        ukuranLebar: row.ukuranLebar,
+        ukuranTinggi: row.ukuranTinggi,
         judulReklame: row.judulReklame,
         masaBerlaku: row.masaBerlaku,
         statusReklame: row.statusReklame,
