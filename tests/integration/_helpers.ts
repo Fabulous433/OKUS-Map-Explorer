@@ -15,6 +15,8 @@ export type IntegrationServer = {
   baseUrl: string;
   requestJson: (path: string, init?: RequestInit) => Promise<{ response: Response; body: unknown }>;
   requestText: (path: string, init?: RequestInit) => Promise<{ response: Response; body: string }>;
+  requestBytes: (path: string, init?: RequestInit) => Promise<{ response: Response; body: Uint8Array }>;
+  requestForm: (path: string, method: string, form: FormData) => Promise<{ response: Response; body: unknown }>;
   jsonRequest: (path: string, method: string, body?: unknown) => Promise<{ response: Response; body: unknown }>;
   loginAs: (username?: string, password?: string) => Promise<{ response: Response; body: unknown }>;
   logout: () => Promise<{ response: Response; body: string }>;
@@ -28,6 +30,21 @@ type CreateIntegrationServerOptions = {
 export async function createIntegrationServer(options: CreateIntegrationServerOptions = {}): Promise<IntegrationServer> {
   await ensureDatabaseConnection();
   await db.execute(sql`alter table users add column if not exists role varchar(20) not null default 'viewer'`);
+  await db.execute(sql`
+    create table if not exists entity_attachment (
+      id varchar(64) primary key,
+      entity_type varchar(40) not null,
+      entity_id integer not null,
+      document_type varchar(40) not null,
+      file_name varchar(255) not null,
+      mime_type varchar(120) not null,
+      file_size integer not null,
+      storage_path varchar(500) not null,
+      uploaded_at timestamp not null default now(),
+      uploaded_by varchar(120) not null default 'system',
+      notes text
+    )
+  `);
   await seedDatabase();
 
   const MemoryStore = createMemoryStore(session);
@@ -121,6 +138,13 @@ export async function createIntegrationServer(options: CreateIntegrationServerOp
     return { response, body };
   };
 
+  const requestBytes = async (path: string, init?: RequestInit) => {
+    const response = await fetch(`${baseUrl}${path}`, withCookie(init));
+    updateCookieHeader(response);
+    const body = new Uint8Array(await response.arrayBuffer());
+    return { response, body };
+  };
+
   const jsonRequest = async (path: string, method: string, body?: unknown) => {
     const headers: Record<string, string> = {};
     const init: RequestInit = { method, headers };
@@ -131,6 +155,10 @@ export async function createIntegrationServer(options: CreateIntegrationServerOp
     }
 
     return requestJson(path, init);
+  };
+
+  const requestForm = async (path: string, method: string, form: FormData) => {
+    return requestJson(path, { method, body: form });
   };
 
   const loginAs = async (username = "admin", password = "admin123") => {
@@ -161,6 +189,8 @@ export async function createIntegrationServer(options: CreateIntegrationServerOp
     baseUrl,
     requestJson,
     requestText,
+    requestBytes,
+    requestForm,
     jsonRequest,
     loginAs,
     logout,
