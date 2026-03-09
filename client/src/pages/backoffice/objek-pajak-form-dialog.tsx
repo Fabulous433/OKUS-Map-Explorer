@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { ApiError, type ApiFieldError, apiRequest } from "@/lib/queryClient";
+import { AttachmentPanel } from "@/components/attachments/attachment-panel";
 import type {
   MasterKecamatan,
   MasterKelurahan,
@@ -44,6 +45,13 @@ import {
   OPFormValues,
   QualityWarning,
 } from "./objek-pajak-shared";
+
+const OP_ATTACHMENT_OPTIONS = [
+  { value: "foto_usaha", label: "Foto Usaha" },
+  { value: "foto_lokasi", label: "Foto Lokasi" },
+  { value: "izin_usaha", label: "Izin Usaha" },
+  { value: "dokumen_lain", label: "Dokumen Lain" },
+] as const;
 export function OPFormDialog({
   mode,
   editOp,
@@ -509,6 +517,18 @@ export function OPFormDialog({
                     {item.message}
                   </p>
                 ))}
+              </div>
+            )}
+            {mode === "edit" && editOp ? (
+              <AttachmentPanel
+                entityType="objek_pajak"
+                entityId={editOp.id}
+                title="Lampiran Objek Pajak"
+                documentTypeOptions={[...OP_ATTACHMENT_OPTIONS]}
+              />
+            ) : (
+              <div className="border-[2px] border-dashed border-black bg-[#fffaf0] p-3 font-mono text-[11px] text-gray-700">
+                Upload foto usaha, foto lokasi, dan izin usaha aktif setelah data Objek Pajak berhasil dibuat.
               </div>
             )}
             <Button

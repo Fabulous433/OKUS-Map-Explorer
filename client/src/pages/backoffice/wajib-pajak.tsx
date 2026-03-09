@@ -26,6 +26,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { PaginatedResult, WajibPajakListItem, WajibPajakWithBadanUsaha } from "@shared/schema";
 import AuditHistoryDialog from "@/components/audit-history-dialog";
+import { AttachmentPanel } from "@/components/attachments/attachment-panel";
 
 const ownerFields = [
   ["namaWp", "NAMA WP"],
@@ -116,6 +117,12 @@ type QualityWarning = {
   duplicates?: QualityWarningDuplicate[];
 };
 const INITIAL_CURSOR = 2147483647;
+const WP_ATTACHMENT_OPTIONS = [
+  { value: "ktp", label: "KTP/NIK" },
+  { value: "npwp", label: "NPWP" },
+  { value: "surat_kuasa", label: "Surat Kuasa" },
+  { value: "dokumen_lain", label: "Dokumen Lain" },
+] as const;
 
 function warningFieldLabel(code: string) {
   switch (code) {
@@ -619,6 +626,9 @@ export default function BackofficeWajibPajak() {
           <Form {...addForm}>
             <form onSubmit={addForm.handleSubmit(submitCreate)} className="p-4 space-y-4">
               <WpForm form={addForm} mode="create" />
+              <div className="border-[2px] border-dashed border-black bg-[#fffaf0] p-3 font-mono text-[11px] text-gray-700">
+                Attachment dokumen aktif setelah data Wajib Pajak berhasil dibuat.
+              </div>
               <Button type="submit" className="w-full rounded-none border-[3px] border-black bg-[#FF6B00] text-white font-mono font-bold">
                 {createMutation.isPending ? "MENYIMPAN..." : "SIMPAN"}
               </Button>
@@ -633,6 +643,14 @@ export default function BackofficeWajibPajak() {
           <Form {...editForm}>
             <form onSubmit={editForm.handleSubmit(submitEdit)} className="p-4 space-y-4">
               <WpForm form={editForm} mode="edit" />
+              {edit ? (
+                <AttachmentPanel
+                  entityType="wajib_pajak"
+                  entityId={edit.id}
+                  title="Lampiran Wajib Pajak"
+                  documentTypeOptions={[...WP_ATTACHMENT_OPTIONS]}
+                />
+              ) : null}
               <Button type="submit" className="w-full rounded-none border-[3px] border-black bg-blue-600 text-white font-mono font-bold">
                 {updateMutation.isPending ? "MEMPERBARUI..." : "PERBARUI"}
               </Button>

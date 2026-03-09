@@ -59,6 +59,20 @@
   - `before_data` (jsonb), `after_data` (jsonb), `metadata` (jsonb)
   - `created_at`
 
+### Attachment
+- `entity_attachment`
+  - `id` (PK, string/uuid-like)
+  - `entity_type` (`wajib_pajak|objek_pajak`)
+  - `entity_id`
+  - `document_type`
+  - `file_name`
+  - `mime_type`
+  - `file_size`
+  - `storage_path`
+  - `uploaded_at`
+  - `uploaded_by`
+  - `notes`
+
 ## Relationship Summary
 - `users` dipakai untuk session auth + RBAC layer aplikasi
 - `wajib_pajak (1) -> (N) objek_pajak`
@@ -68,11 +82,14 @@
 - `master_kelurahan (1) -> (N) objek_pajak`
 - `master_kecamatan (1) -> (N) master_kelurahan` (by `cpm_kode_kec`)
 - `objek_pajak (1) -> (0..1) detail_table_by_jenis`
+- `wajib_pajak (1) -> (N) entity_attachment` via (`entity_type='wajib_pajak'`, `entity_id`)
+- `objek_pajak (1) -> (N) entity_attachment` via (`entity_type='objek_pajak'`, `entity_id`)
 
 ## Constraints & Rules
 - Delete master ditolak jika direferensikan OP.
 - Verifikasi OP disimpan di kolom dedicated (`status_verifikasi`, `verified_*`).
 - Rule conditional bisnis WP/OP tetap enforced di aplikasi (Zod/service), bukan DB CHECK kompleks.
+- Attachment file disimpan di filesystem/volume persisten; database hanya menyimpan metadata + `storage_path`.
 
 ## Performance Indexes (Phase 1.9)
 - `objek_pajak`:

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { entityAttachmentResponseSchema } from "@shared/attachments";
 import { createIntegrationServer, requiredNumber, requiredString, type JsonRecord } from "./_helpers";
 
 async function run() {
@@ -38,6 +39,21 @@ async function run() {
     const targetWp = wpItems[0] as JsonRecord;
     const wpId = requiredNumber(targetWp.id, "wp.id wajib number");
     const oldNpwpd = targetWp.npwpd === null || targetWp.npwpd === undefined ? null : String(targetWp.npwpd);
+
+    const attachmentContract = entityAttachmentResponseSchema.parse({
+      id: "att-contract-check",
+      entityType: "wajib_pajak",
+      entityId: wpId,
+      documentType: "ktp",
+      fileName: "ktp.pdf",
+      mimeType: "application/pdf",
+      fileSize: 1024,
+      storagePath: "wajib-pajak/1/att-contract-check-ktp.pdf",
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: "system",
+      notes: null,
+    });
+    assert.equal(attachmentContract.entityId, wpId);
 
     const rekeningTarget =
       (rekeningBody as JsonRecord[]).find((item) => item.jenisPajak === "Pajak MBLB") ??

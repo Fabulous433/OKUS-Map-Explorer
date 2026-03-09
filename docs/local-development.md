@@ -29,6 +29,7 @@ Copy-Item .env.example .env.local
 Tambahan observability:
 - `SLOW_QUERY_MS` (default `300`) untuk threshold logging slow query.
 - `ENABLE_STARTUP_SEED` (default `true` di local) untuk seed otomatis saat boot aplikasi.
+- `ATTACHMENTS_STORAGE_ROOT` (default `./uploads`) untuk root file attachment WP/OP.
 
 Tambahan security baseline login:
 - `AUTH_LOGIN_RATE_LIMIT_WINDOW_MS` (default `60000`)
@@ -141,6 +142,14 @@ Verifikasi endpoint cepat:
 - `GET /api/dashboard/summary/export?includeUnverified=true&from=2026-01-01&to=2026-12-31&groupBy=week`
 - `GET /api/audit-log?limit=5`
 - `GET /api/quality/report`
+- `GET /api/wajib-pajak/:id/attachments`
+- `GET /api/objek-pajak/:id/attachments`
+
+Verifikasi attachment lokal:
+- root storage default akan dibuat otomatis di direktori `uploads/`
+- upload hanya menerima `PDF/JPG/PNG/WebP`
+- maksimum file `5 MB`
+- setelah test lokal, folder `uploads/` bisa dibersihkan manual bila hanya berisi file smoke test
 
 ---
 

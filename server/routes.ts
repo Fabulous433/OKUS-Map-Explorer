@@ -1,9 +1,17 @@
 import type { Express, Request, Response } from "express";
 import { type Server } from "http";
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { and, asc, desc, eq, gte, ilike, lte, lt, or, sql, type SQL } from "drizzle-orm";
 import { db, ensureDatabaseConnection, storage } from "./storage";
 import { env } from "./env";
+import {
+  ATTACHMENT_ALLOWED_MIME_TYPES,
+  ATTACHMENT_MAX_FILE_SIZE_BYTES,
+  entityAttachmentUploadMetadataSchema,
+  OP_ATTACHMENT_TYPES,
+  WP_ATTACHMENT_TYPES,
+} from "@shared/attachments";
 import {
   auditLog,
   createWajibPajakSchema,
@@ -30,12 +38,13 @@ import {
 } from "@shared/schema";
 import { stringify } from "csv-stringify/sync";
 import { parse } from "csv-parse/sync";
-import multer from "multer";
+import multer, { MulterError } from "multer";
 import { ZodError, type ZodIssue } from "zod";
 import { APP_ROLE_OPTIONS, hashPassword, isAppRole, PASSWORD_POLICY, validatePasswordPolicy, verifyPassword, type AppRole, type SessionUser } from "./auth";
 import { LoginSecurityService, resolveLoginClientId } from "./auth-security";
+import { buildAttachmentDownloadPath, deleteAttachmentFile, ensureAttachmentStorageRoot, saveAttachmentBuffer } from "./file-storage";
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: ATTACHMENT_MAX_FILE_SIZE_BYTES } });
 
 type CsvImportRow = Record<string, string | undefined>;
 
@@ -122,7 +131,14 @@ const OP_CSV_COLUMNS = [
   "detail_rata2_berat_panen",
 ] as const;
 
-type AuditAction = "create" | "update" | "delete" | "verify" | "reject";
+type AuditAction =
+  | "create"
+  | "update"
+  | "delete"
+  | "verify"
+  | "reject"
+  | "ATTACHMENT_UPLOAD"
+  | "ATTACHMENT_DELETE";
 
 type AuditFilter = {
   entityType?: string;
@@ -249,6 +265,77 @@ function requireRole(req: Request, res: Response, roles: readonly AppRole[]) {
   }
 
   return user;
+}
+
+function normalizeAttachmentUploadError(error: unknown) {
+  if (error instanceof MulterError && error.code === "LIMIT_FILE_SIZE") {
+    return { status: 400, message: "Ukuran file melebihi batas 5 MB" };
+  }
+
+  if (error instanceof ZodError) {
+    return { status: 400, message: "Metadata attachment tidak valid" };
+  }
+
+  if (error instanceof Error) {
+    return { status: 400, message: error.message };
+  }
+
+  return { status: 500, message: "File gagal diunggah. Silakan coba lagi." };
+}
+
+function validateAttachmentDocumentType(
+  entityType: "wajib_pajak" | "objek_pajak",
+  documentType: string,
+) {
+  const allowed: readonly string[] = entityType === "wajib_pajak" ? WP_ATTACHMENT_TYPES : OP_ATTACHMENT_TYPES;
+  return allowed.includes(documentType);
+}
+
+async function assertAttachmentEntityExists(entityType: "wajib_pajak" | "objek_pajak", entityId: number) {
+  if (entityType === "wajib_pajak") {
+    const wp = await storage.getWajibPajak(entityId);
+    if (!wp) {
+      throw new Error("Wajib Pajak tidak ditemukan");
+    }
+    return wp;
+  }
+
+  const op = await storage.getObjekPajak(entityId);
+  if (!op) {
+    throw new Error("Objek Pajak tidak ditemukan");
+  }
+  return op;
+}
+
+function toAttachmentResponse(row: {
+  id: string;
+  entityType: string;
+  entityId: number;
+  documentType: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  storagePath: string;
+  uploadedAt: Date;
+  uploadedBy: string;
+  notes?: string | null;
+}) {
+  return {
+    ...row,
+    uploadedAt: row.uploadedAt.toISOString(),
+  };
+}
+
+async function runSingleFileUpload(req: Request, res: Response) {
+  await new Promise<void>((resolve, reject) => {
+    upload.single("file")(req as any, res as any, (error: unknown) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
 }
 
 function parseDate(value: unknown) {
@@ -1479,10 +1566,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const healthHandler = async (_req: Request, res: Response) => {
     try {
       await ensureDatabaseConnection();
+      await ensureAttachmentStorageRoot();
       return res.json({
         status: "healthy",
         service: "okus-map-explorer",
         database: "up",
+        attachmentsStorage: "ready",
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
@@ -1696,7 +1785,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       peranWp,
       statusAktif,
     });
-    return res.json(data);
+    return sendJsonWithEtag(req, res, data);
   });
 
   app.get("/api/wajib-pajak/detail/:id", async (req, res) => {
@@ -1713,6 +1802,141 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     return res.json(data);
+  });
+
+  app.get("/api/wajib-pajak/:id/attachments", async (req, res) => {
+    if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ message: "ID wajib pajak tidak valid" });
+    }
+
+    const existing = await storage.getWajibPajak(id);
+    if (!existing) {
+      return res.status(404).json({ message: "Wajib Pajak tidak ditemukan" });
+    }
+
+    const rows = await storage.listEntityAttachments("wajib_pajak", id);
+    return res.json(rows.map(toAttachmentResponse));
+  });
+
+  app.post("/api/wajib-pajak/:id/attachments", async (req, res) => {
+    if (!requireRole(req, res, ["admin", "editor"])) return;
+
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ message: "ID wajib pajak tidak valid" });
+    }
+
+    try {
+      await runSingleFileUpload(req, res);
+      await assertAttachmentEntityExists("wajib_pajak", id);
+
+      if (!req.file) {
+        return res.status(400).json({ message: "File attachment wajib diunggah" });
+      }
+
+      if (!ATTACHMENT_ALLOWED_MIME_TYPES.includes(req.file.mimetype as (typeof ATTACHMENT_ALLOWED_MIME_TYPES)[number])) {
+        return res.status(400).json({ message: "Format file tidak didukung" });
+      }
+
+      const parsedMeta = entityAttachmentUploadMetadataSchema.safeParse(req.body);
+      if (!parsedMeta.success) {
+        return res.status(400).json({ message: "Metadata attachment tidak valid" });
+      }
+
+      if (!validateAttachmentDocumentType("wajib_pajak", parsedMeta.data.documentType)) {
+        return res.status(400).json({ message: "Jenis dokumen tidak valid untuk Wajib Pajak" });
+      }
+
+      const savedFile = await saveAttachmentBuffer({
+        entityType: "wajib_pajak",
+        entityId: id,
+        documentType: parsedMeta.data.documentType,
+        originalFileName: req.file.originalname,
+        buffer: req.file.buffer,
+      });
+
+      try {
+        const created = await storage.createEntityAttachment({
+          id: savedFile.id,
+          entityType: "wajib_pajak",
+          entityId: id,
+          documentType: parsedMeta.data.documentType,
+          fileName: req.file.originalname,
+          mimeType: req.file.mimetype,
+          fileSize: req.file.size,
+          storagePath: savedFile.storagePath,
+          uploadedBy: getActorName(req),
+          notes: parsedMeta.data.notes ?? null,
+        });
+
+        await writeAuditLog({
+          entityType: "wajib_pajak",
+          entityId: id,
+          action: "ATTACHMENT_UPLOAD",
+          actorName: getActorName(req),
+          beforeData: null,
+          afterData: created,
+          metadata: { source: "api", attachmentId: created.id, documentType: created.documentType },
+        });
+
+        return res.status(201).json(toAttachmentResponse(created));
+      } catch (error) {
+        await deleteAttachmentFile(savedFile.storagePath).catch(() => undefined);
+        throw error;
+      }
+    } catch (error) {
+      const normalized = normalizeAttachmentUploadError(error);
+      return res.status(normalized.status).json({ message: normalized.message });
+    }
+  });
+
+  app.get("/api/wajib-pajak/:id/attachments/:attachmentId/download", async (req, res) => {
+    if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ message: "ID wajib pajak tidak valid" });
+    }
+
+    const row = await storage.getEntityAttachment("wajib_pajak", id, req.params.attachmentId);
+    if (!row) {
+      return res.status(404).json({ message: "Attachment tidak ditemukan" });
+    }
+
+    const buffer = await readFile(buildAttachmentDownloadPath(row.storagePath));
+    res.setHeader("Content-Type", row.mimeType);
+    res.setHeader("Content-Disposition", `attachment; filename=\"${encodeURIComponent(row.fileName)}\"`);
+    return res.send(buffer);
+  });
+
+  app.delete("/api/wajib-pajak/:id/attachments/:attachmentId", async (req, res) => {
+    if (!requireRole(req, res, ["admin", "editor"])) return;
+
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ message: "ID wajib pajak tidak valid" });
+    }
+
+    const removed = await storage.deleteEntityAttachment("wajib_pajak", id, req.params.attachmentId);
+    if (!removed) {
+      return res.status(404).json({ message: "Attachment tidak ditemukan" });
+    }
+
+    await deleteAttachmentFile(removed.storagePath).catch(() => undefined);
+    await writeAuditLog({
+      entityType: "wajib_pajak",
+      entityId: id,
+      action: "ATTACHMENT_DELETE",
+      actorName: getActorName(req),
+      beforeData: removed,
+      afterData: null,
+      metadata: { source: "api", attachmentId: removed.id, documentType: removed.documentType },
+    });
+
+    return res.json({ success: true });
   });
 
   app.post("/api/wajib-pajak", async (req, res) => {
@@ -1946,7 +2170,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
 
     const data = await storage.getAllMasterKecamatan();
-    return res.json(data);
+    return sendJsonWithEtag(req, res, data);
   });
 
   app.post("/api/master/kecamatan", async (req, res) => {
@@ -2096,7 +2320,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const kecamatanId = typeof req.query.kecamatanId === "string" ? req.query.kecamatanId : undefined;
     const data = await storage.getMasterKelurahan(kecamatanId);
-    return res.json(data);
+    return sendJsonWithEtag(req, res, data);
   });
 
   app.post("/api/master/kelurahan", async (req, res) => {
@@ -2247,7 +2471,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const data = includeInactive
       ? await db.select().from(masterRekeningPajak).orderBy(asc(masterRekeningPajak.kodeRekening))
       : await storage.getAllMasterRekeningPajak();
-    return res.json(data);
+    return sendJsonWithEtag(req, res, data);
   });
 
   app.post("/api/master/rekening-pajak", async (req, res) => {
@@ -2661,7 +2885,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       rekPajakId: rekPajakId ?? undefined,
     });
 
-    return res.json(data);
+    return sendJsonWithEtag(req, res, data);
   });
 
   app.get("/api/objek-pajak/map", async (req, res) => {
@@ -2919,6 +3143,141 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (op.statusVerifikasi !== "verified" && !requireRole(req, res, APP_ROLE_OPTIONS)) return;
 
     res.json(op);
+  });
+
+  app.get("/api/objek-pajak/:id/attachments", async (req, res) => {
+    if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ message: "ID objek pajak tidak valid" });
+    }
+
+    const existing = await storage.getObjekPajak(id);
+    if (!existing) {
+      return res.status(404).json({ message: "Objek Pajak tidak ditemukan" });
+    }
+
+    const rows = await storage.listEntityAttachments("objek_pajak", id);
+    return res.json(rows.map(toAttachmentResponse));
+  });
+
+  app.post("/api/objek-pajak/:id/attachments", async (req, res) => {
+    if (!requireRole(req, res, ["admin", "editor"])) return;
+
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ message: "ID objek pajak tidak valid" });
+    }
+
+    try {
+      await runSingleFileUpload(req, res);
+      await assertAttachmentEntityExists("objek_pajak", id);
+
+      if (!req.file) {
+        return res.status(400).json({ message: "File attachment wajib diunggah" });
+      }
+
+      if (!ATTACHMENT_ALLOWED_MIME_TYPES.includes(req.file.mimetype as (typeof ATTACHMENT_ALLOWED_MIME_TYPES)[number])) {
+        return res.status(400).json({ message: "Format file tidak didukung" });
+      }
+
+      const parsedMeta = entityAttachmentUploadMetadataSchema.safeParse(req.body);
+      if (!parsedMeta.success) {
+        return res.status(400).json({ message: "Metadata attachment tidak valid" });
+      }
+
+      if (!validateAttachmentDocumentType("objek_pajak", parsedMeta.data.documentType)) {
+        return res.status(400).json({ message: "Jenis dokumen tidak valid untuk Objek Pajak" });
+      }
+
+      const savedFile = await saveAttachmentBuffer({
+        entityType: "objek_pajak",
+        entityId: id,
+        documentType: parsedMeta.data.documentType,
+        originalFileName: req.file.originalname,
+        buffer: req.file.buffer,
+      });
+
+      try {
+        const created = await storage.createEntityAttachment({
+          id: savedFile.id,
+          entityType: "objek_pajak",
+          entityId: id,
+          documentType: parsedMeta.data.documentType,
+          fileName: req.file.originalname,
+          mimeType: req.file.mimetype,
+          fileSize: req.file.size,
+          storagePath: savedFile.storagePath,
+          uploadedBy: getActorName(req),
+          notes: parsedMeta.data.notes ?? null,
+        });
+
+        await writeAuditLog({
+          entityType: "objek_pajak",
+          entityId: id,
+          action: "ATTACHMENT_UPLOAD",
+          actorName: getActorName(req),
+          beforeData: null,
+          afterData: created,
+          metadata: { source: "api", attachmentId: created.id, documentType: created.documentType },
+        });
+
+        return res.status(201).json(toAttachmentResponse(created));
+      } catch (error) {
+        await deleteAttachmentFile(savedFile.storagePath).catch(() => undefined);
+        throw error;
+      }
+    } catch (error) {
+      const normalized = normalizeAttachmentUploadError(error);
+      return res.status(normalized.status).json({ message: normalized.message });
+    }
+  });
+
+  app.get("/api/objek-pajak/:id/attachments/:attachmentId/download", async (req, res) => {
+    if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ message: "ID objek pajak tidak valid" });
+    }
+
+    const row = await storage.getEntityAttachment("objek_pajak", id, req.params.attachmentId);
+    if (!row) {
+      return res.status(404).json({ message: "Attachment tidak ditemukan" });
+    }
+
+    const buffer = await readFile(buildAttachmentDownloadPath(row.storagePath));
+    res.setHeader("Content-Type", row.mimeType);
+    res.setHeader("Content-Disposition", `attachment; filename=\"${encodeURIComponent(row.fileName)}\"`);
+    return res.send(buffer);
+  });
+
+  app.delete("/api/objek-pajak/:id/attachments/:attachmentId", async (req, res) => {
+    if (!requireRole(req, res, ["admin", "editor"])) return;
+
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ message: "ID objek pajak tidak valid" });
+    }
+
+    const removed = await storage.deleteEntityAttachment("objek_pajak", id, req.params.attachmentId);
+    if (!removed) {
+      return res.status(404).json({ message: "Attachment tidak ditemukan" });
+    }
+
+    await deleteAttachmentFile(removed.storagePath).catch(() => undefined);
+    await writeAuditLog({
+      entityType: "objek_pajak",
+      entityId: id,
+      action: "ATTACHMENT_DELETE",
+      actorName: getActorName(req),
+      beforeData: removed,
+      afterData: null,
+      metadata: { source: "api", attachmentId: removed.id, documentType: removed.documentType },
+    });
+
+    return res.json({ success: true });
   });
 
   app.post("/api/objek-pajak", async (req, res) => {

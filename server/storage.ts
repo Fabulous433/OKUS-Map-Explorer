@@ -1,5 +1,7 @@
 import {
   type CreateWajibPajakInput,
+  entityAttachment,
+  type EntityAttachment,
   type InsertObjekPajak,
   type InsertUser,
   type MapObjekPajakItem,
@@ -103,6 +105,21 @@ type ObjekPajakMapFilter = {
   rekPajakId?: number;
   statusVerifikasi?: string;
   limit: number;
+};
+
+type AttachmentEntityType = "wajib_pajak" | "objek_pajak";
+
+type CreateEntityAttachmentInput = {
+  id: string;
+  entityType: AttachmentEntityType;
+  entityId: number;
+  documentType: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  storagePath: string;
+  uploadedBy: string;
+  notes?: string | null;
 };
 
 function cleanDetailObject(input: DetailRecord | null | undefined) {
@@ -695,6 +712,10 @@ export interface IStorage {
   createWajibPajak(wp: CreateWajibPajakInput): Promise<WajibPajakWithBadanUsaha>;
   updateWajibPajak(id: number, wp: UpdateWajibPajakPayload): Promise<WajibPajakWithBadanUsaha>;
   deleteWajibPajak(id: number): Promise<void>;
+  listEntityAttachments(entityType: AttachmentEntityType, entityId: number): Promise<EntityAttachment[]>;
+  getEntityAttachment(entityType: AttachmentEntityType, entityId: number, attachmentId: string): Promise<EntityAttachment | undefined>;
+  createEntityAttachment(input: CreateEntityAttachmentInput): Promise<EntityAttachment>;
+  deleteEntityAttachment(entityType: AttachmentEntityType, entityId: number, attachmentId: string): Promise<EntityAttachment | undefined>;
 
   getAllMasterKecamatan(): Promise<MasterKecamatan[]>;
   getMasterKelurahan(kecamatanId?: string): Promise<MasterKelurahan[]>;
@@ -895,6 +916,61 @@ export class DatabaseStorage implements IStorage {
 
   async deleteWajibPajak(id: number): Promise<void> {
     await db.delete(wajibPajak).where(eq(wajibPajak.id, id));
+  }
+
+  async listEntityAttachments(entityType: AttachmentEntityType, entityId: number): Promise<EntityAttachment[]> {
+    return db
+      .select()
+      .from(entityAttachment)
+      .where(and(eq(entityAttachment.entityType, entityType), eq(entityAttachment.entityId, entityId)))
+      .orderBy(desc(entityAttachment.uploadedAt), desc(entityAttachment.id));
+  }
+
+  async getEntityAttachment(
+    entityType: AttachmentEntityType,
+    entityId: number,
+    attachmentId: string,
+  ): Promise<EntityAttachment | undefined> {
+    const [row] = await db
+      .select()
+      .from(entityAttachment)
+      .where(
+        and(
+          eq(entityAttachment.entityType, entityType),
+          eq(entityAttachment.entityId, entityId),
+          eq(entityAttachment.id, attachmentId),
+        ),
+      )
+      .limit(1);
+
+    return row;
+  }
+
+  async createEntityAttachment(input: CreateEntityAttachmentInput): Promise<EntityAttachment> {
+    const [created] = await db
+      .insert(entityAttachment)
+      .values({
+        ...input,
+        notes: input.notes ?? null,
+        uploadedAt: new Date(),
+      })
+      .returning();
+
+    return created;
+  }
+
+  async deleteEntityAttachment(
+    entityType: AttachmentEntityType,
+    entityId: number,
+    attachmentId: string,
+  ): Promise<EntityAttachment | undefined> {
+    const existing = await this.getEntityAttachment(entityType, entityId, attachmentId);
+    if (!existing) {
+      return undefined;
+    }
+
+    await db.delete(entityAttachment).where(eq(entityAttachment.id, attachmentId));
+    return existing;
   }
 
   async getAllMasterKecamatan(): Promise<MasterKecamatan[]> {
