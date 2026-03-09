@@ -120,6 +120,7 @@ async function run() {
     const uniqAdmin = Date.now().toString().slice(-6);
     const kodeKec = `8${uniqAdmin.slice(0, 2)}${uniqAdmin.slice(2, 3)}`.slice(0, 3);
     const kodeKel = `${uniqAdmin.slice(3, 6)}`.padStart(3, "0");
+    const rekeningSuffix = uniqAdmin.slice(-4).padStart(4, "0");
 
     const createKecByAdmin = await jsonRequest("/api/master/kecamatan", "POST", {
       cpmKecamatan: `Kecamatan Admin ${uniqAdmin}`,
@@ -137,7 +138,7 @@ async function run() {
     adminKelId = requiredString((createKelByAdmin.body as JsonRecord).cpmKelId, "admin kel id wajib ada");
 
     const createRekByAdmin = await jsonRequest("/api/master/rekening-pajak", "POST", {
-      kodeRekening: `8.8.${uniqAdmin}`,
+      kodeRekening: `4.1.01.14.01.${rekeningSuffix}`,
       namaRekening: `Admin Rek ${uniqAdmin}`,
       jenisPajak: "Pajak MBLB",
       isActive: true,

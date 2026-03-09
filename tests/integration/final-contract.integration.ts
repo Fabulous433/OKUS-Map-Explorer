@@ -73,9 +73,46 @@ async function run() {
       const created = finalCreate.body as JsonRecord;
       createdOpId = requiredNumber(created.id, "created.id wajib number");
       assert.equal(created.namaOp, "IT Contract Final OP");
+      assert.match(
+        requiredString(created.nopd, "created.nopd wajib ada"),
+        /^14\.00\.00\.\d{4}$/,
+        "NOPD MBLB auto-generate harus mengikuti prefix 14.00.00.XXXX",
+      );
       assert.equal("namaObjek" in created, false);
       assert.equal("alamat" in created, false);
       assert.equal("detail_pajak" in created, false);
+
+      const duplicateNopdCreate = await jsonRequest("/api/objek-pajak", "POST", {
+        wpId,
+        rekPajakId,
+        nopd: created.nopd,
+        namaOp: "IT Duplicate NOPD",
+        alamatOp: "Jl. Integration Duplicate",
+        kecamatanId,
+        kelurahanId,
+        status: "active",
+      });
+      assert.equal(duplicateNopdCreate.response.status, 409, "Duplicate NOPD harus ditolak");
+      assert.equal(
+        (duplicateNopdCreate.body as JsonRecord).message,
+        "NOPD sudah digunakan oleh objek pajak lain",
+      );
+
+      const legacyNopdCreate = await jsonRequest("/api/objek-pajak", "POST", {
+        wpId,
+        rekPajakId,
+        nopd: "OP.321.001.2026",
+        namaOp: "IT Legacy NOPD",
+        alamatOp: "Jl. Integration Legacy",
+        kecamatanId,
+        kelurahanId,
+        status: "active",
+      });
+      assert.equal(legacyNopdCreate.response.status, 400, "Format NOPD lama harus ditolak");
+      assert.equal(
+        (legacyNopdCreate.body as JsonRecord).message,
+        "Format NOPD salah, mohon diperiksa kembali",
+      );
 
       const updateFinal = await jsonRequest(`/api/objek-pajak/${createdOpId}`, "PATCH", {
         namaOp: "IT Contract Final OP Updated",
@@ -85,6 +122,15 @@ async function run() {
       });
       assert.equal(updateFinal.response.status, 200);
       assert.equal((updateFinal.body as JsonRecord).namaOp, "IT Contract Final OP Updated");
+
+      const invalidNopdPatch = await jsonRequest(`/api/objek-pajak/${createdOpId}`, "PATCH", {
+        nopd: "19.01.0001",
+      });
+      assert.equal(invalidNopdPatch.response.status, 400, "Format NOPD patch invalid harus ditolak");
+      assert.equal(
+        (invalidNopdPatch.body as JsonRecord).message,
+        "Format NOPD salah, mohon diperiksa kembali",
+      );
 
       const wpCreateWithNpwpd = await jsonRequest("/api/wajib-pajak", "POST", {
         jenisWp: "orang_pribadi",

@@ -43,6 +43,7 @@ import { instrumentPoolForSlowQueryLogging } from "./observability";
 
 const pool = new pg.Pool({
   connectionString: env.DATABASE_URL,
+  connectionTimeoutMillis: 5_000,
 });
 instrumentPoolForSlowQueryLogging(pool, env.SLOW_QUERY_MS);
 
@@ -56,6 +57,10 @@ export async function ensureDatabaseConnection() {
 }
 
 export const db = drizzle(pool);
+
+export async function closeDatabasePool() {
+  await pool.end();
+}
 
 type DetailRecord = Record<string, unknown>;
 
@@ -197,8 +202,66 @@ function getDetailKind(jenisPajak: string) {
   return null;
 }
 
-function isNopdFormatValid(value: string) {
-  return /^OP\.321\.\d{3}\.\d{4}$/.test(value);
+type ParsedNopd = {
+  aa: string;
+  bb: string;
+  cc: string;
+  sequence: string;
+};
+
+const INVALID_NOPD_MESSAGE = "Format NOPD salah, mohon diperiksa kembali";
+
+function parseNopd(value: string): ParsedNopd | null {
+  const match = /^(\d{2})\.(\d{2})\.(\d{2})\.(\d{4})$/.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+
+  return {
+    aa: match[1],
+    bb: match[2],
+    cc: match[3],
+    sequence: match[4],
+  };
+}
+
+function isGenericNopdJenis(jenisPajak: string, aa: string) {
+  return jenisPajak === "Pajak Reklame" || jenisPajak === "Pajak MBLB" || aa === "09" || aa === "14";
+}
+
+function buildNopdPrefix(rekening: MasterRekeningPajak) {
+  const segments = rekening.kodeRekening.split(".").map((segment) => segment.trim());
+  if (segments.length < 6) {
+    throw new Error(`Kode rekening tidak valid untuk pembentukan NOPD: ${rekening.kodeRekening}`);
+  }
+
+  const aa = segments[3];
+  const bb = segments[4];
+  const rincian = segments[5];
+  const cc = rincian.slice(-2);
+
+  if (!/^\d{2}$/.test(aa) || !/^\d{2}$/.test(bb) || !/^\d{4}$/.test(rincian) || !/^\d{2}$/.test(cc)) {
+    throw new Error(`Kode rekening tidak valid untuk pembentukan NOPD: ${rekening.kodeRekening}`);
+  }
+
+  if (isGenericNopdJenis(rekening.jenisPajak, aa)) {
+    return `${aa}.00.00`;
+  }
+
+  return `${aa}.${bb}.${cc}`;
+}
+
+function assertNopdMatchesRekening(nopd: string, rekening: MasterRekeningPajak) {
+  const parsed = parseNopd(nopd);
+  if (!parsed) {
+    throw new Error(INVALID_NOPD_MESSAGE);
+  }
+
+  const expectedPrefix = buildNopdPrefix(rekening);
+  const actualPrefix = `${parsed.aa}.${parsed.bb}.${parsed.cc}`;
+  if (actualPrefix !== expectedPrefix) {
+    throw new Error(INVALID_NOPD_MESSAGE);
+  }
 }
 
 async function clearAllDetailTables(opId: number) {
@@ -570,31 +633,31 @@ async function getRekeningById(id: number) {
   return rekening;
 }
 
-async function resolveNopd(nopdRaw?: string | null) {
+async function resolveNopd(rekening: MasterRekeningPajak, nopdRaw?: string | null) {
   const cleaned = nopdRaw?.trim();
   if (cleaned) {
-    if (!isNopdFormatValid(cleaned)) {
-      throw new Error("Format NOPD harus OP.321.XXX.YYYY");
-    }
+    assertNopdMatchesRekening(cleaned, rekening);
     return cleaned;
   }
 
-  const year = new Date().getFullYear();
-  const likePattern = `OP.321.%.${year}`;
+  const prefix = buildNopdPrefix(rekening);
+  const likePattern = `${prefix}.%`;
   const rows = await db.select({ nopd: objekPajak.nopd }).from(objekPajak).where(ilike(objekPajak.nopd, likePattern));
 
   let maxSeq = 0;
   for (const row of rows) {
-    const match = /^OP\.321\.(\d{3})\.\d{4}$/.exec(row.nopd);
-    if (!match) continue;
-    const seq = Number.parseInt(match[1], 10);
+    const parsed = parseNopd(row.nopd);
+    if (!parsed) continue;
+    const rowPrefix = `${parsed.aa}.${parsed.bb}.${parsed.cc}`;
+    if (rowPrefix !== prefix) continue;
+    const seq = Number.parseInt(parsed.sequence, 10);
     if (Number.isFinite(seq) && seq > maxSeq) {
       maxSeq = seq;
     }
   }
 
-  const nextSeq = String(maxSeq + 1).padStart(3, "0");
-  return `OP.321.${nextSeq}.${year}`;
+  const nextSeq = String(maxSeq + 1).padStart(4, "0");
+  return `${prefix}.${nextSeq}`;
 }
 
 export interface IStorage {
@@ -1086,9 +1149,8 @@ export class DatabaseStorage implements IStorage {
   async createObjekPajak(op: InsertObjekPajak): Promise<ObjekPajak> {
     const { detailPajak, nopd, ...base } = op;
     const now = new Date();
-    const finalNopd = await resolveNopd(nopd ?? undefined);
-
     const rekening = await getRekeningById(base.rekPajakId);
+    const finalNopd = await resolveNopd(rekening, nopd ?? undefined);
     await assertKelurahanDalamKecamatan(base.kelurahanId, base.kecamatanId);
 
     const [created] = await db
@@ -1126,7 +1188,9 @@ export class DatabaseStorage implements IStorage {
 
     let nextNopd = current.nopd;
     if (op.nopd !== undefined) {
-      nextNopd = await resolveNopd(op.nopd);
+      nextNopd = await resolveNopd(rekening, op.nopd);
+    } else if (nextRekPajakId !== current.rekPajakId) {
+      nextNopd = await resolveNopd(rekening, current.nopd);
     }
 
     const detailBaru =

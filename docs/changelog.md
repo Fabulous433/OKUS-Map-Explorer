@@ -1,5 +1,26 @@
 # Changelog
 
+## Phase 2.12 — OP NOPD + Validation UX Hardening
+
+### Added
+- Error payload OP sekarang mendukung `fieldErrors` agar form bisa menandai field yang salah tanpa menampilkan JSON teknis mentah.
+- `SIMILAR_NAME_ADDRESS` dipertahankan sebagai signal internal di `GET /api/quality/report`.
+
+### Improved
+- Validasi backend OP kini menerjemahkan error Zod/DB ke pesan yang lebih manusiawi untuk field numerik utama dan `NOPD`.
+- Pesan error `NOPD` sekarang disederhanakan menjadi `Format NOPD salah, mohon diperiksa kembali`.
+- Toast/import OP sekarang merangkum hasil gagal dengan contoh error baris pertama, bukan hanya payload mentah.
+- Dokumen API kini lock ke aturan `NOPD` final `AA.BB.CC.XXXX`.
+
+### Fixed
+- Warning `DUPLICATE_NOPD` tidak lagi muncul di warning form OP.
+- Warning `SIMILAR_NAME_ADDRESS` tidak lagi mengganggu submit form OP.
+- Helper text di bawah field `NOPD` dihapus dari form OP.
+- Contoh `NOPD` lama `OP.321.XXX.YYYY` dibersihkan dari kontrak API aktif.
+
+### Breaking
+- Create, update, dan import OP tidak lagi menerima format `NOPD` lama; semua jalur wajib `AA.BB.CC.XXXX`.
+
 ## Phase 2.10 — Production Stabilization + Post-Launch Review (Completed Dry-Run Baseline)
 
 ### Added

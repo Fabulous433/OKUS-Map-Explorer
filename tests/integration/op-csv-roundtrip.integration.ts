@@ -162,8 +162,43 @@ async function run() {
     assert.ok(imported, "Data hasil import harus ada");
     importedId = requiredNumber(imported.id, "imported id wajib ada");
     assert.equal(imported.rekPajakId, rekPajakId);
+    assert.match(requiredString(imported.nopd, "NOPD hasil import wajib ada"), /^\d{2}\.\d{2}\.\d{2}\.\d{4}$/);
     assert.equal("namaObjek" in imported, false);
     assert.equal("alamat" in imported, false);
+
+    const invalidLegacyRow: Record<string, string> = {
+      ...sourceRow,
+      nopd: "OP.321.001.2026",
+      nama_op: `IT CSV Invalid Legacy ${Date.now()}`,
+      alamat_op: "Jl. CSV Invalid Legacy",
+    };
+
+    const invalidCsvPayload = stringify([invalidLegacyRow], {
+      header: true,
+      columns: [...OP_CSV_COLUMNS],
+    });
+
+    const invalidForm = new FormData();
+    invalidForm.append("file", new Blob([invalidCsvPayload], { type: "text/csv" }), "op-import-invalid.csv");
+
+    const { response: invalidImportResponse, body: invalidImportBodyRaw } = await requestJson("/api/objek-pajak/import", {
+      method: "POST",
+      body: invalidForm,
+    });
+    const invalidImportBody = (invalidImportBodyRaw ?? {}) as JsonRecord;
+    assert.equal(invalidImportResponse.status, 200);
+    assert.equal(invalidImportBody.total, 1);
+    assert.equal(invalidImportBody.success, 0);
+    assert.equal(invalidImportBody.failed, 1);
+    assert.ok(Array.isArray(invalidImportBody.errors));
+    assert.ok(
+      ((invalidImportBody.errors as unknown[]) ?? []).some(
+        (item) =>
+          typeof item === "string" &&
+          item.includes("Format NOPD salah, mohon diperiksa kembali"),
+      ),
+      "Import harus melaporkan format NOPD lama sebagai error yang jelas",
+    );
   } finally {
     if (importedId !== null) {
       await jsonRequest(`/api/objek-pajak/${importedId}`, "DELETE");

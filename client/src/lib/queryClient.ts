@@ -1,9 +1,63 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+export type ApiFieldError = {
+  field: string;
+  message: string;
+};
+
+export class ApiError extends Error {
+  status: number;
+  fieldErrors: ApiFieldError[];
+  body: unknown;
+
+  constructor(params: {
+    status: number;
+    message: string;
+    fieldErrors?: ApiFieldError[];
+    body?: unknown;
+  }) {
+    super(params.message);
+    this.name = "ApiError";
+    this.status = params.status;
+    this.fieldErrors = params.fieldErrors ?? [];
+    this.body = params.body;
+  }
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const body = await res.json().catch(() => null);
+      const message =
+        body && typeof body === "object" && typeof (body as { message?: unknown }).message === "string"
+          ? (body as { message: string }).message
+          : res.statusText;
+      const fieldErrors =
+        body && typeof body === "object" && Array.isArray((body as { fieldErrors?: unknown[] }).fieldErrors)
+          ? ((body as { fieldErrors: ApiFieldError[] }).fieldErrors ?? []).filter(
+              (item) =>
+                item &&
+                typeof item === "object" &&
+                typeof (item as { field?: unknown }).field === "string" &&
+                typeof (item as { message?: unknown }).message === "string",
+            )
+          : [];
+
+      throw new ApiError({
+        status: res.status,
+        message,
+        fieldErrors,
+        body,
+      });
+    }
+
     const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    throw new ApiError({
+      status: res.status,
+      message: text,
+      body: text,
+    });
   }
 }
 

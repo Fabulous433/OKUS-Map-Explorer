@@ -101,6 +101,12 @@ Kolom CSV WP:
 
 ## Objek Pajak (OP)
 
+Aturan `NOPD` final:
+- Format resmi: `AA.BB.CC.XXXX`
+- Create tanpa `nopd`: server auto-generate berdasarkan rekening pajak
+- Create/update/import dengan `nopd` manual: wajib tetap mengikuti format resmi
+- `nopd` tetap unique; duplikasi ditolak sebagai hard error
+
 ### GET `/api/objek-pajak`
 Query:
 - `page`
@@ -144,7 +150,7 @@ Response:
     {
       "id": 1,
       "wpId": 1,
-      "nopd": "OP.321.001.2026",
+      "nopd": "14.00.00.0001",
       "namaOp": "Contoh OP",
       "jenisPajak": "Pajak MBLB",
       "alamatOp": "Jl. Contoh",
@@ -175,11 +181,26 @@ Perilaku:
 ### POST `/api/objek-pajak`
 - Create OP.
 - Verifikasi default: `statusVerifikasi=draft`.
+- Jika `nopd` kosong, server generate otomatis sesuai format resmi `AA.BB.CC.XXXX`.
+- Jika `nopd` diisi manual, format wajib valid dan unique.
+- Error validasi mengembalikan payload user-friendly:
+```json
+{
+  "message": "Format NOPD salah, mohon diperiksa kembali",
+  "fieldErrors": [
+    {
+      "field": "nopd",
+      "message": "Format NOPD salah, mohon diperiksa kembali"
+    }
+  ]
+}
+```
 - Auth: `admin|editor`.
 
 ### PATCH `/api/objek-pajak/:id`
 - Update data OP inti/detail.
 - Field verifikasi tidak diubah lewat endpoint ini.
+- `nopd` tetap editable, tetapi wajib format resmi `AA.BB.CC.XXXX` dan tetap unique.
 - Auth: `admin|editor`.
 
 ### PATCH `/api/objek-pajak/:id/verification`
@@ -205,6 +226,10 @@ Aturan:
 - `POST /api/objek-pajak/import`
 - Auth export: `admin|editor|viewer`
 - Auth import: `admin|editor`
+- Import OP menolak `nopd` yang tidak mengikuti format resmi `AA.BB.CC.XXXX`.
+- Error import dikembalikan per baris dalam bentuk pesan yang sudah dinormalisasi, misalnya:
+  - `Baris 4: Format NOPD salah, mohon diperiksa kembali`
+  - `Baris 8: NOPD sudah digunakan oleh objek pajak lain`
 
 ---
 
@@ -280,6 +305,7 @@ Audit dicatat untuk mutasi:
 ### POST `/api/quality/check`
 - Pre-check kandidat data.
 - Return warning non-blocking.
+- Untuk flow OP, warning submit tidak lagi memunculkan `DUPLICATE_NOPD` atau `SIMILAR_NAME_ADDRESS`.
 - Auth: `admin|editor`
 
 Contoh response:
@@ -301,6 +327,9 @@ Contoh response:
   - duplicate indicators
   - missing critical fields
   - invalid geo range
+- Internal-only signal tambahan:
+  - `similarNameAddress`
+  - dipakai untuk audit kualitas data, bukan warning submit form OP
 - Auth: `admin|editor`
 
 ---

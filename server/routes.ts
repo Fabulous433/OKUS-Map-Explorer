@@ -31,6 +31,7 @@ import {
 import { stringify } from "csv-stringify/sync";
 import { parse } from "csv-parse/sync";
 import multer from "multer";
+import { ZodError, type ZodIssue } from "zod";
 import { APP_ROLE_OPTIONS, hashPassword, isAppRole, PASSWORD_POLICY, validatePasswordPolicy, verifyPassword, type AppRole, type SessionUser } from "./auth";
 import { LoginSecurityService, resolveLoginClientId } from "./auth-security";
 
@@ -137,6 +138,13 @@ type QualityWarning = {
   message: string;
   relatedIds: Array<string | number>;
 };
+
+type ValidationFieldError = {
+  field: string;
+  message: string;
+};
+
+const INVALID_NOPD_MESSAGE = "Format NOPD salah, mohon diperiksa kembali";
 
 type Bbox = {
   minLng: number;
@@ -468,6 +476,209 @@ function pgErrorCode(error: unknown) {
   return (error as { code?: string }).code ?? null;
 }
 
+function formatFieldLabel(rawField: string) {
+  const labels: Record<string, string> = {
+    nopd: "NOPD",
+    wpId: "Wajib Pajak",
+    rekPajakId: "Rekening pajak",
+    namaOp: "Nama objek pajak",
+    alamatOp: "Alamat objek pajak",
+    kecamatanId: "Kecamatan",
+    kelurahanId: "Kelurahan",
+    omsetBulanan: "Omset bulanan",
+    tarifPersen: "Tarif persen",
+    pajakBulanan: "Pajak bulanan",
+    latitude: "Latitude",
+    longitude: "Longitude",
+    jenisUsaha: "Jenis usaha",
+    kapasitasTempat: "Kapasitas tempat",
+    jumlahKaryawan: "Jumlah karyawan",
+    rata2Pengunjung: "Rata-rata pengunjung",
+    jumlahKamar: "Jumlah kamar",
+    klasifikasi: "Klasifikasi",
+    tarifParkir: "Tarif parkir",
+    kapasitasKendaraan: "Kapasitas kendaraan",
+    jenisLokasi: "Jenis lokasi",
+    jenisReklame: "Jenis reklame",
+    ukuranReklame: "Ukuran reklame",
+    jenisHiburan: "Jenis hiburan",
+    kapasitas: "Kapasitas",
+    dayaListrik: "Daya listrik",
+    jenisTenagaListrik: "Jenis tenaga listrik",
+    jenisAirTanah: "Jenis air tanah",
+    rata2UkuranPemakaian: "Rata-rata ukuran pemakaian",
+    jenisBurungWalet: "Jenis burung walet",
+    panenPerTahun: "Panen per tahun",
+    rata2BeratPanen: "Rata-rata berat panen",
+  };
+
+  return labels[rawField] ?? rawField;
+}
+
+function buildFieldPath(path: Array<string | number>) {
+  return path
+    .map((segment) => String(segment))
+    .filter((segment) => segment.length > 0)
+    .join(".");
+}
+
+function buildFriendlyIssueMessage(issue: ZodIssue) {
+  const field = String(issue.path[issue.path.length - 1] ?? "");
+  const fieldLabel = formatFieldLabel(field);
+  const numericMessages: Record<string, string> = {
+    tarifParkir: "Tarif parkir harus berupa angka",
+    latitude: "Latitude harus berupa angka desimal yang valid",
+    longitude: "Longitude harus berupa angka desimal yang valid",
+    tarifPersen: "Tarif persen harus berupa angka",
+    pajakBulanan: "Pajak bulanan harus berupa angka",
+    omsetBulanan: "Omset bulanan harus berupa angka",
+    kapasitasKendaraan: "Kapasitas kendaraan harus berupa angka",
+    kapasitasTempat: "Kapasitas tempat harus berupa angka",
+    jumlahKaryawan: "Jumlah karyawan harus berupa angka",
+    rata2Pengunjung: "Rata-rata pengunjung harus berupa angka",
+    rata2PengunjungHarian: "Rata-rata pengunjung harian harus berupa angka",
+    jumlahKamar: "Jumlah kamar harus berupa angka",
+    kapasitas: "Kapasitas harus berupa angka",
+    dayaListrik: "Daya listrik harus berupa angka",
+    hargaTermurah: "Harga termurah harus berupa angka",
+    hargaTermahal: "Harga termahal harus berupa angka",
+    ukuranReklame: "Ukuran reklame harus berupa angka",
+    rata2UkuranPemakaian: "Rata-rata ukuran pemakaian harus berupa angka",
+    panenPerTahun: "Panen per tahun harus berupa angka",
+    rata2BeratPanen: "Rata-rata berat panen harus berupa angka",
+  };
+  const requiredSelectionFields = new Set(["wpId", "rekPajakId", "kecamatanId", "kelurahanId", "statusReklame"]);
+  const optionalEmailFields = new Set(["emailWp", "emailBadanUsaha"]);
+
+  if (field === "nopd") {
+    return INVALID_NOPD_MESSAGE;
+  }
+
+  if (numericMessages[field]) {
+    return numericMessages[field];
+  }
+
+  if (
+    issue.code === "invalid_string" &&
+    issue.message.toLowerCase().includes("email") &&
+    optionalEmailFields.has(field)
+  ) {
+    return `${fieldLabel} tidak valid`;
+  }
+
+  if (issue.code === "invalid_type") {
+    if (requiredSelectionFields.has(field)) {
+      return `${fieldLabel} wajib dipilih`;
+    }
+
+    if (issue.received === "undefined" || issue.received === "null") {
+      return `${fieldLabel} wajib diisi`;
+    }
+  }
+
+  if (issue.code === "too_small") {
+    if (requiredSelectionFields.has(field)) {
+      return `${fieldLabel} wajib dipilih`;
+    }
+
+    return `${fieldLabel} wajib diisi`;
+  }
+
+  if (issue.code === "invalid_enum_value") {
+    return `${fieldLabel} tidak valid`;
+  }
+
+  if (issue.code === "custom" && issue.message) {
+    return issue.message;
+  }
+
+  if (
+    issue.message &&
+    !issue.message.startsWith("[") &&
+    issue.message !== "Required" &&
+    issue.message !== "Invalid input"
+  ) {
+    return issue.message;
+  }
+
+  if (field) {
+    return `${fieldLabel} tidak valid`;
+  }
+
+  return "Data tidak valid. Periksa kembali isian form.";
+}
+
+function buildValidationErrorPayload(error: ZodError, fallbackMessage: string) {
+  const fieldErrors: ValidationFieldError[] = error.issues.map((issue) => ({
+    field: buildFieldPath(issue.path),
+    message: buildFriendlyIssueMessage(issue),
+  }));
+
+  const firstMessage = fieldErrors[0]?.message;
+  return {
+    message: firstMessage ?? fallbackMessage,
+    fieldErrors,
+  };
+}
+
+function sendZodValidationError(res: Response, error: ZodError, fallbackMessage: string) {
+  return res.status(400).json(buildValidationErrorPayload(error, fallbackMessage));
+}
+
+function normalizeObjekPajakMutationError(error: unknown): {
+  status: number;
+  message: string;
+  fieldErrors?: ValidationFieldError[];
+} {
+  const code = pgErrorCode(error);
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (code === "23505" && message.toLowerCase().includes("nopd")) {
+    return {
+      status: 409,
+      message: "NOPD sudah digunakan oleh objek pajak lain",
+      fieldErrors: [{ field: "nopd", message: "NOPD sudah digunakan oleh objek pajak lain" }],
+    };
+  }
+
+  if (message.includes("Format NOPD")) {
+    return {
+      status: 400,
+      message: INVALID_NOPD_MESSAGE,
+      fieldErrors: [{ field: "nopd", message: INVALID_NOPD_MESSAGE }],
+    };
+  }
+
+  if (message.includes("Kelurahan tidak sesuai")) {
+    return {
+      status: 400,
+      message,
+      fieldErrors: [{ field: "kelurahanId", message }],
+    };
+  }
+
+  if (message.includes("Rekening pajak tidak ditemukan")) {
+    return {
+      status: 400,
+      message,
+      fieldErrors: [{ field: "rekPajakId", message }],
+    };
+  }
+
+  if (message.includes("Kode rekening tidak valid untuk pembentukan NOPD")) {
+    return {
+      status: 400,
+      message: "Kode rekening pajak belum valid untuk generate NOPD. Hubungi admin master data.",
+      fieldErrors: [{ field: "rekPajakId", message: "Kode rekening pajak belum valid untuk generate NOPD" }],
+    };
+  }
+
+  return {
+    status: 500,
+    message: "Data gagal disimpan. Periksa kembali isian form.",
+  };
+}
+
 async function writeAuditLog(params: {
   entityType: string;
   entityId: string | number;
@@ -514,19 +725,9 @@ async function listAuditLogs(filter: AuditFilter) {
 function buildQualityWarnings(input: {
   candidate: Record<string, string | undefined>;
   wpMatches: Array<Record<string, unknown>>;
-  opMatches: Array<Record<string, unknown>>;
 }) {
   const warnings: QualityWarning[] = [];
-  const { candidate, wpMatches, opMatches } = input;
-
-  if (candidate.nopd && opMatches.some((op) => String(op.nopd) === candidate.nopd)) {
-    warnings.push({
-      level: "critical",
-      code: "DUPLICATE_NOPD",
-      message: "NOPD sudah digunakan oleh objek pajak lain",
-      relatedIds: opMatches.filter((op) => String(op.nopd) === candidate.nopd).map((op) => Number(op.id)),
-    });
-  }
+  const { candidate, wpMatches } = input;
 
   if (candidate.npwpd && wpMatches.some((wp) => String(wp.npwpd || "") === candidate.npwpd)) {
     warnings.push({
@@ -564,26 +765,45 @@ function buildQualityWarnings(input: {
     });
   }
 
-  if (candidate.nama && candidate.alamat) {
-    const normalizedName = candidate.nama.toLowerCase();
-    const normalizedAddr = candidate.alamat.toLowerCase();
-    const fuzzyMatches = opMatches.filter((op) => {
-      const name = String(op.namaOp || "").toLowerCase();
-      const addr = String(op.alamatOp || "").toLowerCase();
-      return name.includes(normalizedName) && addr.includes(normalizedAddr);
-    });
+  return warnings;
+}
 
-    if (fuzzyMatches.length > 0) {
-      warnings.push({
-        level: "info",
-        code: "SIMILAR_NAME_ADDRESS",
-        message: "Nama + alamat mirip dengan objek pajak yang sudah ada",
-        relatedIds: fuzzyMatches.map((op) => Number(op.id)),
-      });
+function buildSimilarNameAddressGroups(
+  opRows: Array<{
+    id: number;
+    namaOp: string | null;
+    alamatOp: string | null;
+  }>,
+) {
+  const grouped = new Map<
+    string,
+    {
+      namaOp: string;
+      alamatOp: string;
+      relatedIds: number[];
     }
+  >();
+
+  for (const row of opRows) {
+    const namaOp = String(row.namaOp ?? "").trim();
+    const alamatOp = String(row.alamatOp ?? "").trim();
+    if (!namaOp || !alamatOp) continue;
+
+    const key = `${namaOp.toLowerCase()}||${alamatOp.toLowerCase()}`;
+    const current = grouped.get(key);
+    if (current) {
+      current.relatedIds.push(row.id);
+      continue;
+    }
+
+    grouped.set(key, {
+      namaOp,
+      alamatOp,
+      relatedIds: [row.id],
+    });
   }
 
-  return warnings;
+  return Array.from(grouped.values()).filter((group) => group.relatedIds.length > 1);
 }
 
 function hasOwn(payload: Record<string, unknown>, key: string) {
@@ -2052,7 +2272,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const parsed = qualityCheckInputSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.message });
+      return sendZodValidationError(res, parsed.error, "Parameter quality check tidak valid");
     }
 
     const candidate = parsed.data;
@@ -2066,14 +2286,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       })
       .from(wajibPajak)
       .leftJoin(wpBadanUsaha, eq(wajibPajak.id, wpBadanUsaha.wpId));
-    const opRows = await db
-      .select({
-        id: objekPajak.id,
-        nopd: objekPajak.nopd,
-        namaOp: objekPajak.namaOp,
-        alamatOp: objekPajak.alamatOp,
-      })
-      .from(objekPajak);
 
     const wpMatches = wpRows.filter((row) => {
       if (candidate.npwpd && row.npwpd === candidate.npwpd) return true;
@@ -2083,17 +2295,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return false;
     });
 
-    const opMatches = opRows.filter((row) => {
-      if (candidate.nopd && row.nopd === candidate.nopd) return true;
-      if (candidate.nama && String(row.namaOp || "").toLowerCase().includes(candidate.nama.toLowerCase())) return true;
-      if (candidate.alamat && String(row.alamatOp || "").toLowerCase().includes(candidate.alamat.toLowerCase())) return true;
-      return false;
-    });
-
     const warnings = buildQualityWarnings({
       candidate,
       wpMatches: wpMatches as Array<Record<string, unknown>>,
-      opMatches: opMatches as Array<Record<string, unknown>>,
     });
 
     res.json({ warnings });
@@ -2147,6 +2351,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const alamat = String(row.alamatOp ?? "").trim();
       return !row.wpId || !row.rekPajakId || nama.length === 0 || alamat.length === 0;
     });
+    const similarNameAddressGroups = buildSimilarNameAddressGroups(
+      opRows.map((row) => ({
+        id: row.id,
+        namaOp: row.namaOp,
+        alamatOp: row.alamatOp,
+      })),
+    );
 
     res.json({
       generatedAt: new Date().toISOString(),
@@ -2168,6 +2379,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       invalidGeoRange: {
         count: invalidGeoRows.length,
         relatedIds: invalidGeoRows.map((row) => row.id),
+      },
+      similarNameAddress: {
+        count: similarNameAddressGroups.length,
+        groups: similarNameAddressGroups,
       },
     });
   });
@@ -2411,7 +2626,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/objek-pajak/import", upload.single("file"), async (req, res) => {
     if (!requireRole(req, res, ["admin", "editor"])) return;
 
-    try {
+      try {
       if (!req.file) {
         return res.status(400).json({ message: "File CSV diperlukan" });
       }
@@ -2448,7 +2663,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const parsed = insertObjekPajakSchema.safeParse(opData);
         if (!parsed.success) {
           failed++;
-          errors.push(`Baris ${i + 2}: ${parsed.error.issues.map((e) => e.message).join(", ")}`);
+          const payload = buildValidationErrorPayload(parsed.error, "Data OP tidak valid");
+          errors.push(`Baris ${i + 2}: ${payload.fieldErrors.map((e) => e.message).join(", ")}`);
           continue;
         }
 
@@ -2458,7 +2674,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           const detailParsed = validateDetailByJenis(jenisPajak, detailCandidate);
           if (!detailParsed.success) {
             failed++;
-            errors.push(`Baris ${i + 2}: ${detailParsed.error.issues.map((e) => e.message).join(", ")}`);
+            const payload = buildValidationErrorPayload(detailParsed.error, "Detail pajak tidak valid");
+            errors.push(`Baris ${i + 2}: ${payload.fieldErrors.map((e) => e.message).join(", ")}`);
             continue;
           }
 
@@ -2482,7 +2699,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           success++;
         } catch (err: any) {
           failed++;
-          errors.push(`Baris ${i + 2}: ${err.message}`);
+          const normalized = normalizeObjekPajakMutationError(err);
+          errors.push(`Baris ${i + 2}: ${normalized.message}`);
         }
       }
 
@@ -2507,7 +2725,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const parsed = objekPajakVerificationSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.message });
+      return sendZodValidationError(res, parsed.error, "Data verifikasi tidak valid");
     }
 
     const actorName = parsed.data.verifierName?.trim() || getActorName(req);
@@ -2573,33 +2791,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const normalized = normalizeOpData(req.body);
     const parsed = insertObjekPajakSchema.safeParse(normalized);
     if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.message });
+      return sendZodValidationError(res, parsed.error, "Data objek pajak tidak valid");
     }
 
-    const jenisPajak = await getJenisPajakFromRekId(parsed.data.rekPajakId);
-    const detailParsed = validateDetailByJenis(jenisPajak, parsed.data.detailPajak);
-    if (!detailParsed.success) {
-      return res.status(400).json({ message: detailParsed.error.message });
-    }
+    try {
+      const jenisPajak = await getJenisPajakFromRekId(parsed.data.rekPajakId);
+      const detailParsed = validateDetailByJenis(jenisPajak, parsed.data.detailPajak);
+      if (!detailParsed.success) {
+        return sendZodValidationError(res, detailParsed.error, "Detail objek pajak tidak valid");
+      }
 
-    const created = await storage.createObjekPajak({
-      ...parsed.data,
-      statusVerifikasi: "draft",
-      catatanVerifikasi: null,
-      verifiedAt: null,
-      verifiedBy: null,
-      detailPajak: detailParsed.data,
-    });
-    await writeAuditLog({
-      entityType: "objek_pajak",
-      entityId: created.id,
-      action: "create",
-      actorName: getActorName(req),
-      beforeData: null,
-      afterData: created,
-      metadata: { source: "api" },
-    });
-    res.status(201).json(created);
+      const created = await storage.createObjekPajak({
+        ...parsed.data,
+        statusVerifikasi: "draft",
+        catatanVerifikasi: null,
+        verifiedAt: null,
+        verifiedBy: null,
+        detailPajak: detailParsed.data,
+      });
+      await writeAuditLog({
+        entityType: "objek_pajak",
+        entityId: created.id,
+        action: "create",
+        actorName: getActorName(req),
+        beforeData: null,
+        afterData: created,
+        metadata: { source: "api" },
+      });
+      res.status(201).json(created);
+    } catch (error) {
+      const normalized = normalizeObjekPajakMutationError(error);
+      res.status(normalized.status).json({
+        message: normalized.message,
+        fieldErrors: normalized.fieldErrors ?? [],
+      });
+    }
   });
 
   app.patch("/api/objek-pajak/:id", async (req, res) => {
@@ -2615,18 +2841,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const normalized = normalizeOpData(req.body, true);
     const parsed = partialSchema.safeParse(normalized);
     if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.message });
-    }
-
-    const targetRekPajakId = parsed.data.rekPajakId ?? existing.rekPajakId;
-    const targetJenis = await getJenisPajakFromRekId(targetRekPajakId);
-
-    if (parsed.data.detailPajak !== undefined) {
-      const detailParsed = validateDetailByJenis(targetJenis, parsed.data.detailPajak);
-      if (!detailParsed.success) {
-        return res.status(400).json({ message: detailParsed.error.message });
-      }
-      parsed.data.detailPajak = detailParsed.data;
+      return sendZodValidationError(res, parsed.error, "Data objek pajak tidak valid");
     }
 
     delete (parsed.data as Record<string, unknown>).statusVerifikasi;
@@ -2634,17 +2849,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     delete (parsed.data as Record<string, unknown>).verifiedAt;
     delete (parsed.data as Record<string, unknown>).verifiedBy;
 
-    const updated = await storage.updateObjekPajak(id, parsed.data);
-    await writeAuditLog({
-      entityType: "objek_pajak",
-      entityId: id,
-      action: "update",
-      actorName: getActorName(req),
-      beforeData: existing,
-      afterData: updated,
-      metadata: { source: "api" },
-    });
-    res.json(updated);
+    try {
+      const targetRekPajakId = parsed.data.rekPajakId ?? existing.rekPajakId;
+      const targetJenis = await getJenisPajakFromRekId(targetRekPajakId);
+
+      if (parsed.data.detailPajak !== undefined) {
+        const detailParsed = validateDetailByJenis(targetJenis, parsed.data.detailPajak);
+        if (!detailParsed.success) {
+          return sendZodValidationError(res, detailParsed.error, "Detail objek pajak tidak valid");
+        }
+        parsed.data.detailPajak = detailParsed.data;
+      }
+
+      const updated = await storage.updateObjekPajak(id, parsed.data);
+      await writeAuditLog({
+        entityType: "objek_pajak",
+        entityId: id,
+        action: "update",
+        actorName: getActorName(req),
+        beforeData: existing,
+        afterData: updated,
+        metadata: { source: "api" },
+      });
+      res.json(updated);
+    } catch (error) {
+      const normalizedError = normalizeObjekPajakMutationError(error);
+      res.status(normalizedError.status).json({
+        message: normalizedError.message,
+        fieldErrors: normalizedError.fieldErrors ?? [],
+      });
+    }
   });
 
   app.delete("/api/objek-pajak/:id", async (req, res) => {

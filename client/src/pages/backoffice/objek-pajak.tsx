@@ -46,7 +46,7 @@ import {
 } from "@/components/ui/pagination";
 import { useToast } from "@/hooks/use-toast";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { ApiError, type ApiFieldError, apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import type {
   MasterKecamatan,
@@ -85,6 +85,16 @@ type OPDetailValue = string | number | null;
 type OPDetailRecord = Record<string, OPDetailValue>;
 type QualityWarning = { level: string; code: string; message: string; relatedIds: Array<string | number> };
 const INITIAL_CURSOR = 2147483647;
+
+function applyApiFieldErrors(
+  form: UseFormReturn<OPFormValues>,
+  fieldErrors: ApiFieldError[],
+) {
+  for (const item of fieldErrors) {
+    if (!item.field || !item.message) continue;
+    form.setError(item.field as any, { type: "server", message: item.message });
+  }
+}
 
 function getDetailRecord(form: UseFormReturn<OPFormValues>): OPDetailRecord {
   const detail = form.watch("detailPajak");
@@ -445,6 +455,7 @@ function DetailFieldsPBJTParkir({ form }: { form: UseFormReturn<OPFormValues> })
       <div>
         <label className="font-mono text-[10px] font-bold text-black block mb-1">TARIF PARKIR</label>
         <Input
+          type="number"
           value={detail.tarifParkir || ""}
           onChange={(e) => update("tarifParkir", e.target.value)}
           placeholder="Motor: 2000, Mobil: 5000"
@@ -674,6 +685,7 @@ function OPFormDialog({
   const { toast } = useToast();
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [qualityWarnings, setQualityWarnings] = useState<QualityWarning[]>([]);
+  const [submitFieldErrors, setSubmitFieldErrors] = useState<ApiFieldError[]>([]);
 
   const form = useForm<OPFormValues>({
     resolver: zodResolver(opFormSchema),
@@ -697,6 +709,7 @@ function OPFormDialog({
 
   useEffect(() => {
     setQualityWarnings([]);
+    setSubmitFieldErrors([]);
     if (mode === "edit" && editOp) {
       form.reset({
         nopd: editOp.nopd,
@@ -729,9 +742,14 @@ function OPFormDialog({
       onOpenChange(false);
       form.reset();
       setQualityWarnings([]);
+      setSubmitFieldErrors([]);
       toast({ title: "Berhasil", description: "Objek Pajak berhasil ditambahkan" });
     },
     onError: (err: Error) => {
+      if (err instanceof ApiError) {
+        setSubmitFieldErrors(err.fieldErrors);
+        applyApiFieldErrors(form, err.fieldErrors);
+      }
       toast({ title: "Gagal", description: err.message, variant: "destructive" });
     },
   });
@@ -745,16 +763,22 @@ function OPFormDialog({
       invalidateObjekPajakQueries();
       onOpenChange(false);
       setQualityWarnings([]);
+      setSubmitFieldErrors([]);
       toast({ title: "Berhasil", description: "Objek Pajak berhasil diperbarui" });
     },
     onError: (err: Error) => {
+      if (err instanceof ApiError) {
+        setSubmitFieldErrors(err.fieldErrors);
+        applyApiFieldErrors(form, err.fieldErrors);
+      }
       toast({ title: "Gagal", description: err.message, variant: "destructive" });
     },
   });
 
   const isPending = createMutation.isPending || updateMutation.isPending;
   const selectedRekPajakId = form.watch("rekPajakId");
-  const jenisPajak = rekeningList.find((item) => item.id === selectedRekPajakId)?.jenisPajak || "";
+  const selectedRekening = rekeningList.find((item) => item.id === selectedRekPajakId);
+  const jenisPajak = selectedRekening?.jenisPajak || "";
   const selectedKecamatanId = form.watch("kecamatanId");
   const selectedKecamatanKode = kecamatanList.find((item) => item.cpmKecId === selectedKecamatanId)?.cpmKodeKec;
   const filteredKelurahanList = selectedKecamatanKode
@@ -775,6 +799,8 @@ function OPFormDialog({
   };
 
   const handleSubmit = async (data: OPFormValues) => {
+    form.clearErrors();
+    setSubmitFieldErrors([]);
     const payload = normalizeOpPayload(data, rekeningList);
     const warnings = await runQualityCheck(payload);
     if (warnings.length > 0) {
@@ -798,7 +824,8 @@ function OPFormDialog({
           </DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="p-4 space-y-4">\n            <FormField
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="p-4 space-y-4">
+            <FormField
               control={form.control}
               name="rekPajakId"
               render={({ field }) => (
@@ -1070,7 +1097,17 @@ function OPFormDialog({
                 <p className="font-mono text-xs font-bold text-orange-900">Warning Data Quality</p>
                 {qualityWarnings.map((item) => (
                   <p key={item.code} className="font-mono text-[11px] text-orange-800">
-                    {item.code}: {item.message}
+                    {item.message}
+                  </p>
+                ))}
+              </div>
+            )}
+            {submitFieldErrors.length > 0 && (
+              <div className="border-[2px] border-red-600 bg-red-50 p-3 space-y-1">
+                <p className="font-mono text-xs font-bold text-red-900">Periksa Isian Form</p>
+                {submitFieldErrors.map((item, index) => (
+                  <p key={`${item.field}-${index}`} className="font-mono text-[11px] text-red-800">
+                    {item.message}
                   </p>
                 ))}
               </div>
@@ -1147,19 +1184,22 @@ export default function BackofficeObjekPajak() {
   const { data: wpPage } = useQuery<PaginatedResult<WajibPajakListItem>>({
     queryKey: ["/api/wajib-pajak?page=1&limit=100"],
   });
-  const wpList = wpPage?.items ?? [];
+  const wpList = Array.isArray(wpPage?.items) ? wpPage.items : [];
 
-  const { data: rekeningList = [] } = useQuery<MasterRekeningPajak[]>({
+  const { data: rekeningListData } = useQuery<MasterRekeningPajak[]>({
     queryKey: ["/api/master/rekening-pajak"],
   });
+  const rekeningList = Array.isArray(rekeningListData) ? rekeningListData : [];
 
-  const { data: kecamatanList = [] } = useQuery<MasterKecamatan[]>({
+  const { data: kecamatanListData } = useQuery<MasterKecamatan[]>({
     queryKey: ["/api/master/kecamatan"],
   });
+  const kecamatanList = Array.isArray(kecamatanListData) ? kecamatanListData : [];
 
-  const { data: kelurahanList = [] } = useQuery<MasterKelurahan[]>({
+  const { data: kelurahanListData } = useQuery<MasterKelurahan[]>({
     queryKey: ["/api/master/kelurahan"],
   });
+  const kelurahanList = Array.isArray(kelurahanListData) ? kelurahanListData : [];
 
   const { toast } = useToast();
 
@@ -1173,14 +1213,32 @@ export default function BackofficeObjekPajak() {
     formData.append("file", file);
 
     try {
-      const res = await fetch("/api/objek-pajak/import", { method: "POST", body: formData });
+      const res = await fetch("/api/objek-pajak/import", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
       const result = await res.json();
       if (!res.ok) {
-        toast({ title: "Gagal", description: result.message, variant: "destructive" });
+        const description =
+          typeof result?.message === "string"
+            ? result.message
+            : "Import OP gagal diproses. Periksa file CSV lalu coba lagi.";
+        toast({ title: "Gagal", description, variant: "destructive" });
       } else {
+        const errorPreview = Array.isArray(result.errors)
+          ? result.errors
+              .slice(0, 3)
+              .filter((item: unknown): item is string => typeof item === "string" && item.trim().length > 0)
+              .join(" | ")
+          : "";
         toast({
           title: "Import Selesai",
-          description: `${result.success} berhasil, ${result.failed} gagal dari ${result.total} data`,
+          description:
+            result.failed > 0 && errorPreview
+              ? `${result.success} berhasil, ${result.failed} gagal dari ${result.total} data. Contoh error: ${errorPreview}`
+              : `${result.success} berhasil, ${result.failed} gagal dari ${result.total} data`,
+          variant: result.failed > 0 ? "destructive" : "default",
         });
         if (result.errors?.length > 0) {
           console.log("Import errors:", result.errors);
@@ -1188,7 +1246,8 @@ export default function BackofficeObjekPajak() {
         invalidateObjekPajakQueries();
       }
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      const description = err instanceof Error ? err.message : "Import OP gagal diproses. Coba lagi.";
+      toast({ title: "Error", description, variant: "destructive" });
     }
 
     if (fileInputRef.current) fileInputRef.current.value = "";

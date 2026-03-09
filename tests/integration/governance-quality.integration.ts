@@ -25,6 +25,7 @@ async function run() {
     const uniq = Date.now().toString().slice(-6);
     const kodeKec = `9${uniq.slice(0, 3)}`;
     const kodeKel = `${uniq.slice(3, 6) || "001"}`.slice(0, 3).padStart(3, "0");
+    const rekeningSuffix = uniq.slice(-4).padStart(4, "0");
 
     const createKec = await jsonRequest("/api/master/kecamatan", "POST", {
       cpmKecamatan: `Kecamatan IT ${uniq}`,
@@ -42,7 +43,7 @@ async function run() {
     createdKelId = String((createKel.body as JsonRecord).cpmKelId);
 
     const createRek = await jsonRequest("/api/master/rekening-pajak", "POST", {
-      kodeRekening: `9.9.${uniq}`,
+      kodeRekening: `4.1.01.14.01.${rekeningSuffix}`,
       namaRekening: `Rekening IT ${uniq}`,
       jenisPajak: "Pajak MBLB",
       isActive: true,
@@ -115,14 +116,24 @@ async function run() {
     });
     assert.equal(qualityCheck.response.status, 200);
     assert.ok(Array.isArray((qualityCheck.body as JsonRecord).warnings));
-    assert.ok(
-      ((qualityCheck.body as JsonRecord).warnings as JsonRecord[]).some((warning) => warning.code === "DUPLICATE_NOPD"),
+    const warnings = (qualityCheck.body as JsonRecord).warnings as JsonRecord[];
+    assert.equal(warnings.length, 0);
+    assert.equal(
+      warnings.some((item) => item.code === "DUPLICATE_NOPD" || item.code === "SIMILAR_NAME_ADDRESS"),
+      false,
+      "Warning OP noisy tidak boleh muncul di quality/check",
     );
 
     const qualityReport = await requestJson("/api/quality/report");
     assert.equal(qualityReport.response.status, 200);
     assert.ok((qualityReport.body as JsonRecord).duplicateIndicators);
     assert.ok((qualityReport.body as JsonRecord).invalidGeoRange);
+    assert.ok((qualityReport.body as JsonRecord).similarNameAddress);
+    assert.equal(
+      typeof ((qualityReport.body as JsonRecord).similarNameAddress as JsonRecord).count,
+      "number",
+      "similarNameAddress harus tersedia sebagai signal internal report",
+    );
 
     const patchRek = await jsonRequest(`/api/master/rekening-pajak/${createdRekId}`, "PATCH", { isActive: false });
     assert.equal(patchRek.response.status, 200);
