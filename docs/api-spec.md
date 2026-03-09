@@ -97,6 +97,37 @@ Rule umum:
 Kolom CSV WP:
 `jenis_wp, peran_wp, npwpd, status_aktif, nama_wp, nik_ktp_wp, alamat_wp, kecamatan_wp, kelurahan_wp, telepon_wa_wp, email_wp, nama_pengelola, nik_pengelola, alamat_pengelola, kecamatan_pengelola, kelurahan_pengelola, telepon_wa_pengelola, nama_badan_usaha, npwp_badan_usaha, alamat_badan_usaha, kecamatan_badan_usaha, kelurahan_badan_usaha, telepon_badan_usaha, email_badan_usaha`
 
+### Attachment WP
+- `GET /api/wajib-pajak/:id/attachments`
+- `POST /api/wajib-pajak/:id/attachments`
+- `GET /api/wajib-pajak/:id/attachments/:attachmentId/download`
+- `DELETE /api/wajib-pajak/:id/attachments/:attachmentId`
+- Auth:
+  - list/download: `admin|editor|viewer`
+  - upload/delete: `admin|editor`
+
+Payload upload (`multipart/form-data`):
+- `file`
+- `documentType`: `ktp|npwp|surat_kuasa|dokumen_lain`
+- `notes` (opsional)
+
+Response item:
+```json
+{
+  "id": "uuid-like-string",
+  "entityType": "wajib_pajak",
+  "entityId": 21,
+  "documentType": "ktp",
+  "fileName": "ktp-budi.pdf",
+  "mimeType": "application/pdf",
+  "fileSize": 182044,
+  "storagePath": "wajib_pajak/21/ktp/....pdf",
+  "uploadedAt": "2026-03-10T03:00:00.000Z",
+  "uploadedBy": "admin",
+  "notes": "scan terbaru"
+}
+```
+
 ---
 
 ## Objek Pajak (OP)
@@ -250,6 +281,32 @@ Aturan:
 - Error import dikembalikan per baris dalam bentuk pesan yang sudah dinormalisasi, misalnya:
   - `Baris 4: Format NOPD salah, mohon diperiksa kembali`
   - `Baris 8: NOPD sudah digunakan oleh objek pajak lain`
+
+### Attachment OP
+- `GET /api/objek-pajak/:id/attachments`
+- `POST /api/objek-pajak/:id/attachments`
+- `GET /api/objek-pajak/:id/attachments/:attachmentId/download`
+- `DELETE /api/objek-pajak/:id/attachments/:attachmentId`
+- Auth:
+  - list/download: `admin|editor|viewer`
+  - upload/delete: `admin|editor`
+
+Payload upload (`multipart/form-data`):
+- `file`
+- `documentType`: `foto_usaha|foto_lokasi|izin_usaha|dokumen_lain`
+- `notes` (opsional)
+
+Rule upload attachment WP/OP:
+- mime type yang diterima:
+  - `application/pdf`
+  - `image/jpeg`
+  - `image/png`
+  - `image/webp`
+- ukuran file maksimum: `5 MB`
+- error user-facing:
+  - `Format file tidak didukung`
+  - `Ukuran file melebihi batas 5 MB`
+  - `File gagal diunggah. Silakan coba lagi.`
 
 ---
 

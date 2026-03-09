@@ -1785,7 +1785,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       peranWp,
       statusAktif,
     });
-    return res.json(data);
+    return sendJsonWithEtag(req, res, data);
   });
 
   app.get("/api/wajib-pajak/detail/:id", async (req, res) => {
@@ -2170,7 +2170,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
 
     const data = await storage.getAllMasterKecamatan();
-    return res.json(data);
+    return sendJsonWithEtag(req, res, data);
   });
 
   app.post("/api/master/kecamatan", async (req, res) => {
@@ -2320,7 +2320,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const kecamatanId = typeof req.query.kecamatanId === "string" ? req.query.kecamatanId : undefined;
     const data = await storage.getMasterKelurahan(kecamatanId);
-    return res.json(data);
+    return sendJsonWithEtag(req, res, data);
   });
 
   app.post("/api/master/kelurahan", async (req, res) => {
@@ -2471,7 +2471,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const data = includeInactive
       ? await db.select().from(masterRekeningPajak).orderBy(asc(masterRekeningPajak.kodeRekening))
       : await storage.getAllMasterRekeningPajak();
-    return res.json(data);
+    return sendJsonWithEtag(req, res, data);
   });
 
   app.post("/api/master/rekening-pajak", async (req, res) => {
@@ -2885,7 +2885,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       rekPajakId: rekPajakId ?? undefined,
     });
 
-    return res.json(data);
+    return sendJsonWithEtag(req, res, data);
   });
 
   app.get("/api/objek-pajak/map", async (req, res) => {

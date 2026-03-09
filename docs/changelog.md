@@ -1,5 +1,51 @@
 # Changelog
 
+## Phase 2.14 — WP/OP Attachments MVP
+
+### Added
+- Attachment backend generik untuk `wajib_pajak` dan `objek_pajak`:
+  - upload
+  - list
+  - download
+  - delete
+- Metadata attachment baru:
+  - `entity_type`
+  - `entity_id`
+  - `document_type`
+  - `file_name`
+  - `mime_type`
+  - `file_size`
+  - `storage_path`
+  - `uploaded_at`
+  - `uploaded_by`
+  - `notes`
+- Panel lampiran di dialog edit Wajib Pajak:
+  - KTP/NIK
+  - NPWP
+  - Surat Kuasa
+  - Dokumen Lain
+- Panel lampiran di dialog edit Objek Pajak:
+  - Foto Usaha
+  - Foto Lokasi
+  - Izin Usaha
+  - Dokumen Lain
+- Preview attachment untuk gambar dan PDF, termasuk zoom in/out/reset pada gambar.
+- Health endpoint sekarang juga memverifikasi storage attachment dengan status `attachmentsStorage: ready`.
+
+### Improved
+- Flow upload memakai volume/filesystem lokal sebagai baseline staging/production awal.
+- Error upload file dinormalisasi ke pesan user-friendly:
+  - `Format file tidak didukung`
+  - `Ukuran file melebihi batas 5 MB`
+  - `File gagal diunggah. Silakan coba lagi.`
+- Runbook staging kini mencakup mount volume persisten untuk `/app/uploads`.
+
+### Fixed
+- Preview gambar attachment sekarang auto-fit ke box tanpa crop, lalu bisa di-zoom manual.
+
+### Breaking
+- Tidak ada breaking API pada flow lama, tetapi environment staging/production sekarang membutuhkan storage persisten untuk attachment jika fitur upload diaktifkan.
+
 ## Phase 2.13 — OP Detail FE Hard Sync
 
 ### Improved

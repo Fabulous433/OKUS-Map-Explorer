@@ -83,11 +83,13 @@ POST_LAUNCH_USERNAME=admin
 POST_LAUNCH_PASSWORD=admin123
 POST_LAUNCH_TIMEOUT_MS=30000
 POST_LAUNCH_GENERATED_BY=staging-system
+ATTACHMENTS_STORAGE_ROOT=/app/uploads
 ```
 
 Catatan penting:
 - `ops:backup`/`ops:restore:drill` saat ini diasumsikan Docker container lokal.
 - Untuk EasyPanel, backup/restore pakai fitur backup DB EasyPanel (lihat Step 6).
+- Attachment WP/OP membutuhkan storage persisten. Di EasyPanel, mount volume persisten ke path `/app/uploads`.
 
 ## Step 4 — Hubungkan Domain Staging
 Di EasyPanel:
@@ -133,6 +135,13 @@ npm run ops:smoke -- --base-url https://staging-map.domainkamu.com
 npm run ops:report:daily -- --base-url https://staging-map.domainkamu.com
 npm run ops:post-launch:snapshot -- --base-url https://staging-map.domainkamu.com
 ```
+
+Tambahan validasi attachment:
+1. upload 1 PDF ke WP
+2. upload 1 foto ke OP
+3. preview/download/delete sukses
+4. redeploy app staging
+5. pastikan metadata tetap terbaca dan file tetap bisa di-download
 
 ### Backup & Restore Drill (EasyPanel style)
 1. Buat backup/snapshot dari `okus-stg-db` via UI EasyPanel.
