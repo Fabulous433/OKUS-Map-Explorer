@@ -34,6 +34,7 @@ import multer from "multer";
 import { ZodError, type ZodIssue } from "zod";
 import { APP_ROLE_OPTIONS, hashPassword, isAppRole, PASSWORD_POLICY, validatePasswordPolicy, verifyPassword, type AppRole, type SessionUser } from "./auth";
 import { LoginSecurityService, resolveLoginClientId } from "./auth-security";
+import { ensureAttachmentStorageRoot } from "./file-storage";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
@@ -1479,10 +1480,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const healthHandler = async (_req: Request, res: Response) => {
     try {
       await ensureDatabaseConnection();
+      await ensureAttachmentStorageRoot();
       return res.json({
         status: "healthy",
         service: "okus-map-explorer",
         database: "up",
+        attachmentsStorage: "ready",
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

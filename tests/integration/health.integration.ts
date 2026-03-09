@@ -12,12 +12,14 @@ async function run() {
     assert.equal(typeof publicHealth.body, "object");
     assert.equal((publicHealth.body as { status?: string }).status, "healthy");
     assert.equal((publicHealth.body as { database?: string }).database, "up");
+    assert.equal((publicHealth.body as { attachmentsStorage?: string }).attachmentsStorage, "ready");
 
     const apiHealth = await requestJson("/api/health");
     assert.equal(apiHealth.response.status, 200);
     assert.equal(typeof apiHealth.body, "object");
     assert.equal((apiHealth.body as { status?: string }).status, "healthy");
     assert.equal((apiHealth.body as { service?: string }).service, "okus-map-explorer");
+    assert.equal((apiHealth.body as { attachmentsStorage?: string }).attachmentsStorage, "ready");
   } finally {
     await close();
   }
