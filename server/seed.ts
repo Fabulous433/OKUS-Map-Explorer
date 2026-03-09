@@ -290,7 +290,7 @@ export async function seedDatabase() {
     });
 
     await storage.createObjekPajak({
-      nopd: "OP.321.001.2024",
+      nopd: "19.01.01.0001",
       wpId: wp1.id,
       rekPajakId: rekMakananId,
       namaOp: "RM Pindang Meranjat Pak Syarif",
@@ -315,7 +315,7 @@ export async function seedDatabase() {
     });
 
     await storage.createObjekPajak({
-      nopd: "OP.321.002.2024",
+      nopd: "19.03.01.0001",
       wpId: wp2.id,
       rekPajakId: rekHotelId,
       namaOp: "Hotel Ranau Indah",
@@ -340,7 +340,7 @@ export async function seedDatabase() {
     });
 
     await storage.createObjekPajak({
-      nopd: "OP.321.003.2024",
+      nopd: "19.01.01.0002",
       wpId: wp3.id,
       rekPajakId: rekMakananId,
       namaOp: "Rumah Makan Sederhana Berkah",
@@ -365,7 +365,7 @@ export async function seedDatabase() {
     });
 
     await storage.createObjekPajak({
-      nopd: "OP.321.004.2024",
+      nopd: "19.01.01.0003",
       wpId: wp4.id,
       rekPajakId: rekMakananId,
       namaOp: "Warung Sate Kambing Pak Fauzi",
@@ -390,7 +390,7 @@ export async function seedDatabase() {
     });
 
     await storage.createObjekPajak({
-      nopd: "OP.321.005.2024",
+      nopd: "09.00.00.0001",
       wpId: wp6.id,
       rekPajakId: rekReklameId,
       namaOp: "Billboard Jl. A. Yani - Coca Cola",
@@ -416,7 +416,7 @@ export async function seedDatabase() {
     });
 
     await storage.createObjekPajak({
-      nopd: "OP.321.006.2024",
+      nopd: "09.00.00.0002",
       wpId: wp8.id,
       rekPajakId: rekReklameId,
       namaOp: "Neon Box - Toko Elektronik Jaya",

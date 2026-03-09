@@ -6,7 +6,7 @@ import { sql } from "drizzle-orm";
 
 import { registerRoutes } from "../../server/routes";
 import { createRequestContextMiddleware } from "../../server/observability";
-import { db, ensureDatabaseConnection } from "../../server/storage";
+import { closeDatabasePool, db, ensureDatabaseConnection } from "../../server/storage";
 import { seedDatabase } from "../../server/seed";
 
 export type JsonRecord = Record<string, unknown>;
@@ -154,6 +154,7 @@ export async function createIntegrationServer(options: CreateIntegrationServerOp
         resolve();
       });
     });
+    await closeDatabasePool();
   };
 
   return {

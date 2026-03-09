@@ -152,6 +152,37 @@ async function run() {
     assert.equal(mblbCreate.response.status, 201, "MBLB tanpa detail harus bisa disimpan");
     const mblbId = requiredNumber((mblbCreate.body as JsonRecord).id, "id MBLB wajib ada");
     createdIds.push(mblbId);
+
+    const rekeningParkir = rekeningList.find((item) => item.jenisPajak === "PBJT Jasa Parkir");
+    assert.ok(rekeningParkir, "Master rekening parkir wajib ada");
+
+    const invalidNumericDetail = await jsonRequest("/api/objek-pajak", "POST", {
+      wpId,
+      rekPajakId: requiredNumber(rekeningParkir!.id, "rek_pajak_id parkir wajib number"),
+      namaOp: `IT Invalid Numeric Parkir ${Date.now()}`,
+      alamatOp: "Jl. Invalid Numeric",
+      kecamatanId,
+      kelurahanId,
+      status: "active",
+      detailPajak: {
+        jenisLokasi: "Gedung",
+        kapasitasKendaraan: 15,
+        tarifParkir: "abc",
+      },
+    });
+    assert.equal(invalidNumericDetail.response.status, 400, "Tarif parkir non-numeric harus ditolak");
+    assert.equal(
+      (invalidNumericDetail.body as JsonRecord).message,
+      "Tarif parkir harus berupa angka",
+    );
+    assert.ok(Array.isArray((invalidNumericDetail.body as JsonRecord).fieldErrors));
+    assert.ok(
+      ((invalidNumericDetail.body as JsonRecord).fieldErrors as JsonRecord[]).some(
+        (item) =>
+          item.field === "tarifParkir" || item.field === "detailPajak.tarifParkir",
+      ),
+      "fieldErrors harus menunjuk field numerik yang salah",
+    );
   } finally {
     for (const id of createdIds) {
       await jsonRequest(`/api/objek-pajak/${id}`, "DELETE");
