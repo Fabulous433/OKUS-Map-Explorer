@@ -1,5 +1,40 @@
 # Changelog
 
+## Phase 2.13 — OP Detail FE Hard Sync
+
+### Improved
+- Form detail OP mulai hard-sync ke contract final untuk jenis yang sudah ada di UI:
+  - Makan Minum
+  - Perhotelan
+  - Hiburan
+  - Parkir
+  - Reklame
+- Panel detail baru ditambahkan untuk:
+  - PBJT Tenaga Listrik
+  - Pajak Air Tanah
+  - Pajak Sarang Burung Walet
+- Detail hotel sekarang memakai `fasilitas[]` dan UI multi-select.
+- Detail reklame sekarang memakai tiga ukuran terpisah:
+  - `ukuranPanjang`
+  - `ukuranLebar`
+  - `ukuranTinggi`
+- Contract CSV OP mulai disinkronkan dengan shape detail final baru.
+- Taksonomi PBJT di form OP mulai dirapikan ke kategori resmi untuk:
+  - Makanan Minuman
+  - Perhotelan
+  - Parkir
+  - Hiburan
+  - Tenaga Listrik
+- Detail parkir sekarang membedakan `jenisUsaha` dan `jenisLokasi`.
+- Detail makanan-minuman sekarang mendukung klasifikasi khusus untuk Restoran.
+- Halaman backoffice OP dipecah menjadi modul terpisah untuk helper/schema, detail fields, map picker, dan dialog form agar perubahan berikutnya tidak lagi bertumpu pada satu file raksasa.
+- Halaman Master Data FE disederhanakan menjadi rekening-only; CRUD kecamatan dan kelurahan disembunyikan dari UI backoffice, tetapi tetap dipakai sebagai data referensi dropdown di form.
+- Setelah create/update OP berhasil, list kembali ke halaman pertama agar data yang baru diubah langsung terlihat operator.
+- Kolom PAJAK/BLN di list OP sekarang hanya menampilkan Rp, tanpa simbol mata uang ganda.
+- Flow quality check WP sekarang menampilkan dialog duplikasi di tengah layar dengan CTA `Perbaiki` dan `Lihat Data Duplikasi`, bukan warning teks polos di dalam form.
+- Payload warning duplicate WP sekarang membawa metadata `duplicates[]` berisi nama data bentrok dan nilai yang sama agar FE bisa mengarahkan operator ke record existing.
+- Quality check WP mode edit sekarang mendukung `excludeWpId`, sehingga record yang sedang diedit tidak dianggap duplikat terhadap dirinya sendiri.
+
 ## Phase 2.12 — OP NOPD + Validation UX Hardening
 
 ### Added
@@ -399,3 +434,4 @@
 ### Breaking
 - `GET /api/objek-pajak` default response kini hanya OP `verified`.
   - Untuk kebutuhan internal/backoffice gunakan `?includeUnverified=true`.
+

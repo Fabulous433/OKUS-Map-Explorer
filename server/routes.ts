@@ -106,7 +106,9 @@ const OP_CSV_COLUMNS = [
   "detail_jenis_tenaga_listrik",
   "detail_daya_listrik",
   "detail_jenis_reklame",
-  "detail_ukuran_reklame",
+  "detail_ukuran_panjang",
+  "detail_ukuran_lebar",
+  "detail_ukuran_tinggi",
   "detail_judul_reklame",
   "detail_masa_berlaku",
   "detail_status_reklame",
@@ -132,11 +134,22 @@ type AuditFilter = {
   cursor?: number;
 };
 
+type QualityWarningDuplicate = {
+  id: number;
+  displayName: string;
+  npwpd?: string | null;
+  nikKtpWp?: string | null;
+  nikPengelola?: string | null;
+  npwpBadanUsaha?: string | null;
+  matchedField?: "npwpd" | "nikKtpWp" | "nikPengelola" | "npwpBadanUsaha";
+};
+
 type QualityWarning = {
   level: "info" | "warning" | "critical";
   code: string;
   message: string;
   relatedIds: Array<string | number>;
+  duplicates?: QualityWarningDuplicate[];
 };
 
 type ValidationFieldError = {
@@ -500,7 +513,9 @@ function formatFieldLabel(rawField: string) {
     kapasitasKendaraan: "Kapasitas kendaraan",
     jenisLokasi: "Jenis lokasi",
     jenisReklame: "Jenis reklame",
-    ukuranReklame: "Ukuran reklame",
+    ukuranPanjang: "Ukuran panjang",
+    ukuranLebar: "Ukuran lebar",
+    ukuranTinggi: "Ukuran tinggi",
     jenisHiburan: "Jenis hiburan",
     kapasitas: "Kapasitas",
     dayaListrik: "Daya listrik",
@@ -542,7 +557,9 @@ function buildFriendlyIssueMessage(issue: ZodIssue) {
     dayaListrik: "Daya listrik harus berupa angka",
     hargaTermurah: "Harga termurah harus berupa angka",
     hargaTermahal: "Harga termahal harus berupa angka",
-    ukuranReklame: "Ukuran reklame harus berupa angka",
+    ukuranPanjang: "Ukuran panjang harus berupa angka",
+    ukuranLebar: "Ukuran lebar harus berupa angka",
+    ukuranTinggi: "Ukuran tinggi harus berupa angka",
     rata2UkuranPemakaian: "Rata-rata ukuran pemakaian harus berupa angka",
     panenPerTahun: "Panen per tahun harus berupa angka",
     rata2BeratPanen: "Rata-rata berat panen harus berupa angka",
@@ -722,47 +739,131 @@ async function listAuditLogs(filter: AuditFilter) {
   return { data, nextCursor, hasMore };
 }
 
+function buildWpWarningDisplayName(row: {
+  namaWp: string | null;
+  namaPengelola: string | null;
+  namaBadanUsaha: string | null;
+}) {
+  const candidates = [row.namaWp, row.namaPengelola, row.namaBadanUsaha];
+  for (const item of candidates) {
+    const value = String(item ?? "").trim();
+    if (value.length > 0) return value;
+  }
+  return "(tanpa nama)";
+}
+
+function buildWarningDuplicates(
+  rows: Array<{
+    id: number;
+    npwpd: string | null;
+    nikKtpWp: string | null;
+    nikPengelola: string | null;
+    npwpBadanUsaha: string | null;
+    namaWp: string | null;
+    namaPengelola: string | null;
+    namaBadanUsaha: string | null;
+  }>,
+  matchedField: "npwpd" | "nikKtpWp" | "nikPengelola" | "npwpBadanUsaha",
+) {
+  return rows.map((row) => ({
+    id: row.id,
+    displayName: buildWpWarningDisplayName(row),
+    npwpd: row.npwpd,
+    nikKtpWp: row.nikKtpWp,
+    nikPengelola: row.nikPengelola,
+    npwpBadanUsaha: row.npwpBadanUsaha,
+    matchedField,
+  }));
+}
+
 function buildQualityWarnings(input: {
-  candidate: Record<string, string | undefined>;
-  wpMatches: Array<Record<string, unknown>>;
+  candidate: { npwpd?: string; nikKtpWp?: string; nikPengelola?: string; npwpBadanUsaha?: string; };
+  wpMatches: Array<{
+    id: number;
+    npwpd: string | null;
+    nikKtpWp: string | null;
+    nikPengelola: string | null;
+    npwpBadanUsaha: string | null;
+    namaWp: string | null;
+    namaPengelola: string | null;
+    namaBadanUsaha: string | null;
+  }>;
 }) {
   const warnings: QualityWarning[] = [];
   const { candidate, wpMatches } = input;
 
-  if (candidate.npwpd && wpMatches.some((wp) => String(wp.npwpd || "") === candidate.npwpd)) {
-    warnings.push({
-      level: "critical",
-      code: "DUPLICATE_NPWPD",
-      message: "NPWPD sudah digunakan oleh wajib pajak lain",
-      relatedIds: wpMatches.filter((wp) => String(wp.npwpd || "") === candidate.npwpd).map((wp) => Number(wp.id)),
-    });
+  if (candidate.npwpd) {
+    const duplicates = wpMatches.filter((wp) => String(wp.npwpd || "") === candidate.npwpd);
+    if (duplicates.length > 0) {
+      warnings.push({
+        level: "critical",
+        code: "DUPLICATE_NPWPD",
+        message: "Maaf, NPWPD yang Anda masukkan terdeteksi duplikasi.",
+        relatedIds: duplicates.map((wp) => Number(wp.id)),
+        duplicates: buildWarningDuplicates(duplicates, "npwpd"),
+      });
+    }
   }
 
-  if (candidate.nikKtpWp && wpMatches.some((wp) => String(wp.nikKtpWp || "") === candidate.nikKtpWp)) {
-    warnings.push({
-      level: "warning",
-      code: "DUPLICATE_NIK_WP",
-      message: "NIK pemilik ditemukan pada wajib pajak lain",
-      relatedIds: wpMatches.filter((wp) => String(wp.nikKtpWp || "") === candidate.nikKtpWp).map((wp) => Number(wp.id)),
-    });
+  if (candidate.nikKtpWp) {
+    const asOwner = wpMatches.filter((wp) => String(wp.nikKtpWp || "") === candidate.nikKtpWp);
+    if (asOwner.length > 0) {
+      warnings.push({
+        level: "warning",
+        code: "DUPLICATE_NIK_WP",
+        message: "Maaf, NIK yang Anda masukkan terdeteksi sebagai pemilik di sistem kami.",
+        relatedIds: asOwner.map((wp) => Number(wp.id)),
+        duplicates: buildWarningDuplicates(asOwner, "nikKtpWp"),
+      });
+    }
+
+    const asManager = wpMatches.filter((wp) => String(wp.nikPengelola || "") === candidate.nikKtpWp);
+    if (asManager.length > 0) {
+      warnings.push({
+        level: "warning",
+        code: "DUPLICATE_NIK_WP_AS_PENGELOLA",
+        message: "Maaf, NIK yang Anda masukkan terdeteksi sebagai pengelola di sistem kami.",
+        relatedIds: asManager.map((wp) => Number(wp.id)),
+        duplicates: buildWarningDuplicates(asManager, "nikPengelola"),
+      });
+    }
   }
 
-  if (candidate.nikPengelola && wpMatches.some((wp) => String(wp.nikPengelola || "") === candidate.nikPengelola)) {
-    warnings.push({
-      level: "warning",
-      code: "DUPLICATE_NIK_PENGELOLA",
-      message: "NIK pengelola ditemukan pada wajib pajak lain",
-      relatedIds: wpMatches.filter((wp) => String(wp.nikPengelola || "") === candidate.nikPengelola).map((wp) => Number(wp.id)),
-    });
+  if (candidate.nikPengelola) {
+    const asManager = wpMatches.filter((wp) => String(wp.nikPengelola || "") === candidate.nikPengelola);
+    if (asManager.length > 0) {
+      warnings.push({
+        level: "warning",
+        code: "DUPLICATE_NIK_PENGELOLA",
+        message: "Maaf, NIK yang Anda masukkan terdeteksi sebagai pengelola di sistem kami.",
+        relatedIds: asManager.map((wp) => Number(wp.id)),
+        duplicates: buildWarningDuplicates(asManager, "nikPengelola"),
+      });
+    }
+
+    const asOwner = wpMatches.filter((wp) => String(wp.nikKtpWp || "") === candidate.nikPengelola);
+    if (asOwner.length > 0) {
+      warnings.push({
+        level: "warning",
+        code: "DUPLICATE_NIK_PENGELOLA_AS_WP",
+        message: "Maaf, NIK yang Anda masukkan terdeteksi sebagai pemilik di sistem kami.",
+        relatedIds: asOwner.map((wp) => Number(wp.id)),
+        duplicates: buildWarningDuplicates(asOwner, "nikKtpWp"),
+      });
+    }
   }
 
-  if (candidate.npwpBadanUsaha && wpMatches.some((wp) => String((wp as any).npwpBadanUsaha || "") === candidate.npwpBadanUsaha)) {
-    warnings.push({
-      level: "warning",
-      code: "DUPLICATE_NPWP_BADAN_USAHA",
-      message: "NPWP badan usaha ditemukan pada record lain",
-      relatedIds: wpMatches.filter((wp) => String((wp as any).npwpBadanUsaha || "") === candidate.npwpBadanUsaha).map((wp) => Number(wp.id)),
-    });
+  if (candidate.npwpBadanUsaha) {
+    const duplicates = wpMatches.filter((wp) => String(wp.npwpBadanUsaha || "") === candidate.npwpBadanUsaha);
+    if (duplicates.length > 0) {
+      warnings.push({
+        level: "warning",
+        code: "DUPLICATE_NPWP_BADAN_USAHA",
+        message: "Maaf, NPWP badan usaha yang Anda masukkan terdeteksi duplikasi.",
+        relatedIds: duplicates.map((wp) => Number(wp.id)),
+        duplicates: buildWarningDuplicates(duplicates, "npwpBadanUsaha"),
+      });
+    }
   }
 
   return warnings;
@@ -944,6 +1045,16 @@ function compactObject<T extends Record<string, unknown>>(input: T): Partial<T> 
   ) as Partial<T>;
 }
 
+function parseStringArray(value: string | undefined) {
+  const cleaned = cleanText(value);
+  if (!cleaned) return undefined;
+  const items = cleaned
+    .split("|")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  return items.length > 0 ? items : undefined;
+}
+
 function normalizeOpData(payload: Record<string, unknown>, partial = false) {
   const normalized: Record<string, unknown> = {};
 
@@ -981,6 +1092,7 @@ function buildDetailFromCsvRow(row: CsvImportRow, jenisPajak: string) {
   if (jenisPajak === "PBJT Makanan dan Minuman") {
     return compactObject({
       jenisUsaha: cleanText(row.detail_jenis_usaha) ?? undefined,
+      klasifikasi: cleanText(row.detail_klasifikasi) ?? undefined,
       kapasitasTempat: parseNumber(row.detail_kapasitas_tempat) ?? undefined,
       jumlahKaryawan: parseNumber(row.detail_jumlah_karyawan) ?? undefined,
       rata2Pengunjung: parseNumber(row.detail_rata2_pengunjung) ?? undefined,
@@ -996,7 +1108,7 @@ function buildDetailFromCsvRow(row: CsvImportRow, jenisPajak: string) {
       jenisUsaha: cleanText(row.detail_jenis_usaha) ?? undefined,
       jumlahKamar: parseNumber(row.detail_jumlah_kamar) ?? undefined,
       klasifikasi: cleanText(row.detail_klasifikasi) ?? undefined,
-      fasilitas: cleanText(row.detail_fasilitas) ?? undefined,
+      fasilitas: parseStringArray(row.detail_fasilitas) ?? undefined,
       rata2PengunjungHarian: parseNumber(row.detail_rata2_pengunjung_harian) ?? undefined,
       hargaTermurah: parseNumber(row.detail_harga_termurah) ?? undefined,
       hargaTermahal: parseNumber(row.detail_harga_termahal) ?? undefined,
@@ -1005,6 +1117,7 @@ function buildDetailFromCsvRow(row: CsvImportRow, jenisPajak: string) {
 
   if (jenisPajak === "PBJT Jasa Parkir") {
     return compactObject({
+      jenisUsaha: cleanText(row.detail_jenis_usaha) ?? undefined,
       jenisLokasi: cleanText(row.detail_jenis_lokasi) ?? undefined,
       kapasitasKendaraan: parseNumber(row.detail_kapasitas_kendaraan) ?? undefined,
       tarifParkir: parseNumber(row.detail_tarif_parkir) ?? undefined,
@@ -1032,7 +1145,9 @@ function buildDetailFromCsvRow(row: CsvImportRow, jenisPajak: string) {
   if (jenisPajak === "Pajak Reklame") {
     return compactObject({
       jenisReklame: cleanText(row.detail_jenis_reklame) ?? undefined,
-      ukuranReklame: parseNumber(row.detail_ukuran_reklame) ?? undefined,
+      ukuranPanjang: parseNumber(row.detail_ukuran_panjang) ?? undefined,
+      ukuranLebar: parseNumber(row.detail_ukuran_lebar) ?? undefined,
+      ukuranTinggi: parseNumber(row.detail_ukuran_tinggi) ?? undefined,
       judulReklame: cleanText(row.detail_judul_reklame) ?? undefined,
       masaBerlaku: cleanText(row.detail_masa_berlaku) ?? undefined,
       statusReklame: cleanText(row.detail_status_reklame) ?? undefined,
@@ -1073,7 +1188,7 @@ function flattenDetailForCsv(detail: unknown) {
     detail_harga_termahal: d.hargaTermahal ?? "",
     detail_jumlah_kamar: d.jumlahKamar ?? "",
     detail_klasifikasi: d.klasifikasi ?? "",
-    detail_fasilitas: d.fasilitas ?? "",
+    detail_fasilitas: Array.isArray(d.fasilitas) ? d.fasilitas.join(" | ") : d.fasilitas ?? "",
     detail_rata2_pengunjung_harian: d.rata2PengunjungHarian ?? "",
     detail_jenis_hiburan: d.jenisHiburan ?? "",
     detail_kapasitas: d.kapasitas ?? "",
@@ -1084,7 +1199,9 @@ function flattenDetailForCsv(detail: unknown) {
     detail_jenis_tenaga_listrik: d.jenisTenagaListrik ?? "",
     detail_daya_listrik: d.dayaListrik ?? "",
     detail_jenis_reklame: d.jenisReklame ?? "",
-    detail_ukuran_reklame: d.ukuranReklame ?? "",
+    detail_ukuran_panjang: d.ukuranPanjang ?? "",
+    detail_ukuran_lebar: d.ukuranLebar ?? "",
+    detail_ukuran_tinggi: d.ukuranTinggi ?? "",
     detail_judul_reklame: d.judulReklame ?? "",
     detail_masa_berlaku: d.masaBerlaku ?? "",
     detail_status_reklame: d.statusReklame ?? "",
@@ -1579,7 +1696,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       peranWp,
       statusAktif,
     });
-    return sendJsonWithEtag(req, res, data);
+    return res.json(data);
+  });
+
+  app.get("/api/wajib-pajak/detail/:id", async (req, res) => {
+    if (!requireRole(req, res, ["admin", "editor", "viewer"])) return;
+
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ message: "ID wajib pajak tidak valid" });
+    }
+
+    const data = await storage.getWajibPajak(id);
+    if (!data) {
+      return res.status(404).json({ message: "Data duplikasi tidak ditemukan" });
+    }
+
+    return res.json(data);
   });
 
   app.post("/api/wajib-pajak", async (req, res) => {
@@ -1813,7 +1946,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
 
     const data = await storage.getAllMasterKecamatan();
-    return sendJsonWithEtag(req, res, data);
+    return res.json(data);
   });
 
   app.post("/api/master/kecamatan", async (req, res) => {
@@ -1963,7 +2096,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const kecamatanId = typeof req.query.kecamatanId === "string" ? req.query.kecamatanId : undefined;
     const data = await storage.getMasterKelurahan(kecamatanId);
-    return sendJsonWithEtag(req, res, data);
+    return res.json(data);
   });
 
   app.post("/api/master/kelurahan", async (req, res) => {
@@ -2114,7 +2247,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const data = includeInactive
       ? await db.select().from(masterRekeningPajak).orderBy(asc(masterRekeningPajak.kodeRekening))
       : await storage.getAllMasterRekeningPajak();
-    return sendJsonWithEtag(req, res, data);
+    return res.json(data);
   });
 
   app.post("/api/master/rekening-pajak", async (req, res) => {
@@ -2283,23 +2416,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         nikKtpWp: wajibPajak.nikKtpWp,
         nikPengelola: wajibPajak.nikPengelola,
         npwpBadanUsaha: wpBadanUsaha.npwpBadanUsaha,
+        namaWp: wajibPajak.namaWp,
+        namaPengelola: wajibPajak.namaPengelola,
+        namaBadanUsaha: wpBadanUsaha.namaBadanUsaha,
       })
       .from(wajibPajak)
       .leftJoin(wpBadanUsaha, eq(wajibPajak.id, wpBadanUsaha.wpId));
 
     const wpMatches = wpRows.filter((row) => {
+      if (typeof candidate.excludeWpId === "number" && row.id === candidate.excludeWpId) return false;
       if (candidate.npwpd && row.npwpd === candidate.npwpd) return true;
-      if (candidate.nikKtpWp && row.nikKtpWp === candidate.nikKtpWp) return true;
-      if (candidate.nikPengelola && row.nikPengelola === candidate.nikPengelola) return true;
+      if (candidate.nikKtpWp && (row.nikKtpWp === candidate.nikKtpWp || row.nikPengelola === candidate.nikKtpWp)) return true;
+      if (candidate.nikPengelola && (row.nikPengelola === candidate.nikPengelola || row.nikKtpWp === candidate.nikPengelola)) return true;
       if (candidate.npwpBadanUsaha && row.npwpBadanUsaha === candidate.npwpBadanUsaha) return true;
       return false;
     });
 
     const warnings = buildQualityWarnings({
       candidate,
-      wpMatches: wpMatches as Array<Record<string, unknown>>,
+      wpMatches,
     });
-
     res.json({ warnings });
   });
 
@@ -2525,7 +2661,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       rekPajakId: rekPajakId ?? undefined,
     });
 
-    return sendJsonWithEtag(req, res, data);
+    return res.json(data);
   });
 
   app.get("/api/objek-pajak/map", async (req, res) => {
@@ -2905,3 +3041,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   return httpServer;
 }
+
+
+
+

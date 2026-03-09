@@ -309,7 +309,8 @@ export async function seedDatabase() {
       verifiedAt: new Date(),
       verifiedBy: "seed",
       detailPajak: {
-        jenisUsaha: "Rumah Makan",
+        jenisUsaha: "Restoran",
+        klasifikasi: "Rumah Makan",
         kapasitasTempat: 80,
       },
     });
@@ -334,7 +335,8 @@ export async function seedDatabase() {
       verifiedAt: new Date(),
       verifiedBy: "seed",
       detailPajak: {
-        jenisUsaha: "Hotel",
+        jenisUsaha: "Hotel/Hostel",
+        klasifikasi: "Bintang 3",
         jumlahKamar: 45,
       },
     });
@@ -359,7 +361,8 @@ export async function seedDatabase() {
       verifiedAt: new Date(),
       verifiedBy: "seed",
       detailPajak: {
-        jenisUsaha: "Rumah Makan",
+        jenisUsaha: "Restoran",
+        klasifikasi: "Rumah Makan",
         kapasitasTempat: 60,
       },
     });
@@ -384,7 +387,8 @@ export async function seedDatabase() {
       verifiedAt: new Date(),
       verifiedBy: "seed",
       detailPajak: {
-        jenisUsaha: "Warung",
+        jenisUsaha: "Restoran",
+        klasifikasi: "Warung",
         kapasitasTempat: 40,
       },
     });
@@ -410,7 +414,9 @@ export async function seedDatabase() {
       verifiedBy: "seed",
       detailPajak: {
         jenisReklame: "Billboard",
-        ukuranReklame: 24,
+        ukuranPanjang: 6,
+        ukuranLebar: 4,
+        ukuranTinggi: 8,
         statusReklame: "baru",
       },
     });
@@ -436,7 +442,9 @@ export async function seedDatabase() {
       verifiedBy: "seed",
       detailPajak: {
         jenisReklame: "Neon Box",
-        ukuranReklame: 8,
+        ukuranPanjang: 4,
+        ukuranLebar: 2,
+        ukuranTinggi: 3,
         statusReklame: "perpanjangan",
       },
     });
