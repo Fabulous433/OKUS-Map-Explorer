@@ -4,6 +4,7 @@ import { BarChart3, Users, Building2, Map, ChevronRight, Sparkles, Database, Log
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import type { AppRole } from "@shared/schema";
+import { MobileBottomNav } from "@/components/backoffice/mobile-bottom-nav";
 
 const NAV_ITEMS = [
   { href: "/backoffice", label: "Dashboard", icon: BarChart3, match: "/backoffice" },
@@ -37,6 +38,9 @@ function NavItem({ href, label, icon: Icon, match }: (typeof NAV_ITEMS)[number])
 export default function BackofficeLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, isAuthenticated, hasRole, logout } = useAuth();
   const [location, setLocation] = useLocation();
+  const pageLabel =
+    visibleLabelForLocation(location) ??
+    (location.startsWith("/backoffice/master-data") ? "Master Data" : "Backoffice");
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -64,8 +68,8 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 flex" data-testid="backoffice-layout">
-      <aside className="w-[260px] bg-white border-r-[4px] border-black flex flex-col flex-shrink-0 h-screen sticky top-0">
+    <div className="min-h-screen bg-gray-50 lg:flex" data-testid="backoffice-layout">
+      <aside className="hidden h-screen w-[260px] flex-shrink-0 flex-col border-r-[4px] border-black bg-white lg:sticky lg:top-0 lg:flex">
         <div className="bg-black p-4 border-b-[4px] border-[#FFFF00]">
           <h1 className="font-serif text-base font-black text-[#FFFF00] leading-tight" data-testid="text-backoffice-title">
             BACKOFFICE
@@ -113,9 +117,49 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
         </Link>
       </aside>
 
-      <main className="flex-1 min-h-screen overflow-auto">
-        {children}
+      <main className="min-h-screen flex-1 overflow-auto pb-28 lg:pb-0">
+        <header className="mobile-panel-shadow sticky top-0 z-40 border-b-[3px] border-black bg-[linear-gradient(135deg,#0b0b0b_0%,#222_100%)] px-4 py-3 text-white lg:hidden">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-[#FFFF00]/80">OKUS Backoffice</p>
+              <h1 className="truncate font-serif text-lg font-black">{pageLabel}</h1>
+            </div>
+            <Button
+              variant="outline"
+              className="h-10 rounded-none border-[2px] border-[#FFFF00] bg-transparent px-3 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-[#FFFF00] hover:bg-[#FFFF00] hover:text-black"
+              onClick={async () => {
+                await logout();
+                setLocation("/backoffice/login");
+              }}
+              data-testid="button-logout-mobile"
+            >
+              Keluar
+            </Button>
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/15 pt-3">
+            <div className="min-w-0">
+              <p className="truncate font-mono text-xs font-bold">{user.username}</p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/65">{user.role}</p>
+            </div>
+            <Link href="/">
+              <div className="cursor-pointer border-[2px] border-white bg-[#FF6B00] px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-white">
+                Peta
+              </div>
+            </Link>
+          </div>
+        </header>
+        <div>{children}</div>
+        <MobileBottomNav />
       </main>
     </div>
   );
+}
+
+function visibleLabelForLocation(location: string) {
+  if (location === "/backoffice") return "Dashboard";
+  if (location.startsWith("/backoffice/wajib-pajak")) return "Wajib Pajak";
+  if (location.startsWith("/backoffice/objek-pajak")) return "Objek Pajak";
+  if (location.startsWith("/backoffice/master-data")) return "Master Data";
+  if (location.startsWith("/backoffice/mockup-form")) return "Mockup Form";
+  return null;
 }
