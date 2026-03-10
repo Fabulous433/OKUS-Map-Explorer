@@ -27,6 +27,8 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { PaginatedResult, WajibPajakListItem, WajibPajakWithBadanUsaha } from "@shared/schema";
 import AuditHistoryDialog from "@/components/audit-history-dialog";
 import { AttachmentPanel } from "@/components/attachments/attachment-panel";
+import { MobileWpCard } from "@/components/backoffice/mobile-wp-card";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const ownerFields = [
   ["namaWp", "NAMA WP"],
@@ -314,6 +316,7 @@ function WpForm({ form, mode }: { form: UseFormReturn<WpFormValues>; mode: "crea
 
 export default function BackofficeWajibPajak() {
   const { hasRole } = useAuth();
+  const isMobile = useIsMobile();
   const canMutate = hasRole(["admin", "editor"]);
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
@@ -488,19 +491,27 @@ export default function BackofficeWajibPajak() {
 
   return (
     <BackofficeLayout>
-      <div className="p-6" data-testid="backoffice-wp-page">
+      <div className="p-4 md:p-6" data-testid="backoffice-wp-page">
         <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleImport} />
-        <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3"><div className="bg-[#FF6B00] w-10 h-10 border-[3px] border-black flex items-center justify-center"><Users className="w-5 h-5 text-white" /></div><div><h1 className="font-serif text-2xl font-black">WAJIB PAJAK</h1><p className="font-mono text-[10px] tracking-widest uppercase text-gray-500">Model Baru</p></div></div>
-          <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" className="rounded-none border-[3px] border-black bg-white font-mono text-xs font-bold" onClick={() => window.open("/api/wajib-pajak/export", "_blank")}><Download className="w-4 h-4 mr-1" />EXPORT CSV</Button>
-            {canMutate && <Button variant="outline" className="rounded-none border-[3px] border-black bg-white font-mono text-xs font-bold" onClick={() => fileInputRef.current?.click()}><Upload className="w-4 h-4 mr-1" />IMPORT CSV</Button>}
-            {canMutate && <Button className="rounded-none border-[3px] border-black bg-[#FFFF00] text-black font-mono font-bold" onClick={() => { setQualityWarnings([]); setIsDuplicateDialogOpen(false); addForm.reset(defaults()); setOpenAdd(true); }}><Plus className="w-4 h-4 mr-2" />TAMBAH WP</Button>}
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center border-[3px] border-black bg-[#FF6B00]">
+              <Users className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h1 className="font-serif text-xl font-black md:text-2xl">WAJIB PAJAK</h1>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500">Model Baru</p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <Button variant="outline" className="rounded-none border-[3px] border-black bg-white font-mono text-xs font-bold" onClick={() => window.open("/api/wajib-pajak/export", "_blank")}><Download className="mr-1 h-4 w-4" />EXPORT CSV</Button>
+            {canMutate && <Button variant="outline" className="rounded-none border-[3px] border-black bg-white font-mono text-xs font-bold" onClick={() => fileInputRef.current?.click()}><Upload className="mr-1 h-4 w-4" />IMPORT CSV</Button>}
+            {canMutate && <Button className="w-full rounded-none border-[3px] border-black bg-[#FFFF00] font-mono font-bold text-black sm:w-auto" onClick={() => { setQualityWarnings([]); setIsDuplicateDialogOpen(false); addForm.reset(defaults()); setOpenAdd(true); }}><Plus className="mr-2 h-4 w-4" />TAMBAH WP</Button>}
           </div>
         </div>
-        <div className="mb-3 flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[240px] max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" />
+        <div className="mb-3 flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
+          <div className="relative w-full md:max-w-md md:flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -509,7 +520,7 @@ export default function BackofficeWajibPajak() {
             />
           </div>
           <Select value={jenisWpFilter} onValueChange={(value) => setJenisWpFilter(value as typeof jenisWpFilter)}>
-            <SelectTrigger className="w-[170px] rounded-none border-[3px] border-black font-mono text-xs">
+            <SelectTrigger className="w-full rounded-none border-[3px] border-black font-mono text-xs md:w-[170px]">
               <SelectValue placeholder="Jenis WP" />
             </SelectTrigger>
             <SelectContent className="rounded-none border-[2px] border-black">
@@ -519,7 +530,7 @@ export default function BackofficeWajibPajak() {
             </SelectContent>
           </Select>
           <Select value={peranWpFilter} onValueChange={(value) => setPeranWpFilter(value as typeof peranWpFilter)}>
-            <SelectTrigger className="w-[170px] rounded-none border-[3px] border-black font-mono text-xs">
+            <SelectTrigger className="w-full rounded-none border-[3px] border-black font-mono text-xs md:w-[170px]">
               <SelectValue placeholder="Peran WP" />
             </SelectTrigger>
             <SelectContent className="rounded-none border-[2px] border-black">
@@ -529,7 +540,7 @@ export default function BackofficeWajibPajak() {
             </SelectContent>
           </Select>
           <Select value={statusAktifFilter} onValueChange={(value) => setStatusAktifFilter(value as typeof statusAktifFilter)}>
-            <SelectTrigger className="w-[150px] rounded-none border-[3px] border-black font-mono text-xs">
+            <SelectTrigger className="w-full rounded-none border-[3px] border-black font-mono text-xs md:w-[150px]">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent className="rounded-none border-[2px] border-black">
@@ -538,15 +549,15 @@ export default function BackofficeWajibPajak() {
               <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
-          <Badge className="rounded-none border-[2px] border-black bg-[#FF6B00] text-white font-mono text-xs">{meta.total} WP</Badge>
+          <Badge className="w-fit rounded-none border-[2px] border-black bg-[#FF6B00] font-mono text-xs text-white">{meta.total} WP</Badge>
         </div>
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <p className="font-mono text-[11px] text-gray-600">
             Halaman {page} dari {meta.totalPages}
             {isFetching ? " - memperbarui..." : ""}
           </p>
           <Select value={String(limit)} onValueChange={(value) => setLimit(Number(value))}>
-            <SelectTrigger className="w-[130px] rounded-none border-[2px] border-black font-mono text-xs">
+            <SelectTrigger className="w-full rounded-none border-[2px] border-black font-mono text-xs md:w-[130px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="rounded-none border-[2px] border-black">
@@ -557,8 +568,20 @@ export default function BackofficeWajibPajak() {
             </SelectContent>
           </Select>
         </div>
-
-        {isLoading ? <div className="h-40 flex items-center justify-center font-mono">Memuat...</div> : (
+        {isLoading ? <div className="flex h-40 items-center justify-center font-mono">Memuat...</div> : isMobile ? (
+          <div className="space-y-3">
+            {wpList.map((wp) => (
+              <MobileWpCard
+                key={wp.id}
+                wp={wp}
+                canMutate={canMutate}
+                onEdit={openEdit}
+                onHistory={setAuditTarget}
+                onDelete={(id) => deleteMutation.mutate(id)}
+              />
+            ))}
+          </div>
+        ) : (
           <div className="border-[3px] border-black overflow-x-auto">
             <Table>
               <TableHeader><TableRow className="bg-black"><TableHead className="text-[#FFFF00] font-mono text-xs">NPWPD</TableHead><TableHead className="text-[#FFFF00] font-mono text-xs">DISPLAY NAME</TableHead><TableHead className="text-[#FFFF00] font-mono text-xs">JENIS</TableHead><TableHead className="text-[#FFFF00] font-mono text-xs">PERAN</TableHead><TableHead className="text-[#FFFF00] font-mono text-xs">STATUS</TableHead><TableHead className="text-[#FFFF00] font-mono text-xs text-right">AKSI</TableHead></TableRow></TableHeader>
