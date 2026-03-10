@@ -19,12 +19,12 @@
 
 ## Execution Status
 - [x] Task 1: Freeze Mobile Acceptance Checklist
-- [ ] Task 2: Build Mobile Shell and Bottom Navigation
-- [ ] Task 3: Refactor Mobile Wajib Pajak List
-- [ ] Task 4: Refactor Mobile Objek Pajak List
-- [ ] Task 5: Refactor Mobile Map Experience
-- [ ] Task 6: Dashboard and Master Data Mobile Polish
-- [ ] Task 7: Final Verification and Documentation
+- [x] Task 2: Build Mobile Shell and Bottom Navigation
+- [x] Task 3: Refactor Mobile Wajib Pajak List
+- [x] Task 4: Refactor Mobile Objek Pajak List
+- [x] Task 5: Refactor Mobile Map Experience
+- [x] Task 6: Dashboard and Master Data Mobile Polish
+- [x] Task 7: Final Verification and Documentation
 
 ## Assumptions Locked
 - Desktop layout existing dipertahankan; perubahan fokus di `< lg` dan `< md`.
