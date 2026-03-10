@@ -28,7 +28,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import AuditHistoryDialog from "@/components/audit-history-dialog";
+import { MobileOpCard } from "@/components/backoffice/mobile-op-card";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
@@ -51,6 +53,7 @@ import {
 } from "./objek-pajak-shared";
 export default function BackofficeObjekPajak() {
   const { hasRole } = useAuth();
+  const isMobile = useIsMobile();
   const canMutate = hasRole(["admin", "editor"]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editOp, setEditOp] = useState<ObjekPajak | null>(null);
@@ -207,6 +210,12 @@ export default function BackofficeObjekPajak() {
 
   const wpMap = new Map(wpList.map((wp) => [wp.id, wp]));
 
+  const rejectOp = (id: number) => {
+    const note = window.prompt("Masukkan catatan penolakan:");
+    if (!note) return;
+    verificationMutation.mutate({ id, statusVerifikasi: "rejected", catatanVerifikasi: note });
+  };
+
   const moveToTopPage = () => {
     setPage(1);
     setCursorHistory([INITIAL_CURSOR]);
@@ -228,21 +237,9 @@ export default function BackofficeObjekPajak() {
     }
   };
 
-  const shortLabel = (jenis: string) => {
-    if (jenis.includes("Makanan")) return "MKN";
-    if (jenis.includes("Perhotelan")) return "HTL";
-    if (jenis.includes("Parkir")) return "PKR";
-    if (jenis.includes("Kesenian") || jenis.includes("Hiburan")) return "HBR";
-    if (jenis.includes("Listrik")) return "LST";
-    if (jenis.includes("Reklame")) return "RKL";
-    if (jenis.includes("Air")) return "AIR";
-    if (jenis.includes("Walet")) return "WLT";
-    if (jenis.includes("MBLB")) return "MBLB";
-    return jenis.substring(0, 3).toUpperCase();
-  };
   return (
     <BackofficeLayout>
-      <div className="p-6" data-testid="backoffice-op-page">
+      <div className="p-4 md:p-6" data-testid="backoffice-op-page">
         <input
           ref={fileInputRef}
           type="file"
@@ -251,7 +248,7 @@ export default function BackofficeObjekPajak() {
           onChange={handleImportCSV}
           data-testid="input-import-op-file"
         />
-        <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-black w-10 h-10 flex items-center justify-center border-[2px] border-[#FFFF00]">
               <Building2 className="w-5 h-5 text-[#FFFF00]" />
@@ -265,7 +262,7 @@ export default function BackofficeObjekPajak() {
               </p>
             </div>
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <Button
               variant="outline"
               className="rounded-none border-[3px] border-black bg-white text-black font-mono font-bold text-xs no-default-hover-elevate no-default-active-elevate"
@@ -285,7 +282,7 @@ export default function BackofficeObjekPajak() {
               IMPORT CSV
             </Button>}
             {canMutate && <Button
-              className="rounded-none border-[3px] border-[#FFFF00] bg-black text-[#FFFF00] font-mono font-bold no-default-hover-elevate no-default-active-elevate"
+              className="w-full rounded-none border-[3px] border-[#FFFF00] bg-black text-[#FFFF00] font-mono font-bold no-default-hover-elevate no-default-active-elevate sm:w-auto"
               onClick={() => setIsCreateOpen(true)}
               data-testid="button-add-op"
             >
@@ -295,8 +292,8 @@ export default function BackofficeObjekPajak() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <div className="relative flex-1 max-w-md">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
+          <div className="relative w-full md:max-w-md md:flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black" />
             <Input
               value={searchQuery}
@@ -311,13 +308,13 @@ export default function BackofficeObjekPajak() {
           </Badge>
         </div>
 
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <p className="font-mono text-[11px] text-gray-600">
             Halaman {page} dari {opMeta.totalPages}
             {isFetching ? " - memperbarui..." : ""}
           </p>
           <Select value={String(limit)} onValueChange={(value) => setLimit(Number(value))}>
-            <SelectTrigger className="w-[130px] rounded-none border-[2px] border-black font-mono text-xs">
+            <SelectTrigger className="w-full rounded-none border-[2px] border-black font-mono text-xs md:w-[130px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="rounded-none border-[2px] border-black">
@@ -329,9 +326,9 @@ export default function BackofficeObjekPajak() {
           </Select>
         </div>
 
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="mb-4 flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
           <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}>
-            <SelectTrigger className="w-[170px] rounded-none border-[2px] border-black font-mono text-xs" data-testid="select-filter-status-op">
+            <SelectTrigger className="w-full rounded-none border-[2px] border-black font-mono text-xs md:w-[170px]" data-testid="select-filter-status-op">
               <SelectValue placeholder="Filter status" />
             </SelectTrigger>
             <SelectContent className="rounded-none border-[2px] border-black">
@@ -341,7 +338,7 @@ export default function BackofficeObjekPajak() {
             </SelectContent>
           </Select>
           <Select value={verificationFilter} onValueChange={(value) => setVerificationFilter(value as typeof verificationFilter)}>
-            <SelectTrigger className="w-[210px] rounded-none border-[2px] border-black font-mono text-xs" data-testid="select-filter-verification-op">
+            <SelectTrigger className="w-full rounded-none border-[2px] border-black font-mono text-xs md:w-[210px]" data-testid="select-filter-verification-op">
               <SelectValue placeholder="Filter verifikasi" />
             </SelectTrigger>
             <SelectContent className="rounded-none border-[2px] border-black">
@@ -352,7 +349,7 @@ export default function BackofficeObjekPajak() {
             </SelectContent>
           </Select>
           <Select value={rekPajakFilterId} onValueChange={setRekPajakFilterId}>
-            <SelectTrigger className="w-[240px] rounded-none border-[2px] border-black font-mono text-xs">
+            <SelectTrigger className="w-full rounded-none border-[2px] border-black font-mono text-xs md:w-[240px]">
               <SelectValue placeholder="Filter rekening" />
             </SelectTrigger>
             <SelectContent className="rounded-none border-[2px] border-black">
@@ -365,7 +362,7 @@ export default function BackofficeObjekPajak() {
             </SelectContent>
           </Select>
           <Select value={kecamatanFilterId} onValueChange={setKecamatanFilterId}>
-            <SelectTrigger className="w-[220px] rounded-none border-[2px] border-black font-mono text-xs" data-testid="select-filter-kecamatan-op">
+            <SelectTrigger className="w-full rounded-none border-[2px] border-black font-mono text-xs md:w-[220px]" data-testid="select-filter-kecamatan-op">
               <SelectValue placeholder="Filter kecamatan" />
             </SelectTrigger>
             <SelectContent className="rounded-none border-[2px] border-black">
@@ -432,6 +429,25 @@ export default function BackofficeObjekPajak() {
             </div>
             <p className="font-serif text-xl font-black text-black">BELUM ADA DATA</p>
             <p className="font-mono text-xs text-gray-500 mt-1">Klik tombol TAMBAH OP untuk memulai</p>
+          </div>
+        ) : isMobile ? (
+          <div className="space-y-3">
+            {opList.map((op) => {
+              const wp = op.wpId ? wpMap.get(op.wpId) : null;
+              return (
+                <MobileOpCard
+                  key={op.id}
+                  op={op}
+                  wp={wp}
+                  canMutate={canMutate}
+                  onEdit={openEdit}
+                  onAudit={setAuditTargetId}
+                  onDelete={(id) => deleteMutation.mutate(id)}
+                  onVerify={(id) => verificationMutation.mutate({ id, statusVerifikasi: "verified" })}
+                  onReject={rejectOp}
+                />
+              );
+            })}
           </div>
         ) : (
           <div className="border-[3px] border-black overflow-x-auto">
@@ -548,11 +564,7 @@ export default function BackofficeObjekPajak() {
                             size="icon"
                             variant="ghost"
                             className="rounded-none border-[2px] border-red-700 no-default-hover-elevate no-default-active-elevate"
-                            onClick={() => {
-                              const note = window.prompt("Masukkan catatan penolakan:");
-                              if (!note) return;
-                              verificationMutation.mutate({ id: op.id, statusVerifikasi: "rejected", catatanVerifikasi: note });
-                            }}
+                            onClick={() => rejectOp(op.id)}
                             data-testid={`button-reject-op-${op.id}`}
                           >
                             <XCircle className="w-3.5 h-3.5 text-red-700" />
