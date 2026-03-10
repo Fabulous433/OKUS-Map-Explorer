@@ -2,12 +2,14 @@ import { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
-import { Layers, Loader2, MapPin, Search, Settings, Target } from "lucide-react";
+import { Filter, Layers, Loader2, MapPin, Search, Settings, Target } from "lucide-react";
 import L from "leaflet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MobileMapDrawer } from "@/components/map/mobile-map-drawer";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { getQueryFn } from "@/lib/queryClient";
 import type { MapObjekPajakItem, MasterKecamatan, MasterRekeningPajak } from "@shared/schema";
@@ -124,10 +126,10 @@ function MapViewportTracker(props: { onChange: (bbox: Bbox, zoom: number) => voi
   return null;
 }
 
-function MapTopRightControls(props: { isFetching: boolean }) {
+function MapTopRightControls(props: { isFetching: boolean; isMobile: boolean }) {
   const map = useMap();
   return (
-    <div className="absolute right-4 top-4 z-[1000] flex gap-2">
+    <div className={`absolute z-[1000] flex gap-2 ${props.isMobile ? "right-3 top-16" : "right-4 top-4"}`}>
       <Button
         size="icon"
         variant="outline"
@@ -148,12 +150,14 @@ function MapTopRightControls(props: { isFetching: boolean }) {
 }
 
 export default function MapPage() {
+  const isMobile = useIsMobile();
   const [baseMap, setBaseMap] = useState<BaseMapKey>("osm");
   const [searchQuery, setSearchQuery] = useState("");
   const [kecamatanId, setKecamatanId] = useState("all");
   const [rekPajakId, setRekPajakId] = useState("all");
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [bbox, setBbox] = useState<Bbox | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
   const debouncedBbox = useDebouncedValue(bbox, 250);
@@ -206,89 +210,149 @@ export default function MapPage() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-white" data-testid="map-page">
-      <div className="absolute left-4 top-4 z-[1000] w-[360px] max-w-[calc(100vw-2rem)] space-y-3">
-        <div className="border-[4px] border-black bg-[#FFFF00] p-3 shadow-[6px_6px_0_#000] transition-transform duration-150 hover:-translate-y-[1px]">
-          <h1 className="font-serif text-xl font-black leading-none text-black">PETA OBJEK PAJAK</h1>
-          <p className="font-mono text-[10px] uppercase tracking-widest text-black/70">
-            Viewport Query Mode
-          </p>
-        </div>
-
-        <div className="space-y-2 border-[3px] border-black bg-white p-3 shadow-[4px_4px_0_#000]">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 w-4 -translate-y-1/2 text-black" />
-            <Input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Cari nama OP / NOPD / alamat"
-              className="rounded-none border-[3px] border-black pl-9 font-mono text-xs"
-            />
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Select value={kecamatanId} onValueChange={setKecamatanId}>
-              <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-xs">
-                <SelectValue placeholder="Kecamatan" />
-              </SelectTrigger>
-              <SelectContent className="rounded-none border-[2px] border-black">
-                <SelectItem value="all">Semua Kecamatan</SelectItem>
-                {kecamatanList.map((item) => (
-                  <SelectItem key={item.cpmKecId} value={item.cpmKecId}>
-                    {item.cpmKecamatan}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={rekPajakId} onValueChange={setRekPajakId}>
-              <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-xs">
-                <SelectValue placeholder="Rekening Pajak" />
-              </SelectTrigger>
-              <SelectContent className="rounded-none border-[2px] border-black">
-                <SelectItem value="all">Semua Rekening</SelectItem>
-                {rekeningList.map((item) => (
-                  <SelectItem key={item.id} value={String(item.id)}>
-                    {item.kodeRekening}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Select value={baseMap} onValueChange={(value) => setBaseMap(value as BaseMapKey)}>
-              <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-xs">
-                <Layers className="mr-2 h-3.5 w-3.5" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-none border-[2px] border-black">
-                {(Object.keys(BASE_MAPS) as BaseMapKey[]).map((key) => (
-                  <SelectItem key={key} value={key}>
-                    {BASE_MAPS[key].name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      {isMobile ? (
+        <>
+          <div className="absolute left-3 right-3 top-3 z-[1000] flex items-start justify-between gap-3">
+            <div className="border-[3px] border-black bg-[#FFFF00] px-3 py-2 shadow-[4px_4px_0_#000]">
+              <h1 className="font-serif text-lg font-black leading-none text-black">PETA OP</h1>
+              <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-black/65">Viewport Query</p>
+            </div>
             <Link href="/backoffice">
-              <Button className="w-full rounded-none border-[2px] border-black bg-black font-mono text-xs text-[#FFFF00] no-default-hover-elevate no-default-active-elevate">
+              <Button className="rounded-none border-[2px] border-black bg-black px-3 font-mono text-[11px] text-[#FFFF00] no-default-hover-elevate no-default-active-elevate">
                 <Settings className="mr-2 h-3.5 w-3.5" />
                 Backoffice
               </Button>
             </Link>
           </div>
-        </div>
-      </div>
 
-      <div className="absolute bottom-4 right-4 z-[1000] flex gap-2">
-        <Badge className="rounded-none border-[3px] border-black bg-black px-3 py-1 font-mono text-xs text-[#FFFF00]">
-          {totalInView} dalam viewport
-        </Badge>
-        <Badge className="rounded-none border-[3px] border-black bg-[#FFFF00] px-3 py-1 font-mono text-xs text-black">
-          {markerList.length} marker
-        </Badge>
-        {isCapped && (
-          <Badge className="rounded-none border-[3px] border-black bg-[#FF6B00] px-3 py-1 font-mono text-xs text-white">
-            capped
-          </Badge>
-        )}
-      </div>
+          <div className="absolute bottom-20 left-3 z-[1000] flex max-w-[70vw] flex-wrap gap-2">
+            <Badge className="rounded-none border-[3px] border-black bg-black px-3 py-1 font-mono text-[10px] text-[#FFFF00]">
+              {totalInView} viewport
+            </Badge>
+            <Badge className="rounded-none border-[3px] border-black bg-[#FFFF00] px-3 py-1 font-mono text-[10px] text-black">
+              {markerList.length} marker
+            </Badge>
+            {isCapped ? (
+              <Badge className="rounded-none border-[3px] border-black bg-[#FF6B00] px-3 py-1 font-mono text-[10px] text-white">
+                capped
+              </Badge>
+            ) : null}
+          </div>
+
+          <Button
+            type="button"
+            className="absolute bottom-20 right-3 z-[1000] rounded-none border-[3px] border-black bg-white px-4 py-6 font-mono text-xs font-bold text-black shadow-[4px_4px_0_#000] no-default-hover-elevate no-default-active-elevate"
+            onClick={() => setIsDrawerOpen(true)}
+          >
+            <Filter className="mr-2 h-4 w-4" />
+            Filter
+          </Button>
+
+          <MobileMapDrawer
+            open={isDrawerOpen}
+            onOpenChange={setIsDrawerOpen}
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
+            kecamatanId={kecamatanId}
+            onKecamatanIdChange={setKecamatanId}
+            rekPajakId={rekPajakId}
+            onRekPajakIdChange={setRekPajakId}
+            baseMap={baseMap}
+            onBaseMapChange={setBaseMap}
+            kecamatanList={kecamatanList}
+            rekeningList={rekeningList}
+            totalInView={totalInView}
+            markerCount={markerList.length}
+            isCapped={isCapped}
+          />
+        </>
+      ) : (
+        <>
+          <div className="absolute left-4 top-4 z-[1000] w-[360px] max-w-[calc(100vw-2rem)] space-y-3">
+            <div className="border-[4px] border-black bg-[#FFFF00] p-3 shadow-[6px_6px_0_#000] transition-transform duration-150 hover:-translate-y-[1px]">
+              <h1 className="font-serif text-xl font-black leading-none text-black">PETA OBJEK PAJAK</h1>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-black/70">
+                Viewport Query Mode
+              </p>
+            </div>
+
+            <div className="space-y-2 border-[3px] border-black bg-white p-3 shadow-[4px_4px_0_#000]">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 w-4 -translate-y-1/2 text-black" />
+                <Input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Cari nama OP / NOPD / alamat"
+                  className="rounded-none border-[3px] border-black pl-9 font-mono text-xs"
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Select value={kecamatanId} onValueChange={setKecamatanId}>
+                  <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-xs">
+                    <SelectValue placeholder="Kecamatan" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-none border-[2px] border-black">
+                    <SelectItem value="all">Semua Kecamatan</SelectItem>
+                    {kecamatanList.map((item) => (
+                      <SelectItem key={item.cpmKecId} value={item.cpmKecId}>
+                        {item.cpmKecamatan}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={rekPajakId} onValueChange={setRekPajakId}>
+                  <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-xs">
+                    <SelectValue placeholder="Rekening Pajak" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-none border-[2px] border-black">
+                    <SelectItem value="all">Semua Rekening</SelectItem>
+                    {rekeningList.map((item) => (
+                      <SelectItem key={item.id} value={String(item.id)}>
+                        {item.kodeRekening}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Select value={baseMap} onValueChange={(value) => setBaseMap(value as BaseMapKey)}>
+                  <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-xs">
+                    <Layers className="mr-2 h-3.5 w-3.5" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-none border-[2px] border-black">
+                    {(Object.keys(BASE_MAPS) as BaseMapKey[]).map((key) => (
+                      <SelectItem key={key} value={key}>
+                        {BASE_MAPS[key].name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Link href="/backoffice">
+                  <Button className="w-full rounded-none border-[2px] border-black bg-black font-mono text-xs text-[#FFFF00] no-default-hover-elevate no-default-active-elevate">
+                    <Settings className="mr-2 h-3.5 w-3.5" />
+                    Backoffice
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          <div className="absolute bottom-4 right-4 z-[1000] flex gap-2">
+            <Badge className="rounded-none border-[3px] border-black bg-black px-3 py-1 font-mono text-xs text-[#FFFF00]">
+              {totalInView} dalam viewport
+            </Badge>
+            <Badge className="rounded-none border-[3px] border-black bg-[#FFFF00] px-3 py-1 font-mono text-xs text-black">
+              {markerList.length} marker
+            </Badge>
+            {isCapped && (
+              <Badge className="rounded-none border-[3px] border-black bg-[#FF6B00] px-3 py-1 font-mono text-xs text-white">
+                capped
+              </Badge>
+            )}
+          </div>
+        </>
+      )}
 
       <MapContainer center={OKU_SELATAN_CENTER} zoom={DEFAULT_ZOOM} className="h-full w-full" zoomControl={false}>
         <TileLayer attribution={mapConfig.attribution} url={mapConfig.url} maxZoom={mapConfig.maxZoom} />
@@ -298,7 +362,7 @@ export default function MapPage() {
             setZoom(nextZoom);
           }}
         />
-        <MapTopRightControls isFetching={isFetching} />
+        <MapTopRightControls isFetching={isFetching} isMobile={isMobile} />
 
         {markerList.map((item) => (
           <Marker
