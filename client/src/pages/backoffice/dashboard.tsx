@@ -17,6 +17,7 @@ import {
   YAxis,
 } from "recharts";
 import BackofficeLayout from "./layout";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type DashboardJenisRow = {
   jenisPajak: string;
@@ -84,6 +85,7 @@ function toDateInputValue(value: Date) {
 }
 
 export default function BackofficeDashboard() {
+  const isMobile = useIsMobile();
   const today = new Date();
   const fromDefault = new Date(today);
   fromDefault.setDate(fromDefault.getDate() - 29);
@@ -128,17 +130,17 @@ export default function BackofficeDashboard() {
 
   return (
     <BackofficeLayout>
-      <div className="space-y-6 p-6" data-testid="backoffice-dashboard">
-        <div className="border-b-[3px] border-black pb-4">
-          <h2 className="font-serif text-2xl font-black" data-testid="text-dashboard-title">
+      <div className="space-y-4 p-4 md:space-y-6 md:p-6" data-testid="backoffice-dashboard">
+        <div className="border-b-[3px] border-black pb-3 md:pb-4">
+          <h2 className="font-serif text-xl font-black md:text-2xl" data-testid="text-dashboard-title">
             DASHBOARD PENDATAAN
           </h2>
-          <p className="mt-1 font-mono text-xs text-muted-foreground">
+          <p className="mt-1 font-mono text-[11px] text-muted-foreground md:text-xs">
             Ringkasan + trend periodik langsung dari agregasi server.
           </p>
         </div>
 
-        <Card className="border-[2px] border-black p-4">
+        <Card className="border-[2px] border-black p-3 md:p-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <label className="flex flex-col gap-1 font-mono text-xs">
@@ -178,7 +180,7 @@ export default function BackofficeDashboard() {
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
-                className="rounded-none border-[2px] border-black font-mono text-xs font-bold"
+                className="w-full rounded-none border-[2px] border-black font-mono text-xs font-bold md:w-auto"
                 onClick={() => {
                   window.location.href = exportUrl;
                 }}
@@ -188,38 +190,38 @@ export default function BackofficeDashboard() {
               </Button>
             </div>
           </div>
-          <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+          <p className="mt-2 font-mono text-[11px] leading-5 text-muted-foreground">
             Window aktif: {data?.filters.trendWindow.from ?? fromDate} s/d {data?.filters.trendWindow.to ?? toDate} ({groupBy})
           </p>
         </Card>
 
         {isLoading ? (
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-5 md:gap-4">
             {[1, 2, 3, 4, 5].map((item) => (
               <Skeleton key={item} className="h-24 w-full" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-5" data-testid="summary-stats">
-            <Card className="border-[2px] border-black p-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-5 md:gap-4" data-testid="summary-stats">
+            <Card className="border-[2px] border-black p-3 md:p-4">
               <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">Total WP</p>
-              <p className="mt-1 font-serif text-3xl font-black">{summary.totalWp}</p>
+              <p className="mt-1 font-serif text-2xl font-black md:text-3xl">{summary.totalWp}</p>
             </Card>
-            <Card className="border-[2px] border-black p-4">
+            <Card className="border-[2px] border-black p-3 md:p-4">
               <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">Total OP</p>
-              <p className="mt-1 font-serif text-3xl font-black">{summary.totalOp}</p>
+              <p className="mt-1 font-serif text-2xl font-black md:text-3xl">{summary.totalOp}</p>
             </Card>
-            <Card className="border-[2px] border-black p-4">
+            <Card className="border-[2px] border-black p-3 md:p-4">
               <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">Sudah Update</p>
-              <p className="mt-1 font-serif text-3xl font-black text-green-700">{summary.totalUpdated}</p>
+              <p className="mt-1 font-serif text-2xl font-black text-green-700 md:text-3xl">{summary.totalUpdated}</p>
             </Card>
-            <Card className="border-[2px] border-black p-4">
+            <Card className="border-[2px] border-black p-3 md:p-4">
               <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">Belum Update</p>
-              <p className="mt-1 font-serif text-3xl font-black text-orange-600">{summary.totalPending}</p>
+              <p className="mt-1 font-serif text-2xl font-black text-orange-600 md:text-3xl">{summary.totalPending}</p>
             </Card>
-            <Card className="border-[2px] border-black p-4">
+            <Card className="border-[2px] border-black p-3 md:p-4">
               <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">Overall Progress</p>
-              <p className="mt-1 font-serif text-3xl font-black">{summary.overallPercentage}%</p>
+              <p className="mt-1 font-serif text-2xl font-black md:text-3xl">{summary.overallPercentage}%</p>
               <Progress value={summary.overallPercentage} className="mt-2 h-2" />
             </Card>
           </div>
@@ -232,6 +234,33 @@ export default function BackofficeDashboard() {
             <div className="space-y-3">
               {[1, 2, 3].map((item) => (
                 <Skeleton key={item} className="h-16 w-full" />
+              ))}
+            </div>
+          ) : isMobile ? (
+            <div className="space-y-3">
+              {byJenis.map((row) => (
+                <Card key={row.jenisPajak} className="border-[2px] border-black p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          className="border-0 font-mono text-[10px] font-bold text-white no-default-hover-elevate no-default-active-elevate"
+                          style={{ backgroundColor: JENIS_PAJAK_COLORS[row.jenisPajak] ?? "#111827" }}
+                        >
+                          {getShortLabel(row.jenisPajak)}
+                        </Badge>
+                        <span className="font-mono text-[11px] leading-5">{row.jenisPajak}</span>
+                      </div>
+                    </div>
+                    <span className="font-mono text-xs font-bold">{row.percentage}%</span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 font-mono text-[11px]">
+                    <div><p className="text-muted-foreground">Total</p><p className="mt-1 font-bold">{row.total}</p></div>
+                    <div><p className="text-muted-foreground">Updated</p><p className="mt-1 font-bold text-green-700">{row.updated}</p></div>
+                    <div><p className="text-muted-foreground">Pending</p><p className="mt-1 font-bold text-orange-600">{row.pending}</p></div>
+                  </div>
+                  <Progress value={row.percentage} className="mt-3 h-2" />
+                </Card>
               ))}
             </div>
           ) : (
@@ -283,8 +312,8 @@ export default function BackofficeDashboard() {
           {isLoading ? (
             <Skeleton className="h-[320px] w-full" />
           ) : (
-            <Card className="border-[2px] border-black p-4">
-              <div className="h-[300px] w-full">
+            <Card className="border-[2px] border-black p-3 md:p-4">
+              <div className="h-[240px] w-full md:h-[300px]">
                 <ResponsiveContainer>
                   <LineChart data={trend}>
                     <CartesianGrid strokeDasharray="2 2" stroke="#11111133" />
