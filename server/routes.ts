@@ -2167,8 +2167,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.get("/api/master/kecamatan", async (req, res) => {
-    if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
-
     const data = await storage.getAllMasterKecamatan();
     return sendJsonWithEtag(req, res, data);
   });
@@ -2465,9 +2463,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.get("/api/master/rekening-pajak", async (req, res) => {
-    if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
-
     const includeInactive = typeof req.query.includeInactive === "string" && req.query.includeInactive === "true";
+    if (includeInactive && !requireRole(req, res, APP_ROLE_OPTIONS)) return;
     const data = includeInactive
       ? await db.select().from(masterRekeningPajak).orderBy(asc(masterRekeningPajak.kodeRekening))
       : await storage.getAllMasterRekeningPajak();

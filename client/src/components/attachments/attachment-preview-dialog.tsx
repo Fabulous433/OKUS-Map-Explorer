@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ExternalLink, Download, Plus, Minus, RotateCcw } from "lucide-react";
 import type { EntityAttachmentResponse } from "@shared/schema";
@@ -44,6 +44,9 @@ export function AttachmentPreviewDialog({
           <DialogTitle className="font-serif text-xl font-black text-[#FFFF00] uppercase">
             Preview Attachment
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Preview file attachment dengan opsi zoom untuk gambar dan tindakan buka atau download.
+          </DialogDescription>
         </DialogHeader>
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">

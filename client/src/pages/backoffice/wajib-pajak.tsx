@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -645,7 +645,7 @@ export default function BackofficeWajibPajak() {
 
       {canMutate && <Dialog open={openAdd} onOpenChange={(open) => { setOpenAdd(open); if (!open) { setQualityWarnings([]); setIsDuplicateDialogOpen(false); } }}>
         <DialogContent className="rounded-none border-[4px] border-black max-w-2xl bg-white p-0 max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="p-4 border-b-[3px] border-black bg-[#FF6B00]"><DialogTitle className="font-serif text-xl font-black text-white">TAMBAH WAJIB PAJAK</DialogTitle></DialogHeader>
+          <DialogHeader className="p-4 border-b-[3px] border-black bg-[#FF6B00]"><DialogTitle className="font-serif text-xl font-black text-white">TAMBAH WAJIB PAJAK</DialogTitle><DialogDescription className="sr-only">Form tambah wajib pajak untuk mengisi identitas, peran, dan data badan usaha bila diperlukan.</DialogDescription></DialogHeader>
           <Form {...addForm}>
             <form onSubmit={addForm.handleSubmit(submitCreate)} className="p-4 space-y-4">
               <WpForm form={addForm} mode="create" />
@@ -662,7 +662,7 @@ export default function BackofficeWajibPajak() {
 
       {canMutate && <Dialog open={!!edit} onOpenChange={(open) => { if (!open) { setEdit(null); setQualityWarnings([]); setIsDuplicateDialogOpen(false); } }}>
         <DialogContent className="rounded-none border-[4px] border-black max-w-2xl bg-white p-0 max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="p-4 border-b-[3px] border-black bg-blue-600"><DialogTitle className="font-serif text-xl font-black text-white">EDIT WAJIB PAJAK</DialogTitle></DialogHeader>
+          <DialogHeader className="p-4 border-b-[3px] border-black bg-blue-600"><DialogTitle className="font-serif text-xl font-black text-white">EDIT WAJIB PAJAK</DialogTitle><DialogDescription className="sr-only">Form edit wajib pajak untuk memperbarui identitas, status aktif, dan lampiran dokumen.</DialogDescription></DialogHeader>
           <Form {...editForm}>
             <form onSubmit={editForm.handleSubmit(submitEdit)} className="p-4 space-y-4">
               <WpForm form={editForm} mode="edit" />
@@ -691,6 +691,9 @@ export default function BackofficeWajibPajak() {
                 </div>
                 <DialogHeader className="space-y-2 text-left">
                   <DialogTitle className="font-serif text-2xl font-black uppercase tracking-[0.08em] text-black">Duplikasi Data Terdeteksi</DialogTitle>
+                  <DialogDescription className="sr-only">
+                    Ringkasan data wajib pajak yang bentrok atau terdeteksi duplikasi agar pengguna dapat meninjau data existing.
+                  </DialogDescription>
                   <p className="max-w-2xl font-mono text-[12px] leading-6 text-black/75">
                     Periksa data yang bentrok di bawah ini sebelum melanjutkan perubahan.
                   </p>

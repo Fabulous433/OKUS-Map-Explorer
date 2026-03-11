@@ -6,6 +6,7 @@ import { Crosshair, MapPin } from "lucide-react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -215,6 +216,9 @@ export function OPFormDialog({
           <DialogTitle className="font-serif text-xl font-black text-[#FFFF00]">
             {mode === "edit" ? "EDIT OBJEK PAJAK" : "TAMBAH OBJEK PAJAK"}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Form objek pajak untuk mengisi rekening, detail usaha, lokasi, dan data operasional.
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="p-4 space-y-4">

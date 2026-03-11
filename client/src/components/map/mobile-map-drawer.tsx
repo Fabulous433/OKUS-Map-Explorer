@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   Drawer,
   DrawerContent,
+  DrawerDescription,
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
@@ -76,6 +77,9 @@ export function MobileMapDrawer({
               <DrawerTitle className="font-serif text-xl font-black uppercase tracking-[0.08em] text-black">
                 Filter Peta
               </DrawerTitle>
+              <DrawerDescription className="sr-only">
+                Panel filter peta untuk pencarian, wilayah, rekening pajak, basemap, dan legenda marker.
+              </DrawerDescription>
               <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.18em] text-black/55">
                 Search, wilayah, rekening, dan legenda
               </p>

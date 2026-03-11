@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,6 +66,9 @@ export function AttachmentUploadDialog({
       <DialogContent className="rounded-none border-[4px] border-black max-w-lg bg-white p-0">
         <DialogHeader className="p-4 border-b-[3px] border-black bg-[#FF6B00]">
           <DialogTitle className="font-serif text-xl font-black text-white uppercase">{title}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Dialog upload attachment untuk memilih jenis dokumen, file, dan catatan opsional.
+          </DialogDescription>
         </DialogHeader>
         <div className="p-4 space-y-4">
           <div className="space-y-2">

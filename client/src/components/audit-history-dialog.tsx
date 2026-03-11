@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Clock3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type AuditItem = {
   id: number;
@@ -110,6 +110,9 @@ export default function AuditHistoryDialog({
             <Clock3 className="w-5 h-5" />
             {title}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Riwayat audit perubahan data beserta nilai sebelum dan sesudah perubahan.
+          </DialogDescription>
         </DialogHeader>
         <div className="p-4 space-y-3">
           {isLoading ? (
