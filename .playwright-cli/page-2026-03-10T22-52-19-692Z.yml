@@ -1,0 +1,673 @@
+- generic:
+  - generic:
+    - list
+    - generic:
+      - complementary:
+        - generic:
+          - heading [level=1]: BACKOFFICE
+          - paragraph: Pajak Daerah OKU Selatan
+        - generic:
+          - paragraph: Login sebagai
+          - paragraph: admin
+          - paragraph: admin
+        - navigation:
+          - link:
+            - /url: /backoffice
+            - generic:
+              - img
+              - generic: Dashboard
+          - link:
+            - /url: /backoffice/wajib-pajak
+            - generic:
+              - img
+              - generic: Wajib Pajak
+          - link:
+            - /url: /backoffice/objek-pajak
+            - generic:
+              - img
+              - generic: Objek Pajak
+              - img
+          - link:
+            - /url: /backoffice/master-data
+            - generic:
+              - img
+              - generic: Master Data
+          - link:
+            - /url: /backoffice/mockup-form
+            - generic:
+              - img
+              - generic: Mockup Form
+        - generic:
+          - button:
+            - img
+            - text: Logout
+        - link:
+          - /url: /
+          - generic:
+            - img
+            - generic: Kembali ke Peta
+      - main:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - img
+                - generic:
+                  - heading [level=1]: OBJEK PAJAK
+                  - paragraph: Kelola Data Objek Pajak Daerah
+              - generic:
+                - button:
+                  - img
+                  - text: EXPORT CSV
+                - button:
+                  - img
+                  - text: IMPORT CSV
+                - button:
+                  - img
+                  - text: TAMBAH OP
+            - generic:
+              - generic:
+                - img
+                - textbox:
+                  - /placeholder: Cari nama objek, NOPD, alamat...
+              - generic: 14 OP
+            - generic:
+              - paragraph: Halaman 1 dari 1
+              - combobox:
+                - generic: 25 / halaman
+                - img
+            - generic:
+              - combobox:
+                - generic: Semua Status
+                - img
+              - combobox:
+                - generic: Semua Verifikasi
+                - img
+              - combobox:
+                - generic: Semua Rekening
+                - img
+              - combobox:
+                - generic: Semua Kecamatan
+                - img
+            - generic:
+              - generic:
+                - table:
+                  - rowgroup:
+                    - row:
+                      - columnheader: NOPD
+                      - columnheader: NAMA OBJEK
+                      - columnheader: JENIS PAJAK
+                      - columnheader: WAJIB PAJAK
+                      - columnheader: ALAMAT
+                      - columnheader: PAJAK/BLN
+                      - columnheader: STATUS
+                      - columnheader: VERIFIKASI
+                      - columnheader: DETAIL
+                      - columnheader: AKSI
+                  - rowgroup:
+                    - row:
+                      - cell: OP.321.907.2026
+                      - cell: Sumur Air Dummy
+                      - cell:
+                        - generic: AIR
+                      - cell: Gina Pemilik BU
+                      - cell:
+                        - generic:
+                          - img
+                          - generic: Jl. OP Dummy 76
+                      - cell:
+                        - generic:
+                          - generic: Rp 6.578.000
+                      - cell:
+                        - generic: ACTIVE
+                      - cell:
+                        - generic: VERIFIED
+                      - cell:
+                        - generic: LENGKAP
+                      - cell:
+                        - generic:
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                    - row:
+                      - cell: OP.321.910.2026
+                      - cell: IT Contract Final OP Updated
+                      - cell:
+                        - generic: MBLB
+                      - cell: H. Syarifudin
+                      - cell:
+                        - generic:
+                          - img
+                          - generic: Jl. Integration Test 2
+                      - cell: "-"
+                      - cell:
+                        - generic: ACTIVE
+                      - cell:
+                        - generic: REJECTED
+                      - cell:
+                        - generic: BELUM
+                      - cell:
+                        - generic:
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                    - row:
+                      - cell: OP.321.901.2026
+                      - cell: Resto Dummy Nusantara
+                      - cell:
+                        - generic: MKN
+                      - cell: Andi Pratama
+                      - cell:
+                        - generic:
+                          - img
+                          - generic: Jl. OP Dummy 1
+                      - cell:
+                        - generic:
+                          - generic: Rp 12.000.000
+                      - cell:
+                        - generic: ACTIVE
+                      - cell:
+                        - generic: VERIFIED
+                      - cell:
+                        - generic: LENGKAP
+                      - cell:
+                        - generic:
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                    - row:
+                      - cell: OP.321.903.2026
+                      - cell: Parkir Dummy Center
+                      - cell:
+                        - generic: PKR
+                      - cell: Citra Lestari
+                      - cell:
+                        - generic:
+                          - img
+                          - generic: Jl. OP Dummy 3
+                      - cell:
+                        - generic:
+                          - generic: Rp 8.000.000
+                      - cell:
+                        - generic: ACTIVE
+                      - cell:
+                        - generic: VERIFIED
+                      - cell:
+                        - generic: LENGKAP
+                      - cell:
+                        - generic:
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                    - row:
+                      - cell: 19.01.01.0002
+                      - cell: Nasgor Bang Jo
+                      - cell:
+                        - generic: MKN
+                      - cell: Bambang Hermanto
+                      - cell:
+                        - generic:
+                          - img
+                          - generic: Jl. OP Dummy 6
+                      - cell:
+                        - generic:
+                          - generic: Rp 2.500.000
+                      - cell:
+                        - generic: ACTIVE
+                      - cell:
+                        - generic: DRAFT
+                      - cell:
+                        - generic: LENGKAP
+                      - cell:
+                        - generic:
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                    - row:
+                      - cell: 13.01.01.0008
+                      - cell: Walet Budi
+                      - cell:
+                        - generic: WLT
+                      - cell: Budi Santoso
+                      - cell:
+                        - generic:
+                          - img
+                          - generic: Tebing Gading
+                      - cell:
+                        - generic:
+                          - generic: Rp 400.000
+                      - cell:
+                        - generic: ACTIVE
+                      - cell:
+                        - generic: VERIFIED
+                      - cell:
+                        - generic: LENGKAP
+                      - cell:
+                        - generic:
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                    - row:
+                      - cell: 19.01.01.0001
+                      - cell: IT Valid PBJT Makanan dan Minuman 1773033133947
+                      - cell:
+                        - generic: MKN
+                      - cell: H. Syarifudin
+                      - cell:
+                        - generic:
+                          - img
+                          - generic: Jl. Valid Detail
+                      - cell: "-"
+                      - cell:
+                        - generic: ACTIVE
+                      - cell:
+                        - generic: DRAFT
+                      - cell:
+                        - generic: LENGKAP
+                      - cell:
+                        - generic:
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                    - row:
+                      - cell: 14.00.00.0001
+                      - cell: IT CSV Source 1773033133902
+                      - cell:
+                        - generic: MBLB
+                      - cell: H. Syarifudin
+                      - cell:
+                        - generic:
+                          - img
+                          - generic: Jl. CSV Source
+                      - cell: "-"
+                      - cell:
+                        - generic: ACTIVE
+                      - cell:
+                        - generic: DRAFT
+                      - cell:
+                        - generic: BELUM
+                      - cell:
+                        - generic:
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                    - row:
+                      - cell: OP.321.909.2026
+                      - cell: Tambang Dummy MBLB
+                      - cell:
+                        - generic: MBLB
+                      - cell: Indra Pemilik BU
+                      - cell:
+                        - generic:
+                          - img
+                          - generic: Jl. OP Dummy 9
+                      - cell:
+                        - generic:
+                          - generic: Rp 32.000.000
+                      - cell:
+                        - generic: ACTIVE
+                      - cell:
+                        - generic: VERIFIED
+                      - cell:
+                        - generic: BELUM
+                      - cell:
+                        - generic:
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                    - row:
+                      - cell: OP.321.908.2026
+                      - cell: Budidaya Walet Dummy
+                      - cell:
+                        - generic: WLT
+                      - cell: Hadi Pemilik BU
+                      - cell:
+                        - generic:
+                          - img
+                          - generic: Jl. OP Dummy 8
+                      - cell:
+                        - generic:
+                          - generic: Rp 7.000.000
+                      - cell:
+                        - generic: ACTIVE
+                      - cell:
+                        - generic: VERIFIED
+                      - cell:
+                        - generic: LENGKAP
+                      - cell:
+                        - generic:
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                    - row:
+                      - cell: OP.321.906.2026
+                      - cell: Reklame Dummy Billboard
+                      - cell:
+                        - generic: RKL
+                      - cell: Fajar Pemilik BU
+                      - cell:
+                        - generic:
+                          - img
+                          - generic: Jl. OP Dummy 6
+                      - cell:
+                        - generic:
+                          - generic: Rp 12.500.000
+                      - cell:
+                        - generic: ACTIVE
+                      - cell:
+                        - generic: VERIFIED
+                      - cell:
+                        - generic: LENGKAP
+                      - cell:
+                        - generic:
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                    - row:
+                      - cell: OP.321.905.2026
+                      - cell: PLN Dummy Niaga
+                      - cell:
+                        - generic: LST
+                      - cell: Eka Pemilik BU
+                      - cell:
+                        - generic:
+                          - img
+                          - generic: Jl. OP Dummy 5
+                      - cell:
+                        - generic:
+                          - generic: Rp 30.000.000
+                      - cell:
+                        - generic: ACTIVE
+                      - cell:
+                        - generic: VERIFIED
+                      - cell:
+                        - generic: LENGKAP
+                      - cell:
+                        - generic:
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                    - row:
+                      - cell: OP.321.904.2026
+                      - cell: Arena Hiburan Dummy
+                      - cell:
+                        - generic: HBR
+                      - cell: Deni Pengelola
+                      - cell:
+                        - generic:
+                          - img
+                          - generic: Jl. OP Dummy 4
+                      - cell:
+                        - generic:
+                          - generic: Rp 14.000.000
+                      - cell:
+                        - generic: ACTIVE
+                      - cell:
+                        - generic: VERIFIED
+                      - cell:
+                        - generic: LENGKAP
+                      - cell:
+                        - generic:
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                    - row:
+                      - cell: OP.321.902.2026
+                      - cell: Hotel Dummy Sentosa
+                      - cell:
+                        - generic: HTL
+                      - cell: Budi Santoso
+                      - cell:
+                        - generic:
+                          - img
+                          - generic: Jl. OP Dummy 2
+                      - cell:
+                        - generic:
+                          - generic: Rp 25.000.000
+                      - cell:
+                        - generic: ACTIVE
+                      - cell:
+                        - generic: VERIFIED
+                      - cell:
+                        - generic: LENGKAP
+                      - cell:
+                        - generic:
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+                          - button:
+                            - img
+            - generic:
+              - paragraph: Menampilkan 14 dari 14 data
+              - navigation:
+                - list:
+                  - listitem:
+                    - link:
+                      - /url: "#"
+                      - img
+                      - generic: Previous
+                  - listitem:
+                    - link:
+                      - /url: "#"
+                      - text: "1"
+                  - listitem:
+                    - link:
+                      - /url: "#"
+                      - generic: Next
+                      - img
+  - generic: "0"
+  - dialog "EDIT OBJEK PAJAK" [ref=e1045]:
+    - heading "EDIT OBJEK PAJAK" [level=2] [ref=e1047]
+    - generic [ref=e1048]:
+      - generic [ref=e1049]:
+        - text: REKENING PAJAK
+        - combobox "REKENING PAJAK" [active] [ref=e1050] [cursor=pointer]:
+          - generic: 4.1.01.12.01.0001 - Pajak Air Tanah
+          - img [ref=e1051]
+        - combobox [ref=e1053]
+      - generic [ref=e1054]:
+        - generic [ref=e1055]:
+          - img [ref=e1056]
+          - text: DETAIL PAJAK AIR TANAH
+        - generic [ref=e1060]:
+          - generic [ref=e1061]:
+            - generic [ref=e1062]: JENIS AIR TANAH
+            - textbox [ref=e1063]: Sumur Bor
+          - generic [ref=e1064]:
+            - generic [ref=e1065]: RATA-RATA UKURAN PEMAKAIAN
+            - spinbutton [ref=e1066]: "85.50"
+        - generic [ref=e1067]:
+          - generic [ref=e1068]:
+            - generic [ref=e1069]: KRITERIA AIR TANAH
+            - textbox [ref=e1070]: Dalam
+          - generic [ref=e1071]:
+            - generic [ref=e1072]: KELOMPOK USAHA
+            - textbox [ref=e1073]: Industri
+      - generic [ref=e1074]:
+        - generic [ref=e1075]:
+          - text: NOPD
+          - textbox "NOPD" [ref=e1076]: OP.321.907.2026
+        - generic [ref=e1077]:
+          - text: NAMA OBJEK
+          - textbox "NAMA OBJEK" [ref=e1078]:
+            - /placeholder: Nama RM, Hotel, dll
+            - text: Sumur Air Dummy
+      - generic [ref=e1079]:
+        - text: WAJIB PAJAK
+        - combobox "WAJIB PAJAK" [ref=e1080] [cursor=pointer]:
+          - generic: Gina Pemilik BU - DUMMY-NPWPD-007
+          - img [ref=e1081]
+        - combobox [ref=e1083]
+      - generic [ref=e1084]:
+        - text: ALAMAT
+        - textbox "ALAMAT" [ref=e1085]: Jl. OP Dummy 76
+      - generic [ref=e1086]:
+        - generic [ref=e1087]:
+          - text: KECAMATAN
+          - combobox "KECAMATAN" [ref=e1088] [cursor=pointer]:
+            - generic: Kecamatan Dummy Satu
+            - img [ref=e1089]
+          - combobox [ref=e1091]
+        - generic [ref=e1092]:
+          - text: KELURAHAN
+          - combobox "KELURAHAN" [ref=e1093] [cursor=pointer]:
+            - generic: Kelurahan Dummy Satu
+            - img [ref=e1094]
+          - combobox [ref=e1096]
+      - generic [ref=e1097]:
+        - generic [ref=e1098]:
+          - text: OMSET/BLN (Rp)
+          - textbox "OMSET/BLN (Rp)" [ref=e1099]: 65.780.000
+        - generic [ref=e1100]:
+          - text: TARIF (%)
+          - spinbutton "TARIF (%)" [ref=e1101]: "10.00"
+        - generic [ref=e1102]:
+          - text: PAJAK/BLN (Rp)
+          - textbox "PAJAK/BLN (Rp)" [ref=e1103]: 6.578.000
+      - generic [ref=e1104]:
+        - generic [ref=e1105]:
+          - generic [ref=e1106]: LOKASI KOORDINAT
+          - button "PILIH DI PETA" [ref=e1107] [cursor=pointer]:
+            - img
+            - text: PILIH DI PETA
+        - generic [ref=e1108]:
+          - generic [ref=e1109]:
+            - text: LATITUDE
+            - textbox "LATITUDE" [ref=e1110]: "-4.7234567"
+          - generic [ref=e1111]:
+            - text: LONGITUDE
+            - textbox "LONGITUDE" [ref=e1112]: "104.7234567"
+      - generic [ref=e1113]:
+        - text: STATUS
+        - combobox "STATUS" [ref=e1114] [cursor=pointer]:
+          - generic: Active
+          - img [ref=e1115]
+        - combobox [ref=e1117]
+      - generic [ref=e1118]:
+        - generic [ref=e1119]:
+          - generic [ref=e1120]:
+            - paragraph [ref=e1121]: Lampiran Objek Pajak
+            - paragraph [ref=e1122]: Preview, download, dan hapus bukti dokumen
+          - button "Upload" [ref=e1123] [cursor=pointer]:
+            - img
+            - text: Upload
+        - generic [ref=e1125]:
+          - generic [ref=e1126]:
+            - img [ref=e1128]
+            - generic [ref=e1132]:
+              - generic [ref=e1133]:
+                - generic [ref=e1134]: Foto Usaha
+                - generic [ref=e1135]: 132 KB
+              - paragraph [ref=e1136]: 1675346288079.jpg
+              - paragraph [ref=e1137]: admin • 10 Mar 2026, 04.43
+          - generic [ref=e1138]:
+            - button "Lihat" [ref=e1139] [cursor=pointer]:
+              - img
+              - text: Lihat
+            - button "Download" [ref=e1140] [cursor=pointer]:
+              - img
+              - text: Download
+            - button "Hapus" [ref=e1141] [cursor=pointer]:
+              - img
+              - text: Hapus
+      - button "PERBARUI OBJEK PAJAK" [ref=e1142] [cursor=pointer]
+    - button "Close" [ref=e1143] [cursor=pointer]:
+      - img [ref=e1144]
+      - generic [ref=e1147]: Close

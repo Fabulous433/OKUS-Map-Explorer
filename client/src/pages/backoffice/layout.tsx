@@ -18,19 +18,19 @@ function NavItem({ href, label, icon: Icon, match }: (typeof NAV_ITEMS)[number])
   const [isActive] = useRoute(match);
 
   return (
-    <Link href={href}>
-      <div
-        className={`flex items-center gap-3 px-4 py-3 border-b-[2px] border-black cursor-pointer transition-colors ${
-          isActive
-            ? "bg-[#FFFF00] text-black"
-            : "bg-white text-black hover:bg-gray-100"
+    <Link
+      href={href}
+      className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-all duration-200 rounded-lg mx-2 my-1
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
+        ${isActive
+          ? "bg-primary text-primary-foreground shadow-pressed font-bold"
+          : "text-foreground shadow-card hover:shadow-floating hover:-translate-y-0.5"
         }`}
-        data-testid={`nav-${label.toLowerCase().replace(/\s/g, "-")}`}
-      >
-        <Icon className="w-5 h-5 flex-shrink-0" />
-        <span className="font-mono text-sm font-bold flex-1">{label}</span>
-        {isActive && <ChevronRight className="w-4 h-4" />}
-      </div>
+      data-testid={`nav-${label.toLowerCase().replace(/\s/g, "-")}`}
+    >
+      <Icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
+      <span className="font-mono text-sm font-bold flex-1">{label}</span>
+      {isActive && <ChevronRight className="w-4 h-4" aria-hidden="true" />}
     </Link>
   );
 }
@@ -50,9 +50,9 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="border-[3px] border-black bg-white px-4 py-3 font-mono text-sm font-bold">
-          Memuat sesi...
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="rounded-lg bg-background px-6 py-4 shadow-card font-mono text-sm font-bold">
+          Memuat sesi…
         </div>
       </div>
     );
@@ -68,65 +68,73 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 lg:flex" data-testid="backoffice-layout">
-      <aside className="hidden h-screen w-[260px] flex-shrink-0 flex-col border-r-[4px] border-black bg-white lg:sticky lg:top-0 lg:flex">
-        <div className="bg-black p-4 border-b-[4px] border-[#FFFF00]">
-          <h1 className="font-serif text-base font-black text-[#FFFF00] leading-tight" data-testid="text-backoffice-title">
-            BACKOFFICE
-          </h1>
-          <p className="font-mono text-[9px] text-white/60 tracking-widest uppercase mt-0.5">
+    <div className="min-h-screen bg-background lg:flex" data-testid="backoffice-layout">
+      <aside className="hidden h-screen w-[260px] flex-shrink-0 flex-col bg-background shadow-[4px_0_16px_#babecc] lg:sticky lg:top-0 lg:flex">
+        <div className="bg-[#2d3436] p-4">
+          <div className="flex items-center gap-2">
+            <div className="h-2.5 w-2.5 rounded-full bg-[#ff4757] animate-pulse shadow-[var(--shadow-glow-accent)]" aria-hidden="true" />
+            <h1 className="font-mono text-sm font-bold uppercase tracking-[0.2em] text-white" data-testid="text-backoffice-title">
+              BACKOFFICE
+            </h1>
+          </div>
+          <p className="font-mono text-[9px] text-white/50 tracking-widest uppercase mt-1">
             Pajak Daerah OKU Selatan
           </p>
         </div>
 
-        <div className="px-4 py-3 border-b-[2px] border-black bg-gray-50">
-          <p className="font-mono text-[10px] text-gray-500 uppercase tracking-wider">Login sebagai</p>
+        <div className="px-4 py-3 mx-2 mt-3 rounded-lg shadow-recessed">
+          <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider">Login sebagai</p>
           <p className="font-mono text-xs font-bold">{user.username}</p>
-          <p className="font-mono text-[10px] uppercase text-gray-500">{user.role}</p>
+          <p className="font-mono text-[10px] uppercase text-muted-foreground">{user.role}</p>
         </div>
 
-        <nav className="flex-1 overflow-y-auto">
+        <nav className="flex-1 overflow-y-auto mt-2">
           {visibleNavItems.map((item) => (
             <NavItem key={item.href} {...item} />
           ))}
         </nav>
 
-        <div className="border-t-[2px] border-black p-3">
+        <div className="p-3">
           <Button
             variant="outline"
-            className="w-full rounded-none border-[2px] border-black font-mono text-xs font-bold"
+            className="w-full font-mono text-xs font-bold"
             onClick={async () => {
               await logout();
               setLocation("/backoffice/login");
             }}
             data-testid="button-logout"
           >
-            <LogOut className="w-4 h-4 mr-2" />
+            <LogOut className="w-4 h-4 mr-2" aria-hidden="true" />
             Logout
           </Button>
         </div>
 
-        <Link href="/">
-          <div
-            className="flex items-center gap-3 px-4 py-3 border-t-[3px] border-black bg-[#FF6B00] text-white cursor-pointer hover:bg-[#e55f00] transition-colors"
-            data-testid="nav-peta"
-          >
-            <Map className="w-5 h-5" />
-            <span className="font-mono text-sm font-bold">Kembali ke Peta</span>
-          </div>
+        <Link
+          href="/"
+          className="flex items-center gap-3 px-4 py-3 bg-primary text-primary-foreground rounded-lg mx-2 mb-2 shadow-card
+            hover:shadow-floating hover:-translate-y-0.5 active:translate-y-[2px] active:shadow-pressed
+            transition-all duration-150 cursor-pointer
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          data-testid="nav-peta"
+        >
+          <Map className="w-5 h-5" aria-hidden="true" />
+          <span className="font-mono text-sm font-bold uppercase tracking-wide">Kembali ke Peta</span>
         </Link>
       </aside>
 
       <main className="min-h-screen flex-1 overflow-auto pb-28 lg:pb-0">
-        <header className="mobile-panel-shadow sticky top-0 z-40 border-b-[3px] border-black bg-[linear-gradient(135deg,#0b0b0b_0%,#222_100%)] px-4 py-3 text-white lg:hidden">
+        <header className="mobile-panel-shadow sticky top-0 z-40 bg-[#2d3436] px-4 py-3 text-white lg:hidden">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-[#FFFF00]/80">OKUS Backoffice</p>
-              <h1 className="truncate font-serif text-lg font-black">{pageLabel}</h1>
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-[#ff4757] animate-pulse shadow-[var(--shadow-glow-accent)]" aria-hidden="true" />
+                <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-white/70">OKUS Backoffice</p>
+              </div>
+              <h1 className="truncate font-sans text-lg font-bold mt-1" style={{ textWrap: "balance" }}>{pageLabel}</h1>
             </div>
             <Button
               variant="outline"
-              className="h-10 rounded-none border-[2px] border-[#FFFF00] bg-transparent px-3 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-[#FFFF00] hover:bg-[#FFFF00] hover:text-black"
+              className="h-10 rounded-lg border-white/20 bg-transparent px-3 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-white hover:bg-white/10"
               onClick={async () => {
                 await logout();
                 setLocation("/backoffice/login");
@@ -141,10 +149,12 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
               <p className="truncate font-mono text-xs font-bold">{user.username}</p>
               <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/65">{user.role}</p>
             </div>
-            <Link href="/">
-              <div className="cursor-pointer border-[2px] border-white bg-[#FF6B00] px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-white">
-                Peta
-              </div>
+            <Link
+              href="/"
+              className="cursor-pointer rounded-lg bg-primary px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-white shadow-card
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Peta
             </Link>
           </div>
         </header>

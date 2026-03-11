@@ -1,0 +1,538 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - region "Notifications (F8)":
+      - list
+    - generic [ref=e541]:
+      - complementary [ref=e542]:
+        - generic [ref=e543]:
+          - heading "BACKOFFICE" [level=1] [ref=e544]
+          - paragraph [ref=e545]: Pajak Daerah OKU Selatan
+        - generic [ref=e546]:
+          - paragraph [ref=e547]: Login sebagai
+          - paragraph [ref=e548]: admin
+          - paragraph [ref=e549]: admin
+        - navigation [ref=e550]:
+          - link "Dashboard" [ref=e551] [cursor=pointer]:
+            - /url: /backoffice
+            - generic [ref=e552]:
+              - img [ref=e553]
+              - generic [ref=e555]: Dashboard
+          - link "Wajib Pajak" [ref=e556] [cursor=pointer]:
+            - /url: /backoffice/wajib-pajak
+            - generic [ref=e557]:
+              - img [ref=e558]
+              - generic [ref=e563]: Wajib Pajak
+          - link "Objek Pajak" [ref=e564] [cursor=pointer]:
+            - /url: /backoffice/objek-pajak
+            - generic [ref=e565]:
+              - img [ref=e566]
+              - generic [ref=e570]: Objek Pajak
+              - img [ref=e571]
+          - link "Master Data" [ref=e573] [cursor=pointer]:
+            - /url: /backoffice/master-data
+            - generic [ref=e574]:
+              - img [ref=e575]
+              - generic [ref=e579]: Master Data
+          - link "Mockup Form" [ref=e580] [cursor=pointer]:
+            - /url: /backoffice/mockup-form
+            - generic [ref=e581]:
+              - img [ref=e582]
+              - generic [ref=e584]: Mockup Form
+        - button "Logout" [ref=e586] [cursor=pointer]:
+          - img
+          - text: Logout
+        - link "Kembali ke Peta" [ref=e587] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e588]:
+            - img [ref=e589]
+            - generic [ref=e591]: Kembali ke Peta
+      - main [ref=e592]:
+        - generic [ref=e594]:
+          - generic [ref=e595]:
+            - generic [ref=e596]:
+              - img [ref=e598]
+              - generic [ref=e602]:
+                - heading "OBJEK PAJAK" [level=1] [ref=e603]
+                - paragraph [ref=e604]: Kelola Data Objek Pajak Daerah
+            - generic [ref=e605]:
+              - button "EXPORT CSV" [ref=e606] [cursor=pointer]:
+                - img
+                - text: EXPORT CSV
+              - button "IMPORT CSV" [ref=e607] [cursor=pointer]:
+                - img
+                - text: IMPORT CSV
+              - button "TAMBAH OP" [ref=e608] [cursor=pointer]:
+                - img
+                - text: TAMBAH OP
+          - generic [ref=e609]:
+            - generic [ref=e610]:
+              - img [ref=e611]
+              - textbox "Cari nama objek, NOPD, alamat..." [ref=e614]
+            - generic [ref=e615]: 14 OP
+          - generic [ref=e616]:
+            - paragraph [ref=e617]: Halaman 1 dari 1
+            - combobox [ref=e618] [cursor=pointer]:
+              - generic: 25 / halaman
+              - img [ref=e619]
+          - generic [ref=e621]:
+            - combobox [ref=e622] [cursor=pointer]:
+              - generic: Semua Status
+              - img [ref=e623]
+            - combobox [ref=e625] [cursor=pointer]:
+              - generic: Semua Verifikasi
+              - img [ref=e626]
+            - combobox [ref=e628] [cursor=pointer]:
+              - generic: Semua Rekening
+              - img [ref=e629]
+            - combobox [ref=e631] [cursor=pointer]:
+              - generic: Semua Kecamatan
+              - img [ref=e632]
+          - table [ref=e636]:
+            - rowgroup [ref=e637]:
+              - row "NOPD NAMA OBJEK JENIS PAJAK WAJIB PAJAK ALAMAT PAJAK/BLN STATUS VERIFIKASI DETAIL AKSI" [ref=e638]:
+                - columnheader "NOPD" [ref=e639]
+                - columnheader "NAMA OBJEK" [ref=e640]
+                - columnheader "JENIS PAJAK" [ref=e641]
+                - columnheader "WAJIB PAJAK" [ref=e642]
+                - columnheader "ALAMAT" [ref=e643]
+                - columnheader "PAJAK/BLN" [ref=e644]
+                - columnheader "STATUS" [ref=e645]
+                - columnheader "VERIFIKASI" [ref=e646]
+                - columnheader "DETAIL" [ref=e647]
+                - columnheader "AKSI" [ref=e648]
+            - rowgroup [ref=e649]:
+              - row "OP.321.907.2026 Sumur Air Dummy AIR Gina Pemilik BU Jl. OP Dummy 76 Rp 6.578.000 ACTIVE VERIFIED LENGKAP" [ref=e650]:
+                - cell "OP.321.907.2026" [ref=e651]
+                - cell "Sumur Air Dummy" [ref=e652]
+                - cell "AIR" [ref=e653]:
+                  - generic [ref=e654]: AIR
+                - cell "Gina Pemilik BU" [ref=e655]
+                - cell "Jl. OP Dummy 76" [ref=e656]:
+                  - generic [ref=e657]:
+                    - img [ref=e658]
+                    - generic [ref=e661]: Jl. OP Dummy 76
+                - cell "Rp 6.578.000" [ref=e662]:
+                  - generic [ref=e664]: Rp 6.578.000
+                - cell "ACTIVE" [ref=e665]:
+                  - generic [ref=e666]: ACTIVE
+                - cell "VERIFIED" [ref=e667]:
+                  - generic [ref=e668]: VERIFIED
+                - cell "LENGKAP" [ref=e669]:
+                  - generic [ref=e670]: LENGKAP
+                - cell [ref=e671]:
+                  - generic [ref=e672]:
+                    - button [ref=e673] [cursor=pointer]:
+                      - img
+                    - button [ref=e674] [cursor=pointer]:
+                      - img
+                    - button [ref=e675] [cursor=pointer]:
+                      - img
+                    - button [ref=e676] [cursor=pointer]:
+                      - img
+                    - button [ref=e677] [cursor=pointer]:
+                      - img
+              - row "OP.321.910.2026 IT Contract Final OP Updated MBLB H. Syarifudin Jl. Integration Test 2 - ACTIVE REJECTED BELUM" [ref=e678]:
+                - cell "OP.321.910.2026" [ref=e679]
+                - cell "IT Contract Final OP Updated" [ref=e680]
+                - cell "MBLB" [ref=e681]:
+                  - generic [ref=e682]: MBLB
+                - cell "H. Syarifudin" [ref=e683]
+                - cell "Jl. Integration Test 2" [ref=e684]:
+                  - generic [ref=e685]:
+                    - img [ref=e686]
+                    - generic [ref=e689]: Jl. Integration Test 2
+                - cell "-" [ref=e690]
+                - cell "ACTIVE" [ref=e691]:
+                  - generic [ref=e692]: ACTIVE
+                - cell "REJECTED" [ref=e693]:
+                  - generic [ref=e694]: REJECTED
+                - cell "BELUM" [ref=e695]:
+                  - generic [ref=e696]: BELUM
+                - cell [ref=e697]:
+                  - generic [ref=e698]:
+                    - button [ref=e699] [cursor=pointer]:
+                      - img
+                    - button [ref=e700] [cursor=pointer]:
+                      - img
+                    - button [ref=e701] [cursor=pointer]:
+                      - img
+                    - button [ref=e702] [cursor=pointer]:
+                      - img
+                    - button [ref=e703] [cursor=pointer]:
+                      - img
+              - row "OP.321.901.2026 Resto Dummy Nusantara MKN Andi Pratama Jl. OP Dummy 1 Rp 12.000.000 ACTIVE VERIFIED LENGKAP" [ref=e704]:
+                - cell "OP.321.901.2026" [ref=e705]
+                - cell "Resto Dummy Nusantara" [ref=e706]
+                - cell "MKN" [ref=e707]:
+                  - generic [ref=e708]: MKN
+                - cell "Andi Pratama" [ref=e709]
+                - cell "Jl. OP Dummy 1" [ref=e710]:
+                  - generic [ref=e711]:
+                    - img [ref=e712]
+                    - generic [ref=e715]: Jl. OP Dummy 1
+                - cell "Rp 12.000.000" [ref=e716]:
+                  - generic [ref=e718]: Rp 12.000.000
+                - cell "ACTIVE" [ref=e719]:
+                  - generic [ref=e720]: ACTIVE
+                - cell "VERIFIED" [ref=e721]:
+                  - generic [ref=e722]: VERIFIED
+                - cell "LENGKAP" [ref=e723]:
+                  - generic [ref=e724]: LENGKAP
+                - cell [ref=e725]:
+                  - generic [ref=e726]:
+                    - button [ref=e727] [cursor=pointer]:
+                      - img
+                    - button [ref=e728] [cursor=pointer]:
+                      - img
+                    - button [ref=e729] [cursor=pointer]:
+                      - img
+                    - button [ref=e730] [cursor=pointer]:
+                      - img
+                    - button [ref=e731] [cursor=pointer]:
+                      - img
+              - row "OP.321.903.2026 Parkir Dummy Center PKR Citra Lestari Jl. OP Dummy 3 Rp 8.000.000 ACTIVE VERIFIED LENGKAP" [ref=e732]:
+                - cell "OP.321.903.2026" [ref=e733]
+                - cell "Parkir Dummy Center" [ref=e734]
+                - cell "PKR" [ref=e735]:
+                  - generic [ref=e736]: PKR
+                - cell "Citra Lestari" [ref=e737]
+                - cell "Jl. OP Dummy 3" [ref=e738]:
+                  - generic [ref=e739]:
+                    - img [ref=e740]
+                    - generic [ref=e743]: Jl. OP Dummy 3
+                - cell "Rp 8.000.000" [ref=e744]:
+                  - generic [ref=e746]: Rp 8.000.000
+                - cell "ACTIVE" [ref=e747]:
+                  - generic [ref=e748]: ACTIVE
+                - cell "VERIFIED" [ref=e749]:
+                  - generic [ref=e750]: VERIFIED
+                - cell "LENGKAP" [ref=e751]:
+                  - generic [ref=e752]: LENGKAP
+                - cell [ref=e753]:
+                  - generic [ref=e754]:
+                    - button [ref=e755] [cursor=pointer]:
+                      - img
+                    - button [ref=e756] [cursor=pointer]:
+                      - img
+                    - button [ref=e757] [cursor=pointer]:
+                      - img
+                    - button [ref=e758] [cursor=pointer]:
+                      - img
+                    - button [ref=e759] [cursor=pointer]:
+                      - img
+              - row "19.01.01.0002 Nasgor Bang Jo MKN Bambang Hermanto Jl. OP Dummy 6 Rp 2.500.000 ACTIVE DRAFT LENGKAP" [ref=e760]:
+                - cell "19.01.01.0002" [ref=e761]
+                - cell "Nasgor Bang Jo" [ref=e762]
+                - cell "MKN" [ref=e763]:
+                  - generic [ref=e764]: MKN
+                - cell "Bambang Hermanto" [ref=e765]
+                - cell "Jl. OP Dummy 6" [ref=e766]:
+                  - generic [ref=e767]:
+                    - img [ref=e768]
+                    - generic [ref=e771]: Jl. OP Dummy 6
+                - cell "Rp 2.500.000" [ref=e772]:
+                  - generic [ref=e774]: Rp 2.500.000
+                - cell "ACTIVE" [ref=e775]:
+                  - generic [ref=e776]: ACTIVE
+                - cell "DRAFT" [ref=e777]:
+                  - generic [ref=e778]: DRAFT
+                - cell "LENGKAP" [ref=e779]:
+                  - generic [ref=e780]: LENGKAP
+                - cell [ref=e781]:
+                  - generic [ref=e782]:
+                    - button [ref=e783] [cursor=pointer]:
+                      - img
+                    - button [ref=e784] [cursor=pointer]:
+                      - img
+                    - button [ref=e785] [cursor=pointer]:
+                      - img
+                    - button [ref=e786] [cursor=pointer]:
+                      - img
+                    - button [ref=e787] [cursor=pointer]:
+                      - img
+              - row "13.01.01.0008 Walet Budi WLT Budi Santoso Tebing Gading Rp 400.000 ACTIVE VERIFIED LENGKAP" [ref=e788]:
+                - cell "13.01.01.0008" [ref=e789]
+                - cell "Walet Budi" [ref=e790]
+                - cell "WLT" [ref=e791]:
+                  - generic [ref=e792]: WLT
+                - cell "Budi Santoso" [ref=e793]
+                - cell "Tebing Gading" [ref=e794]:
+                  - generic [ref=e795]:
+                    - img [ref=e796]
+                    - generic [ref=e799]: Tebing Gading
+                - cell "Rp 400.000" [ref=e800]:
+                  - generic [ref=e802]: Rp 400.000
+                - cell "ACTIVE" [ref=e803]:
+                  - generic [ref=e804]: ACTIVE
+                - cell "VERIFIED" [ref=e805]:
+                  - generic [ref=e806]: VERIFIED
+                - cell "LENGKAP" [ref=e807]:
+                  - generic [ref=e808]: LENGKAP
+                - cell [ref=e809]:
+                  - generic [ref=e810]:
+                    - button [ref=e811] [cursor=pointer]:
+                      - img
+                    - button [ref=e812] [cursor=pointer]:
+                      - img
+                    - button [ref=e813] [cursor=pointer]:
+                      - img
+                    - button [ref=e814] [cursor=pointer]:
+                      - img
+                    - button [ref=e815] [cursor=pointer]:
+                      - img
+              - row "19.01.01.0001 IT Valid PBJT Makanan dan Minuman 1773033133947 MKN H. Syarifudin Jl. Valid Detail - ACTIVE DRAFT LENGKAP" [ref=e816]:
+                - cell "19.01.01.0001" [ref=e817]
+                - cell "IT Valid PBJT Makanan dan Minuman 1773033133947" [ref=e818]
+                - cell "MKN" [ref=e819]:
+                  - generic [ref=e820]: MKN
+                - cell "H. Syarifudin" [ref=e821]
+                - cell "Jl. Valid Detail" [ref=e822]:
+                  - generic [ref=e823]:
+                    - img [ref=e824]
+                    - generic [ref=e827]: Jl. Valid Detail
+                - cell "-" [ref=e828]
+                - cell "ACTIVE" [ref=e829]:
+                  - generic [ref=e830]: ACTIVE
+                - cell "DRAFT" [ref=e831]:
+                  - generic [ref=e832]: DRAFT
+                - cell "LENGKAP" [ref=e833]:
+                  - generic [ref=e834]: LENGKAP
+                - cell [ref=e835]:
+                  - generic [ref=e836]:
+                    - button [ref=e837] [cursor=pointer]:
+                      - img
+                    - button [ref=e838] [cursor=pointer]:
+                      - img
+                    - button [ref=e839] [cursor=pointer]:
+                      - img
+                    - button [ref=e840] [cursor=pointer]:
+                      - img
+                    - button [ref=e841] [cursor=pointer]:
+                      - img
+              - row "14.00.00.0001 IT CSV Source 1773033133902 MBLB H. Syarifudin Jl. CSV Source - ACTIVE DRAFT BELUM" [ref=e842]:
+                - cell "14.00.00.0001" [ref=e843]
+                - cell "IT CSV Source 1773033133902" [ref=e844]
+                - cell "MBLB" [ref=e845]:
+                  - generic [ref=e846]: MBLB
+                - cell "H. Syarifudin" [ref=e847]
+                - cell "Jl. CSV Source" [ref=e848]:
+                  - generic [ref=e849]:
+                    - img [ref=e850]
+                    - generic [ref=e853]: Jl. CSV Source
+                - cell "-" [ref=e854]
+                - cell "ACTIVE" [ref=e855]:
+                  - generic [ref=e856]: ACTIVE
+                - cell "DRAFT" [ref=e857]:
+                  - generic [ref=e858]: DRAFT
+                - cell "BELUM" [ref=e859]:
+                  - generic [ref=e860]: BELUM
+                - cell [ref=e861]:
+                  - generic [ref=e862]:
+                    - button [ref=e863] [cursor=pointer]:
+                      - img
+                    - button [ref=e864] [cursor=pointer]:
+                      - img
+                    - button [ref=e865] [cursor=pointer]:
+                      - img
+                    - button [ref=e866] [cursor=pointer]:
+                      - img
+                    - button [ref=e867] [cursor=pointer]:
+                      - img
+              - row "OP.321.909.2026 Tambang Dummy MBLB MBLB Indra Pemilik BU Jl. OP Dummy 9 Rp 32.000.000 ACTIVE VERIFIED BELUM" [ref=e868]:
+                - cell "OP.321.909.2026" [ref=e869]
+                - cell "Tambang Dummy MBLB" [ref=e870]
+                - cell "MBLB" [ref=e871]:
+                  - generic [ref=e872]: MBLB
+                - cell "Indra Pemilik BU" [ref=e873]
+                - cell "Jl. OP Dummy 9" [ref=e874]:
+                  - generic [ref=e875]:
+                    - img [ref=e876]
+                    - generic [ref=e879]: Jl. OP Dummy 9
+                - cell "Rp 32.000.000" [ref=e880]:
+                  - generic [ref=e882]: Rp 32.000.000
+                - cell "ACTIVE" [ref=e883]:
+                  - generic [ref=e884]: ACTIVE
+                - cell "VERIFIED" [ref=e885]:
+                  - generic [ref=e886]: VERIFIED
+                - cell "BELUM" [ref=e887]:
+                  - generic [ref=e888]: BELUM
+                - cell [ref=e889]:
+                  - generic [ref=e890]:
+                    - button [ref=e891] [cursor=pointer]:
+                      - img
+                    - button [ref=e892] [cursor=pointer]:
+                      - img
+                    - button [ref=e893] [cursor=pointer]:
+                      - img
+                    - button [ref=e894] [cursor=pointer]:
+                      - img
+                    - button [ref=e895] [cursor=pointer]:
+                      - img
+              - row "OP.321.908.2026 Budidaya Walet Dummy WLT Hadi Pemilik BU Jl. OP Dummy 8 Rp 7.000.000 ACTIVE VERIFIED LENGKAP" [ref=e896]:
+                - cell "OP.321.908.2026" [ref=e897]
+                - cell "Budidaya Walet Dummy" [ref=e898]
+                - cell "WLT" [ref=e899]:
+                  - generic [ref=e900]: WLT
+                - cell "Hadi Pemilik BU" [ref=e901]
+                - cell "Jl. OP Dummy 8" [ref=e902]:
+                  - generic [ref=e903]:
+                    - img [ref=e904]
+                    - generic [ref=e907]: Jl. OP Dummy 8
+                - cell "Rp 7.000.000" [ref=e908]:
+                  - generic [ref=e910]: Rp 7.000.000
+                - cell "ACTIVE" [ref=e911]:
+                  - generic [ref=e912]: ACTIVE
+                - cell "VERIFIED" [ref=e913]:
+                  - generic [ref=e914]: VERIFIED
+                - cell "LENGKAP" [ref=e915]:
+                  - generic [ref=e916]: LENGKAP
+                - cell [ref=e917]:
+                  - generic [ref=e918]:
+                    - button [ref=e919] [cursor=pointer]:
+                      - img
+                    - button [ref=e920] [cursor=pointer]:
+                      - img
+                    - button [ref=e921] [cursor=pointer]:
+                      - img
+                    - button [ref=e922] [cursor=pointer]:
+                      - img
+                    - button [ref=e923] [cursor=pointer]:
+                      - img
+              - row "OP.321.906.2026 Reklame Dummy Billboard RKL Fajar Pemilik BU Jl. OP Dummy 6 Rp 12.500.000 ACTIVE VERIFIED LENGKAP" [ref=e924]:
+                - cell "OP.321.906.2026" [ref=e925]
+                - cell "Reklame Dummy Billboard" [ref=e926]
+                - cell "RKL" [ref=e927]:
+                  - generic [ref=e928]: RKL
+                - cell "Fajar Pemilik BU" [ref=e929]
+                - cell "Jl. OP Dummy 6" [ref=e930]:
+                  - generic [ref=e931]:
+                    - img [ref=e932]
+                    - generic [ref=e935]: Jl. OP Dummy 6
+                - cell "Rp 12.500.000" [ref=e936]:
+                  - generic [ref=e938]: Rp 12.500.000
+                - cell "ACTIVE" [ref=e939]:
+                  - generic [ref=e940]: ACTIVE
+                - cell "VERIFIED" [ref=e941]:
+                  - generic [ref=e942]: VERIFIED
+                - cell "LENGKAP" [ref=e943]:
+                  - generic [ref=e944]: LENGKAP
+                - cell [ref=e945]:
+                  - generic [ref=e946]:
+                    - button [ref=e947] [cursor=pointer]:
+                      - img
+                    - button [ref=e948] [cursor=pointer]:
+                      - img
+                    - button [ref=e949] [cursor=pointer]:
+                      - img
+                    - button [ref=e950] [cursor=pointer]:
+                      - img
+                    - button [ref=e951] [cursor=pointer]:
+                      - img
+              - row "OP.321.905.2026 PLN Dummy Niaga LST Eka Pemilik BU Jl. OP Dummy 5 Rp 30.000.000 ACTIVE VERIFIED LENGKAP" [ref=e952]:
+                - cell "OP.321.905.2026" [ref=e953]
+                - cell "PLN Dummy Niaga" [ref=e954]
+                - cell "LST" [ref=e955]:
+                  - generic [ref=e956]: LST
+                - cell "Eka Pemilik BU" [ref=e957]
+                - cell "Jl. OP Dummy 5" [ref=e958]:
+                  - generic [ref=e959]:
+                    - img [ref=e960]
+                    - generic [ref=e963]: Jl. OP Dummy 5
+                - cell "Rp 30.000.000" [ref=e964]:
+                  - generic [ref=e966]: Rp 30.000.000
+                - cell "ACTIVE" [ref=e967]:
+                  - generic [ref=e968]: ACTIVE
+                - cell "VERIFIED" [ref=e969]:
+                  - generic [ref=e970]: VERIFIED
+                - cell "LENGKAP" [ref=e971]:
+                  - generic [ref=e972]: LENGKAP
+                - cell [ref=e973]:
+                  - generic [ref=e974]:
+                    - button [ref=e975] [cursor=pointer]:
+                      - img
+                    - button [ref=e976] [cursor=pointer]:
+                      - img
+                    - button [ref=e977] [cursor=pointer]:
+                      - img
+                    - button [ref=e978] [cursor=pointer]:
+                      - img
+                    - button [ref=e979] [cursor=pointer]:
+                      - img
+              - row "OP.321.904.2026 Arena Hiburan Dummy HBR Deni Pengelola Jl. OP Dummy 4 Rp 14.000.000 ACTIVE VERIFIED LENGKAP" [ref=e980]:
+                - cell "OP.321.904.2026" [ref=e981]
+                - cell "Arena Hiburan Dummy" [ref=e982]
+                - cell "HBR" [ref=e983]:
+                  - generic [ref=e984]: HBR
+                - cell "Deni Pengelola" [ref=e985]
+                - cell "Jl. OP Dummy 4" [ref=e986]:
+                  - generic [ref=e987]:
+                    - img [ref=e988]
+                    - generic [ref=e991]: Jl. OP Dummy 4
+                - cell "Rp 14.000.000" [ref=e992]:
+                  - generic [ref=e994]: Rp 14.000.000
+                - cell "ACTIVE" [ref=e995]:
+                  - generic [ref=e996]: ACTIVE
+                - cell "VERIFIED" [ref=e997]:
+                  - generic [ref=e998]: VERIFIED
+                - cell "LENGKAP" [ref=e999]:
+                  - generic [ref=e1000]: LENGKAP
+                - cell [ref=e1001]:
+                  - generic [ref=e1002]:
+                    - button [ref=e1003] [cursor=pointer]:
+                      - img
+                    - button [ref=e1004] [cursor=pointer]:
+                      - img
+                    - button [ref=e1005] [cursor=pointer]:
+                      - img
+                    - button [ref=e1006] [cursor=pointer]:
+                      - img
+                    - button [ref=e1007] [cursor=pointer]:
+                      - img
+              - row "OP.321.902.2026 Hotel Dummy Sentosa HTL Budi Santoso Jl. OP Dummy 2 Rp 25.000.000 ACTIVE VERIFIED LENGKAP" [ref=e1008]:
+                - cell "OP.321.902.2026" [ref=e1009]
+                - cell "Hotel Dummy Sentosa" [ref=e1010]
+                - cell "HTL" [ref=e1011]:
+                  - generic [ref=e1012]: HTL
+                - cell "Budi Santoso" [ref=e1013]
+                - cell "Jl. OP Dummy 2" [ref=e1014]:
+                  - generic [ref=e1015]:
+                    - img [ref=e1016]
+                    - generic [ref=e1019]: Jl. OP Dummy 2
+                - cell "Rp 25.000.000" [ref=e1020]:
+                  - generic [ref=e1022]: Rp 25.000.000
+                - cell "ACTIVE" [ref=e1023]:
+                  - generic [ref=e1024]: ACTIVE
+                - cell "VERIFIED" [ref=e1025]:
+                  - generic [ref=e1026]: VERIFIED
+                - cell "LENGKAP" [ref=e1027]:
+                  - generic [ref=e1028]: LENGKAP
+                - cell [ref=e1029]:
+                  - generic [ref=e1030]:
+                    - button [ref=e1031] [cursor=pointer]:
+                      - img
+                    - button [ref=e1032] [cursor=pointer]:
+                      - img
+                    - button [ref=e1033] [cursor=pointer]:
+                      - img
+                    - button [ref=e1034] [cursor=pointer]:
+                      - img
+                    - button [ref=e1035] [cursor=pointer]:
+                      - img
+          - generic [ref=e1036]:
+            - paragraph [ref=e1037]: Menampilkan 14 dari 14 data
+            - navigation "pagination" [ref=e1038]:
+              - list [ref=e1039]:
+                - listitem [ref=e1040]:
+                  - link "Go to previous page":
+                    - /url: "#"
+                    - img
+                    - generic: Previous
+                - listitem [ref=e1041]:
+                  - link "1" [ref=e1042] [cursor=pointer]:
+                    - /url: "#"
+                - listitem [ref=e1043]:
+                  - link "Go to next page":
+                    - /url: "#"
+                    - generic: Next
+                    - img
+  - generic [ref=e298]: "0"

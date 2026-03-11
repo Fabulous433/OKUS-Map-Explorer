@@ -265,7 +265,7 @@ export function invalidateObjekPajakQueries() {
 }
 
 export function jenisPajakColor(jenis: string) {
-  if (jenis.includes("Makanan")) return "bg-[#FF6B00] text-white";
+  if (jenis.includes("Makanan")) return "bg-primary text-white";
   if (jenis.includes("Perhotelan")) return "bg-blue-600 text-white";
   if (jenis.includes("Reklame")) return "bg-purple-600 text-white";
   if (jenis.includes("Parkir")) return "bg-green-600 text-white";

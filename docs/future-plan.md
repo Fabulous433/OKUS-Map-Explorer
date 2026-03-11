@@ -48,6 +48,10 @@ Ringkasan fase yang sudah selesai sampai saat ini:
   - integration test `tests/integration/ops-post-launch.integration.ts`.
   - post-launch summary `docs/operations/post-launch-summary-2026-03-07.md`.
 - Active now: staging/prod execution window (non-dev environment evidence collection + owner approvals).
+- Latest staging status (2026-03-10):
+  - `codex/staging` deployed successfully.
+  - staging smoke for current WP/OP backoffice flow passed after schema sync.
+  - production gate remains pending final approval and release evidence closure.
 - Execution pack ready:
   - `docs/release/staging-bootstrap-plan.md`
   - `docs/release/staging-single-vps-runbook.md` (EasyPanel-compatible)

@@ -1,0 +1,30 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - heading "PETA OP" [level=1] [ref=e6]
+        - paragraph [ref=e7]: Viewport Query
+      - link "Backoffice" [ref=e8] [cursor=pointer]:
+        - /url: /backoffice
+        - button "Backoffice" [ref=e9]:
+          - img
+          - text: Backoffice
+    - generic [ref=e10]:
+      - generic [ref=e11]: 0 viewport
+      - generic [ref=e12]: 0 marker
+    - button "Filter" [ref=e13] [cursor=pointer]:
+      - img
+      - text: Filter
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - link "Leaflet" [ref=e16] [cursor=pointer]:
+          - /url: https://leafletjs.com
+          - img [ref=e17]
+          - text: Leaflet
+        - text: "| ©"
+        - link "OpenStreetMap" [ref=e21] [cursor=pointer]:
+          - /url: https://www.openstreetmap.org/copyright
+      - button "Reset view" [ref=e23] [cursor=pointer]:
+        - img

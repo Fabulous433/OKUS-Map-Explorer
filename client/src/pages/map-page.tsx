@@ -73,11 +73,11 @@ function buildMarkerIcon(jenisPajak: string) {
 
   return new L.DivIcon({
     className: "custom-op-marker",
-    html: `<div style="width:36px;height:36px;border:3px solid #000;background:#000;display:flex;align-items:center;justify-content:center;box-shadow:3px 3px 0 #000;">
-      <span style="font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.5px;color:${selected.color}">${selected.label}</span>
+    html: `<div style="width:38px;height:38px;border-radius:8px;background:#e0e5ec;display:flex;align-items:center;justify-content:center;box-shadow:3px 3px 6px #babecc,-3px -3px 6px #fff;">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.5px;color:${selected.color}">${selected.label}</span>
     </div>`,
-    iconSize: [36, 36],
-    iconAnchor: [18, 36],
+    iconSize: [38, 38],
+    iconAnchor: [19, 38],
     popupAnchor: [0, -30],
   });
 }
@@ -133,14 +133,15 @@ function MapTopRightControls(props: { isFetching: boolean; isMobile: boolean }) 
       <Button
         size="icon"
         variant="outline"
-        className="rounded-none border-[3px] border-black bg-white no-default-hover-elevate no-default-active-elevate"
+        className="rounded-lg bg-background shadow-card"
         onClick={() => map.flyTo(OKU_SELATAN_CENTER, DEFAULT_ZOOM, { duration: 0.7 })}
         title="Reset view"
+        aria-label="Reset view"
       >
-        <Target className="w-4 h-4 text-black" />
+        <Target className="w-4 h-4" />
       </Button>
       {props.isFetching && (
-        <div className="flex items-center gap-2 rounded-none border-[3px] border-black bg-white px-3 py-2 font-mono text-xs shadow-[3px_3px_0_#000]">
+        <div className="flex items-center gap-2 rounded-lg bg-background px-3 py-2 font-mono text-xs shadow-card">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           memuat viewport
         </div>
@@ -209,31 +210,31 @@ export default function MapPage() {
   const mapConfig = BASE_MAPS[baseMap];
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-white" data-testid="map-page">
+    <div className="relative h-screen w-screen overflow-hidden bg-background" data-testid="map-page">
       {isMobile ? (
         <>
           <div className="absolute left-3 right-3 top-3 z-[1000] flex items-start justify-between gap-3">
-            <div className="border-[3px] border-black bg-[#FFFF00] px-3 py-2 shadow-[4px_4px_0_#000]">
-              <h1 className="font-serif text-lg font-black leading-none text-black">PETA OP</h1>
-              <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-black/65">Viewport Query</p>
+            <div className="rounded-xl bg-background px-4 py-3 shadow-floating">
+              <h1 className="font-sans text-lg font-bold leading-none">PETA OP</h1>
+              <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Viewport Query</p>
             </div>
             <Link href="/backoffice">
-              <Button className="rounded-none border-[2px] border-black bg-black px-3 font-mono text-[11px] text-[#FFFF00] no-default-hover-elevate no-default-active-elevate">
-                <Settings className="mr-2 h-3.5 w-3.5" />
+              <Button className="font-mono text-[11px]">
+                <Settings className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
                 Backoffice
               </Button>
             </Link>
           </div>
 
           <div className="absolute bottom-20 left-3 z-[1000] flex max-w-[70vw] flex-wrap gap-2">
-            <Badge className="rounded-none border-[3px] border-black bg-black px-3 py-1 font-mono text-[10px] text-[#FFFF00]">
+            <Badge className="bg-[#2d3436] text-white">
               {totalInView} viewport
             </Badge>
-            <Badge className="rounded-none border-[3px] border-black bg-[#FFFF00] px-3 py-1 font-mono text-[10px] text-black">
+            <Badge variant="secondary">
               {markerList.length} marker
             </Badge>
             {isCapped ? (
-              <Badge className="rounded-none border-[3px] border-black bg-[#FF6B00] px-3 py-1 font-mono text-[10px] text-white">
+              <Badge className="bg-primary text-primary-foreground">
                 capped
               </Badge>
             ) : null}
@@ -241,10 +242,11 @@ export default function MapPage() {
 
           <Button
             type="button"
-            className="absolute bottom-20 right-3 z-[1000] rounded-none border-[3px] border-black bg-white px-4 py-6 font-mono text-xs font-bold text-black shadow-[4px_4px_0_#000] no-default-hover-elevate no-default-active-elevate"
+            className="absolute bottom-20 right-3 z-[1000] px-4 py-6 font-mono text-xs font-bold shadow-floating"
+            variant="outline"
             onClick={() => setIsDrawerOpen(true)}
           >
-            <Filter className="mr-2 h-4 w-4" />
+            <Filter className="mr-2 h-4 w-4" aria-hidden="true" />
             Filter
           </Button>
 
@@ -269,29 +271,29 @@ export default function MapPage() {
       ) : (
         <>
           <div className="absolute left-4 top-4 z-[1000] w-[360px] max-w-[calc(100vw-2rem)] space-y-3">
-            <div className="border-[4px] border-black bg-[#FFFF00] p-3 shadow-[6px_6px_0_#000] transition-transform duration-150 hover:-translate-y-[1px]">
-              <h1 className="font-serif text-xl font-black leading-none text-black">PETA OBJEK PAJAK</h1>
-              <p className="font-mono text-[10px] uppercase tracking-widest text-black/70">
+            <div className="rounded-xl bg-background p-4 shadow-floating">
+              <h1 className="font-sans text-xl font-bold leading-none">PETA OBJEK PAJAK</h1>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
                 Viewport Query Mode
               </p>
             </div>
 
-            <div className="space-y-2 border-[3px] border-black bg-white p-3 shadow-[4px_4px_0_#000]">
+            <div className="space-y-2 rounded-xl bg-background p-4 shadow-card">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 w-4 -translate-y-1/2 text-black" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Cari nama OP / NOPD / alamat"
-                  className="rounded-none border-[3px] border-black pl-9 font-mono text-xs"
+                  className="pl-9"
                 />
               </div>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Select value={kecamatanId} onValueChange={setKecamatanId}>
-                  <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-xs">
+                  <SelectTrigger className="font-mono text-xs">
                     <SelectValue placeholder="Kecamatan" />
                   </SelectTrigger>
-                  <SelectContent className="rounded-none border-[2px] border-black">
+                  <SelectContent>
                     <SelectItem value="all">Semua Kecamatan</SelectItem>
                     {kecamatanList.map((item) => (
                       <SelectItem key={item.cpmKecId} value={item.cpmKecId}>
@@ -301,10 +303,10 @@ export default function MapPage() {
                   </SelectContent>
                 </Select>
                 <Select value={rekPajakId} onValueChange={setRekPajakId}>
-                  <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-xs">
+                  <SelectTrigger className="font-mono text-xs">
                     <SelectValue placeholder="Rekening Pajak" />
                   </SelectTrigger>
-                  <SelectContent className="rounded-none border-[2px] border-black">
+                  <SelectContent>
                     <SelectItem value="all">Semua Rekening</SelectItem>
                     {rekeningList.map((item) => (
                       <SelectItem key={item.id} value={String(item.id)}>
@@ -316,11 +318,11 @@ export default function MapPage() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <Select value={baseMap} onValueChange={(value) => setBaseMap(value as BaseMapKey)}>
-                  <SelectTrigger className="rounded-none border-[2px] border-black font-mono text-xs">
-                    <Layers className="mr-2 h-3.5 w-3.5" />
+                  <SelectTrigger className="font-mono text-xs">
+                    <Layers className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="rounded-none border-[2px] border-black">
+                  <SelectContent>
                     {(Object.keys(BASE_MAPS) as BaseMapKey[]).map((key) => (
                       <SelectItem key={key} value={key}>
                         {BASE_MAPS[key].name}
@@ -329,8 +331,8 @@ export default function MapPage() {
                   </SelectContent>
                 </Select>
                 <Link href="/backoffice">
-                  <Button className="w-full rounded-none border-[2px] border-black bg-black font-mono text-xs text-[#FFFF00] no-default-hover-elevate no-default-active-elevate">
-                    <Settings className="mr-2 h-3.5 w-3.5" />
+                  <Button className="w-full font-mono text-xs">
+                    <Settings className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
                     Backoffice
                   </Button>
                 </Link>
@@ -339,14 +341,14 @@ export default function MapPage() {
           </div>
 
           <div className="absolute bottom-4 right-4 z-[1000] flex gap-2">
-            <Badge className="rounded-none border-[3px] border-black bg-black px-3 py-1 font-mono text-xs text-[#FFFF00]">
+            <Badge className="bg-[#2d3436] text-white">
               {totalInView} dalam viewport
             </Badge>
-            <Badge className="rounded-none border-[3px] border-black bg-[#FFFF00] px-3 py-1 font-mono text-xs text-black">
+            <Badge variant="secondary">
               {markerList.length} marker
             </Badge>
             {isCapped && (
-              <Badge className="rounded-none border-[3px] border-black bg-[#FF6B00] px-3 py-1 font-mono text-xs text-white">
+              <Badge className="bg-primary text-primary-foreground">
                 capped
               </Badge>
             )}
@@ -384,15 +386,15 @@ export default function MapPage() {
       </MapContainer>
 
       {error && (
-        <div className="absolute bottom-4 left-4 z-[1000] max-w-[440px] border-[3px] border-black bg-red-100 p-3 font-mono text-xs text-red-800 shadow-[4px_4px_0_#000]">
+        <div className="absolute bottom-4 left-4 z-[1000] max-w-[440px] rounded-lg bg-red-100 p-3 font-mono text-xs text-red-800 shadow-card">
           {error instanceof Error ? error.message : "Terjadi kesalahan saat memuat peta"}
         </div>
       )}
 
       {!error && !isFetching && markerList.length === 0 && bbox && (
-        <div className="absolute bottom-4 left-4 z-[1000] border-[3px] border-black bg-white p-3 font-mono text-xs shadow-[4px_4px_0_#000]">
+        <div className="absolute bottom-4 left-4 z-[1000] rounded-lg bg-background p-3 font-mono text-xs shadow-card">
           <div className="flex items-center gap-2">
-            <MapPin className="h-3.5 w-3.5" />
+            <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
             Tidak ada objek pajak pada viewport ini.
           </div>
         </div>
