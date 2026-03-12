@@ -1,0 +1,372 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - main [ref=e4]:
+    - generic [ref=e6]:
+      - generic [ref=e9]: OKUS Backoffice
+      - button "Menu pengguna" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+    - generic [ref=e15]:
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - img [ref=e19]
+          - generic [ref=e24]:
+            - heading "WAJIB PAJAK" [level=1] [ref=e25]
+            - paragraph [ref=e26]: Model Baru
+        - button "Tambah WP" [ref=e28] [cursor=pointer]:
+          - img
+      - generic [ref=e29]:
+        - generic [ref=e30]:
+          - img [ref=e31]
+          - textbox "Cari nama / NPWPD" [ref=e34]
+        - combobox [ref=e35] [cursor=pointer]:
+          - generic: Semua Jenis
+          - img [ref=e36]
+        - combobox [ref=e38] [cursor=pointer]:
+          - generic: Semua Peran
+          - img [ref=e39]
+        - combobox [ref=e41] [cursor=pointer]:
+          - generic: Semua Status
+          - img [ref=e42]
+        - generic [ref=e44]: 12 WP
+      - generic [ref=e45]:
+        - paragraph [ref=e46]: Halaman 1 dari 1
+        - combobox [ref=e47] [cursor=pointer]:
+          - generic: 25 / halaman
+          - img [ref=e48]
+      - generic [ref=e50]:
+        - article [ref=e51]:
+          - generic [ref=e52]:
+            - generic [ref=e53]:
+              - paragraph [ref=e54]: H. Syarifudin
+              - paragraph [ref=e55]: NPWPD IT-1772809695301
+            - generic [ref=e56]:
+              - generic [ref=e57]: Active
+              - generic [ref=e58]: Pemilik
+          - generic [ref=e59]:
+            - generic [ref=e60]:
+              - paragraph [ref=e61]: Jenis
+              - paragraph [ref=e62]: Orang Pribadi
+            - generic [ref=e63]:
+              - paragraph [ref=e64]: Kontak
+              - paragraph [ref=e65]: "0812765432104"
+            - generic [ref=e66]:
+              - paragraph [ref=e67]: Wilayah
+              - paragraph [ref=e68]: Muaradua / Pasar Muaradua
+          - generic [ref=e69]:
+            - button "Edit" [ref=e70] [cursor=pointer]:
+              - img
+            - button "Riwayat" [ref=e71] [cursor=pointer]:
+              - img
+            - button "Hapus" [ref=e72] [cursor=pointer]:
+              - img
+        - article [ref=e73]:
+          - generic [ref=e74]:
+            - generic [ref=e75]:
+              - paragraph [ref=e76]: Budi Santoso
+              - paragraph [ref=e77]: NPWPD DUMMY-NPWPD-002
+            - generic [ref=e78]:
+              - generic [ref=e79]: Active
+              - generic [ref=e80]: Pemilik
+          - generic [ref=e81]:
+            - generic [ref=e82]:
+              - paragraph [ref=e83]: Jenis
+              - paragraph [ref=e84]: Orang Pribadi
+            - generic [ref=e85]:
+              - paragraph [ref=e86]: Kontak
+              - paragraph [ref=e87]: "081200000002"
+            - generic [ref=e88]:
+              - paragraph [ref=e89]: Wilayah
+              - paragraph [ref=e90]: Kecamatan Dummy Dua / Kelurahan Dummy Dua
+          - generic [ref=e91]:
+            - button "Edit" [ref=e92] [cursor=pointer]:
+              - img
+            - button "Riwayat" [ref=e93] [cursor=pointer]:
+              - img
+            - button "Hapus" [ref=e94] [cursor=pointer]:
+              - img
+        - article [ref=e95]:
+          - generic [ref=e96]:
+            - generic [ref=e97]:
+              - paragraph [ref=e98]: Fajar Pemilik BU
+              - paragraph [ref=e99]: NPWPD DUMMY-NPWPD-006
+            - generic [ref=e100]:
+              - generic [ref=e101]: Active
+              - generic [ref=e102]: Pemilik
+          - generic [ref=e103]:
+            - generic [ref=e104]:
+              - paragraph [ref=e105]: Jenis
+              - paragraph [ref=e106]: Badan Usaha
+            - generic [ref=e107]:
+              - paragraph [ref=e108]: Kontak
+              - paragraph [ref=e109]: "081200000006"
+            - generic [ref=e110]:
+              - paragraph [ref=e111]: Wilayah
+              - paragraph [ref=e112]: Kecamatan Dummy Tiga / Kelurahan Dummy Tiga
+          - generic [ref=e113]:
+            - button "Edit" [ref=e114] [cursor=pointer]:
+              - img
+            - button "Riwayat" [ref=e115] [cursor=pointer]:
+              - img
+            - button "Hapus" [ref=e116] [cursor=pointer]:
+              - img
+        - article [ref=e117]:
+          - generic [ref=e118]:
+            - generic [ref=e119]:
+              - paragraph [ref=e120]: Deni Pengelola
+              - paragraph [ref=e121]: NPWPD DUMMY-NPWPD-004
+            - generic [ref=e122]:
+              - generic [ref=e123]: Active
+              - generic [ref=e124]: Pengelola
+          - generic [ref=e125]:
+            - generic [ref=e126]:
+              - paragraph [ref=e127]: Jenis
+              - paragraph [ref=e128]: Orang Pribadi
+            - generic [ref=e129]:
+              - paragraph [ref=e130]: Kontak
+              - paragraph [ref=e131]: "081200000004"
+            - generic [ref=e132]:
+              - paragraph [ref=e133]: Wilayah
+              - paragraph [ref=e134]: Kecamatan Dummy Satu / Kelurahan Dummy Satu
+          - generic [ref=e135]:
+            - button "Edit" [ref=e136] [cursor=pointer]:
+              - img
+            - button "Riwayat" [ref=e137] [cursor=pointer]:
+              - img
+            - button "Hapus" [ref=e138] [cursor=pointer]:
+              - img
+        - article [ref=e139]:
+          - generic [ref=e140]:
+            - generic [ref=e141]:
+              - paragraph [ref=e142]: Eka Pemilik BU
+              - paragraph [ref=e143]: NPWPD DUMMY-NPWPD-005
+            - generic [ref=e144]:
+              - generic [ref=e145]: Active
+              - generic [ref=e146]: Pemilik
+          - generic [ref=e147]:
+            - generic [ref=e148]:
+              - paragraph [ref=e149]: Jenis
+              - paragraph [ref=e150]: Badan Usaha
+            - generic [ref=e151]:
+              - paragraph [ref=e152]: Kontak
+              - paragraph [ref=e153]: "081200000005"
+            - generic [ref=e154]:
+              - paragraph [ref=e155]: Wilayah
+              - paragraph [ref=e156]: Kecamatan Dummy Dua / Kelurahan Dummy Dua
+          - generic [ref=e157]:
+            - button "Edit" [ref=e158] [cursor=pointer]:
+              - img
+            - button "Riwayat" [ref=e159] [cursor=pointer]:
+              - img
+            - button "Hapus" [ref=e160] [cursor=pointer]:
+              - img
+        - article [ref=e161]:
+          - generic [ref=e162]:
+            - generic [ref=e163]:
+              - paragraph [ref=e164]: Andi Pratama
+              - paragraph [ref=e165]: NPWPD DUMMY-NPWPD-001
+            - generic [ref=e166]:
+              - generic [ref=e167]: Active
+              - generic [ref=e168]: Pemilik
+          - generic [ref=e169]:
+            - generic [ref=e170]:
+              - paragraph [ref=e171]: Jenis
+              - paragraph [ref=e172]: Orang Pribadi
+            - generic [ref=e173]:
+              - paragraph [ref=e174]: Kontak
+              - paragraph [ref=e175]: "081200000001"
+            - generic [ref=e176]:
+              - paragraph [ref=e177]: Wilayah
+              - paragraph [ref=e178]: Kecamatan Dummy Satu 2 / Kelurahan Dummy Satu 2
+          - generic [ref=e179]:
+            - button "Edit" [ref=e180] [cursor=pointer]:
+              - img
+            - button "Riwayat" [ref=e181] [cursor=pointer]:
+              - img
+            - button "Hapus" [ref=e182] [cursor=pointer]:
+              - img
+        - article [ref=e183]:
+          - generic [ref=e184]:
+            - generic [ref=e185]:
+              - paragraph [ref=e186]: Indra Pemilik BU
+              - paragraph [ref=e187]: NPWPD DUMMY-NPWPD-009
+            - generic [ref=e188]:
+              - generic [ref=e189]: Active
+              - generic [ref=e190]: Pemilik
+          - generic [ref=e191]:
+            - generic [ref=e192]:
+              - paragraph [ref=e193]: Jenis
+              - paragraph [ref=e194]: Badan Usaha
+            - generic [ref=e195]:
+              - paragraph [ref=e196]: Kontak
+              - paragraph [ref=e197]: "081200000009"
+            - generic [ref=e198]:
+              - paragraph [ref=e199]: Wilayah
+              - paragraph [ref=e200]: Kecamatan Dummy Tiga / Kelurahan Dummy Tiga
+          - generic [ref=e201]:
+            - button "Edit" [ref=e202] [cursor=pointer]:
+              - img
+            - button "Riwayat" [ref=e203] [cursor=pointer]:
+              - img
+            - button "Hapus" [ref=e204] [cursor=pointer]:
+              - img
+        - article [ref=e205]:
+          - generic [ref=e206]:
+            - generic [ref=e207]:
+              - paragraph [ref=e208]: Hadi Pemilik BU
+              - paragraph [ref=e209]: NPWPD DUMMY-NPWPD-008
+            - generic [ref=e210]:
+              - generic [ref=e211]: Active
+              - generic [ref=e212]: Pemilik
+          - generic [ref=e213]:
+            - generic [ref=e214]:
+              - paragraph [ref=e215]: Jenis
+              - paragraph [ref=e216]: Badan Usaha
+            - generic [ref=e217]:
+              - paragraph [ref=e218]: Kontak
+              - paragraph [ref=e219]: "081200000008"
+            - generic [ref=e220]:
+              - paragraph [ref=e221]: Wilayah
+              - paragraph [ref=e222]: Kecamatan Dummy Dua / Kelurahan Dummy Dua
+          - generic [ref=e223]:
+            - button "Edit" [ref=e224] [cursor=pointer]:
+              - img
+            - button "Riwayat" [ref=e225] [cursor=pointer]:
+              - img
+            - button "Hapus" [ref=e226] [cursor=pointer]:
+              - img
+        - article [ref=e227]:
+          - generic [ref=e228]:
+            - generic [ref=e229]:
+              - paragraph [ref=e230]: Gina Pemilik BU
+              - paragraph [ref=e231]: NPWPD DUMMY-NPWPD-007
+            - generic [ref=e232]:
+              - generic [ref=e233]: Active
+              - generic [ref=e234]: Pemilik
+          - generic [ref=e235]:
+            - generic [ref=e236]:
+              - paragraph [ref=e237]: Jenis
+              - paragraph [ref=e238]: Badan Usaha
+            - generic [ref=e239]:
+              - paragraph [ref=e240]: Kontak
+              - paragraph [ref=e241]: "081200000007"
+            - generic [ref=e242]:
+              - paragraph [ref=e243]: Wilayah
+              - paragraph [ref=e244]: Kecamatan Dummy Satu / Kelurahan Dummy Satu
+          - generic [ref=e245]:
+            - button "Edit" [ref=e246] [cursor=pointer]:
+              - img
+            - button "Riwayat" [ref=e247] [cursor=pointer]:
+              - img
+            - button "Hapus" [ref=e248] [cursor=pointer]:
+              - img
+        - article [ref=e249]:
+          - generic [ref=e250]:
+            - generic [ref=e251]:
+              - paragraph [ref=e252]: Citra Lestari
+              - paragraph [ref=e253]: NPWPD DUMMY-NPWPD-003
+            - generic [ref=e254]:
+              - generic [ref=e255]: Active
+              - generic [ref=e256]: Pemilik
+          - generic [ref=e257]:
+            - generic [ref=e258]:
+              - paragraph [ref=e259]: Jenis
+              - paragraph [ref=e260]: Orang Pribadi
+            - generic [ref=e261]:
+              - paragraph [ref=e262]: Kontak
+              - paragraph [ref=e263]: "081200000003"
+            - generic [ref=e264]:
+              - paragraph [ref=e265]: Wilayah
+              - paragraph [ref=e266]: Kecamatan Dummy Tiga / Kelurahan Dummy Tiga
+          - generic [ref=e267]:
+            - button "Edit" [ref=e268] [cursor=pointer]:
+              - img
+            - button "Riwayat" [ref=e269] [cursor=pointer]:
+              - img
+            - button "Hapus" [ref=e270] [cursor=pointer]:
+              - img
+        - article [ref=e271]:
+          - generic [ref=e272]:
+            - generic [ref=e273]:
+              - paragraph [ref=e274]: Bambang Hermanto
+              - paragraph [ref=e275]: NPWPD -
+            - generic [ref=e276]:
+              - generic [ref=e277]: Active
+              - generic [ref=e278]: Pemilik
+          - generic [ref=e279]:
+            - generic [ref=e280]:
+              - paragraph [ref=e281]: Jenis
+              - paragraph [ref=e282]: Badan Usaha
+            - generic [ref=e283]:
+              - paragraph [ref=e284]: Kontak
+              - paragraph [ref=e285]: "08345678912"
+            - generic [ref=e286]:
+              - paragraph [ref=e287]: Wilayah
+              - paragraph [ref=e288]: Muaradua / Batu Belang Jaya
+          - generic [ref=e289]:
+            - button "Edit" [ref=e290] [cursor=pointer]:
+              - img
+            - button "Riwayat" [ref=e291] [cursor=pointer]:
+              - img
+            - button "Hapus" [ref=e292] [cursor=pointer]:
+              - img
+        - article [ref=e293]:
+          - generic [ref=e294]:
+            - generic [ref=e295]:
+              - paragraph [ref=e296]: Ny. Ratna Dewi
+              - paragraph [ref=e297]: NPWPD -
+            - generic [ref=e298]:
+              - generic [ref=e299]: Active
+              - generic [ref=e300]: Pemilik
+          - generic [ref=e301]:
+            - generic [ref=e302]:
+              - paragraph [ref=e303]: Jenis
+              - paragraph [ref=e304]: Badan Usaha
+            - generic [ref=e305]:
+              - paragraph [ref=e306]: Kontak
+              - paragraph [ref=e307]: "08234561234"
+            - generic [ref=e308]:
+              - paragraph [ref=e309]: Wilayah
+              - paragraph [ref=e310]: Muaradua / Batu Belang Jaya
+          - generic [ref=e311]:
+            - button "Edit" [ref=e312] [cursor=pointer]:
+              - img
+            - button "Riwayat" [ref=e313] [cursor=pointer]:
+              - img
+            - button "Hapus" [ref=e314] [cursor=pointer]:
+              - img
+      - generic [ref=e315]:
+        - paragraph [ref=e316]: Menampilkan 12 dari 12 data
+        - navigation "pagination" [ref=e317]:
+          - list [ref=e318]:
+            - listitem [ref=e319]:
+              - link "Go to previous page":
+                - /url: "#"
+                - img
+                - generic: Previous
+            - listitem [ref=e320]:
+              - link "1" [ref=e321] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e322]:
+              - link "Go to next page":
+                - /url: "#"
+                - generic: Next
+                - img
+    - navigation [ref=e323]:
+      - generic [ref=e324]:
+        - link "Dashboard" [ref=e325] [cursor=pointer]:
+          - /url: /backoffice
+          - img [ref=e326]
+          - generic [ref=e328]: Dashboard
+        - link "WP" [ref=e329] [cursor=pointer]:
+          - /url: /backoffice/wajib-pajak
+          - img [ref=e330]
+          - generic [ref=e335]: WP
+        - link "OP" [ref=e336] [cursor=pointer]:
+          - /url: /backoffice/objek-pajak
+          - img [ref=e337]
+          - generic [ref=e341]: OP
+        - link "Peta" [ref=e342] [cursor=pointer]:
+          - /url: /
+          - img [ref=e343]
+          - generic [ref=e345]: Peta

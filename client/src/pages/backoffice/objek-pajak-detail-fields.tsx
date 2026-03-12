@@ -39,11 +39,11 @@ function DetailFieldsPBJTMakanan({ form }: { form: UseFormReturn<OPFormValues> }
  setDetailValue(form, detail, key, value);
  };
  return (
- <div className="border border-[#FF6B00] p-3 space-y-3 bg-orange-50">
+ <div className="min-w-0 overflow-x-hidden border border-[#FF6B00] bg-orange-50 p-2 md:p-3 space-y-3">
  <div className="font-mono text-xs font-bold text-primary flex items-center gap-1">
  <Tag className="w-3 h-3" /> DETAIL PBJT MAKANAN & MINUMAN
  </div>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-2 gap-2 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">JENIS USAHA</label>
  <Select
@@ -95,7 +95,7 @@ function DetailFieldsPBJTMakanan({ form }: { form: UseFormReturn<OPFormValues> }
  </Select>
  </div>
  ) : null}
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-2 gap-2 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">JUMLAH KARYAWAN</label>
  <Input
@@ -117,7 +117,7 @@ function DetailFieldsPBJTMakanan({ form }: { form: UseFormReturn<OPFormValues> }
  />
  </div>
  </div>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-2 gap-2 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">JAM BUKA</label>
  <Input
@@ -139,7 +139,7 @@ function DetailFieldsPBJTMakanan({ form }: { form: UseFormReturn<OPFormValues> }
  />
  </div>
  </div>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-2 gap-2 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">HARGA TERMURAH</label>
  <Input
@@ -172,11 +172,11 @@ function DetailFieldsPBJTHotel({ form }: { form: UseFormReturn<OPFormValues> }) 
  setDetailValue(form, detail, key, value);
  };
  return (
- <div className="border border-blue-600 p-3 space-y-3 bg-blue-50">
+ <div className="min-w-0 overflow-x-hidden border border-blue-600 bg-blue-50 p-2 md:p-3 space-y-3">
  <div className="font-mono text-xs font-bold text-blue-600 flex items-center gap-1">
  <Tag className="w-3 h-3" /> DETAIL PBJT JASA PERHOTELAN
  </div>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-2 gap-2 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">JENIS USAHA</label>
  <Select
@@ -228,7 +228,7 @@ function DetailFieldsPBJTHotel({ form }: { form: UseFormReturn<OPFormValues> }) 
  </div>
  ) : null}
  </div>
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-3 gap-2 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">RATA-RATA PENGUNJUNG/HARI</label>
  <Input
@@ -262,7 +262,7 @@ function DetailFieldsPBJTHotel({ form }: { form: UseFormReturn<OPFormValues> }) 
  </div>
  <div className="space-y-2">
  <label className="font-mono text-[10px] font-bold text-black block">FASILITAS</label>
- <div className="grid grid-cols-2 gap-2 bg-white p-2">
+ <div className="grid grid-cols-1 gap-2 bg-white p-2 md:grid-cols-2">
  {HOTEL_FACILITY_OPTIONS.map((option) => {
  const selected = Array.isArray(detail.fasilitas) ? detail.fasilitas.includes(option) : false;
  return (
@@ -288,11 +288,11 @@ function DetailFieldsPajakReklame({ form }: { form: UseFormReturn<OPFormValues> 
  setDetailValue(form, detail, key, value);
  };
  return (
- <div className="border border-purple-600 p-3 space-y-3 bg-purple-50">
+ <div className="min-w-0 overflow-x-hidden border border-purple-600 bg-purple-50 p-2 md:p-3 space-y-3">
  <div className="font-mono text-xs font-bold text-purple-600 flex items-center gap-1">
  <Tag className="w-3 h-3" /> DETAIL PAJAK REKLAME
  </div>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-2 gap-2 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">JENIS REKLAME</label>
  <Select onValueChange={(v) => update("jenisReklame", v)} value={String(detail.jenisReklame ?? "")}>
@@ -319,7 +319,7 @@ function DetailFieldsPajakReklame({ form }: { form: UseFormReturn<OPFormValues> 
  />
  </div>
  </div>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-2 gap-2 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">MASA BERLAKU</label>
  <Input
@@ -343,7 +343,7 @@ function DetailFieldsPajakReklame({ form }: { form: UseFormReturn<OPFormValues> 
  </Select>
  </div>
  </div>
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-3 gap-2 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">PANJANG (m)</label>
  <Input
@@ -394,11 +394,11 @@ function DetailFieldsPBJTParkir({ form }: { form: UseFormReturn<OPFormValues> })
  setDetailValue(form, detail, key, value);
  };
  return (
- <div className="border border-green-600 p-3 space-y-3 bg-green-50">
+ <div className="min-w-0 overflow-x-hidden border border-green-600 bg-green-50 p-2 md:p-3 space-y-3">
  <div className="font-mono text-xs font-bold text-green-600 flex items-center gap-1">
  <Tag className="w-3 h-3" /> DETAIL PBJT JASA PARKIR
  </div>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">JENIS USAHA</label>
  <Select
@@ -432,7 +432,7 @@ function DetailFieldsPBJTParkir({ form }: { form: UseFormReturn<OPFormValues> })
  </Select>
  </div>
  </div>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">KAPASITAS KENDARAAN</label>
  <Input
@@ -445,24 +445,25 @@ function DetailFieldsPBJTParkir({ form }: { form: UseFormReturn<OPFormValues> })
  />
  </div>
  </div>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">TARIF PARKIR</label>
  <Input
  inputMode="numeric"
  value={formatMoneyInput(detail.tarifParkir)}
  onChange={(e) => setMoneyDetailValue(form, detail, "tarifParkir", e.target.value)}
- placeholder="Motor: 2000, Mobil: 5000"
+ placeholder="Contoh: 3.000"
  className="font-mono text-sm"
  data-testid="input-tarif-parkir"
  />
  </div>
  <div>
- <label className="font-mono text-[10px] font-bold text-black block mb-1">RATA-RATA PENGUNJUNG</label>
+ <label className="font-mono text-[10px] font-bold text-black block mb-1">RATA-RATA PER HARI</label>
  <Input
  type="number"
  value={detail.rata2Pengunjung || ""}
  onChange={(e) => update("rata2Pengunjung", e.target.value ? parseInt(e.target.value, 10) : null)}
+ placeholder="Contoh: 250"
  className="font-mono text-sm"
  data-testid="input-rata2-pengunjung-parkir"
  />
@@ -474,6 +475,10 @@ function DetailFieldsPBJTParkir({ form }: { form: UseFormReturn<OPFormValues> })
 
 function DetailFieldsPBJTHiburan({ form }: { form: UseFormReturn<OPFormValues> }) {
  const detail = getDetailRecord(form);
+ const jamOperasionalRaw = String(detail.jamOperasional ?? "");
+ const [jamBukaValue = "", jamTutupValue = ""] = jamOperasionalRaw
+ .split("-")
+ .map((value) => value.trim());
  const isCustomJenisHiburan =
  typeof detail.jenisHiburan === "string" &&
  detail.jenisHiburan.length > 0 &&
@@ -484,12 +489,21 @@ function DetailFieldsPBJTHiburan({ form }: { form: UseFormReturn<OPFormValues> }
  const update = (key: string, value: OPDetailValue) => {
  setDetailValue(form, detail, key, value);
  };
+ const updateJamOperasional = (part: "buka" | "tutup", value: string) => {
+ const nextJamBuka = part === "buka" ? value : jamBukaValue;
+ const nextJamTutup = part === "tutup" ? value : jamTutupValue;
+ const nextValue =
+ nextJamBuka || nextJamTutup
+ ? [nextJamBuka, nextJamTutup].filter(Boolean).join(" - ")
+ : null;
+ update("jamOperasional", nextValue);
+ };
  return (
- <div className="border border-pink-600 p-3 space-y-3 bg-pink-50">
+ <div className="min-w-0 overflow-x-hidden border border-pink-600 bg-pink-50 p-2 md:p-3 space-y-3">
  <div className="font-mono text-xs font-bold text-pink-600 flex items-center gap-1">
  <Music className="w-3 h-3" /> DETAIL PBJT KESENIAN & HIBURAN
  </div>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">JENIS HIBURAN</label>
  <Select
@@ -525,17 +539,29 @@ function DetailFieldsPBJTHiburan({ form }: { form: UseFormReturn<OPFormValues> }
  />
  </div>
  </div>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-3">
  <div>
- <label className="font-mono text-[10px] font-bold text-black block mb-1">JAM OPERASIONAL</label>
+ <label className="font-mono text-[10px] font-bold text-black block mb-1">JAM BUKA</label>
  <Input
- value={String(detail.jamOperasional ?? "")}
- onChange={(e) => update("jamOperasional", e.target.value)}
- placeholder="08:00 - 23:00"
+ type="time"
+ value={jamBukaValue}
+ onChange={(e) => updateJamOperasional("buka", e.target.value)}
  className="font-mono text-sm"
- data-testid="input-jam-operasional-hiburan"
+ data-testid="input-jam-buka-hiburan"
  />
  </div>
+ <div>
+ <label className="font-mono text-[10px] font-bold text-black block mb-1">JAM TUTUP</label>
+ <Input
+ type="time"
+ value={jamTutupValue}
+ onChange={(e) => updateJamOperasional("tutup", e.target.value)}
+ className="font-mono text-sm"
+ data-testid="input-jam-tutup-hiburan"
+ />
+ </div>
+ </div>
+ <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">JUMLAH KARYAWAN</label>
  <Input
@@ -569,11 +595,11 @@ function DetailFieldsPBJTTenagaListrik({ form }: { form: UseFormReturn<OPFormVal
  setDetailValue(form, detail, key, value);
  };
  return (
- <div className="border border-yellow-600 p-3 space-y-3 bg-yellow-50">
+ <div className="min-w-0 overflow-x-hidden border border-yellow-600 bg-yellow-50 p-2 md:p-3 space-y-3">
  <div className="font-mono text-xs font-bold text-yellow-700 flex items-center gap-1">
  <DollarSign className="w-3 h-3" /> DETAIL PBJT TENAGA LISTRIK
  </div>
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 gap-2 md:grid-cols-3 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">JENIS TENAGA LISTRIK</label>
  <Select
@@ -621,11 +647,11 @@ function DetailFieldsPajakAirTanah({ form }: { form: UseFormReturn<OPFormValues>
  setDetailValue(form, detail, key, value);
  };
  return (
- <div className="border border-cyan-700 p-3 space-y-3 bg-cyan-50">
+ <div className="min-w-0 overflow-x-hidden border border-cyan-700 bg-cyan-50 p-2 md:p-3 space-y-3">
  <div className="font-mono text-xs font-bold text-cyan-800 flex items-center gap-1">
  <Building2 className="w-3 h-3" /> DETAIL PAJAK AIR TANAH
  </div>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">JENIS AIR TANAH</label>
  <Input
@@ -646,7 +672,7 @@ function DetailFieldsPajakAirTanah({ form }: { form: UseFormReturn<OPFormValues>
  />
  </div>
  </div>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">KRITERIA AIR TANAH</label>
  <Input
@@ -676,11 +702,11 @@ function DetailFieldsPajakWalet({ form }: { form: UseFormReturn<OPFormValues> })
  setDetailValue(form, detail, key, value);
  };
  return (
- <div className="border border-amber-800 p-3 space-y-3 bg-amber-50">
+ <div className="min-w-0 overflow-x-hidden border border-amber-800 bg-amber-50 p-2 md:p-3 space-y-3">
  <div className="font-mono text-xs font-bold text-amber-900 flex items-center gap-1">
  <Tag className="w-3 h-3" /> DETAIL PAJAK SARANG BURUNG WALET
  </div>
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 gap-2 md:grid-cols-3 md:gap-3">
  <div>
  <label className="font-mono text-[10px] font-bold text-black block mb-1">JENIS BURUNG WALET</label>
  <Input

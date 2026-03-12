@@ -1,9 +1,11 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { useForm, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { AlertTriangle, ArrowRight, Download, History, Pencil, Plus, Search, Trash2, Upload, Users, X } from "lucide-react";
+import { useLocation, useSearch } from "wouter";
+import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, History, Pencil, Plus, Search, Trash2, Users, X } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import BackofficeLayout from "./layout";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -250,7 +252,7 @@ function FormFieldText({ form, name, label }: { form: UseFormReturn<WpFormValues
  <FormItem>
  <FormLabel className="font-mono text-xs font-bold text-black">{label}</FormLabel>
  <FormControl>
- <Input {...field} value={field.value ?? ""} className="font-mono text-sm" />
+ <Input {...field} value={field.value ?? ""} className="h-10 px-3 font-mono text-sm md:h-11" />
  </FormControl>
  <FormMessage />
  </FormItem>
@@ -264,8 +266,8 @@ function WpForm({ form, mode }: { form: UseFormReturn<WpFormValues>; mode: "crea
  const peranWp = form.watch("peranWp");
 
  return (
- <div className="space-y-4">
- <div className="grid grid-cols-2 gap-3">
+ <div className="space-y-3 md:space-y-4">
+ <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-3">
  <FormField
  control={form.control}
  name="jenisWp"
@@ -273,7 +275,7 @@ function WpForm({ form, mode }: { form: UseFormReturn<WpFormValues>; mode: "crea
  <FormItem>
  <FormLabel className="font-mono text-xs font-bold text-black">JENIS WP</FormLabel>
  <Select onValueChange={field.onChange} value={field.value}>
- <FormControl><SelectTrigger className="font-mono text-sm"><SelectValue /></SelectTrigger></FormControl>
+ <FormControl><SelectTrigger className="h-10 px-3 font-mono text-sm md:h-11"><SelectValue /></SelectTrigger></FormControl>
  <SelectContent className="border border-black"><SelectItem value="orang_pribadi">Orang Pribadi</SelectItem><SelectItem value="badan_usaha">Badan Usaha</SelectItem></SelectContent>
  </Select>
  </FormItem>
@@ -286,7 +288,7 @@ function WpForm({ form, mode }: { form: UseFormReturn<WpFormValues>; mode: "crea
  <FormItem>
  <FormLabel className="font-mono text-xs font-bold text-black">PERAN WP</FormLabel>
  <Select onValueChange={field.onChange} value={field.value}>
- <FormControl><SelectTrigger className="font-mono text-sm"><SelectValue /></SelectTrigger></FormControl>
+ <FormControl><SelectTrigger className="h-10 px-3 font-mono text-sm md:h-11"><SelectValue /></SelectTrigger></FormControl>
  <SelectContent className="border border-black"><SelectItem value="pemilik">Pemilik</SelectItem><SelectItem value="pengelola">Pengelola</SelectItem></SelectContent>
  </Select>
  </FormItem>
@@ -301,7 +303,7 @@ function WpForm({ form, mode }: { form: UseFormReturn<WpFormValues>; mode: "crea
  <FormItem>
  <FormLabel className="font-mono text-xs font-bold text-black">STATUS</FormLabel>
  <Select onValueChange={field.onChange} value={field.value}>
- <FormControl><SelectTrigger className="font-mono text-sm"><SelectValue /></SelectTrigger></FormControl>
+ <FormControl><SelectTrigger className="h-10 px-3 font-mono text-sm md:h-11"><SelectValue /></SelectTrigger></FormControl>
  <SelectContent className="border border-black"><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent>
  </Select>
  </FormItem>
@@ -317,6 +319,8 @@ function WpForm({ form, mode }: { form: UseFormReturn<WpFormValues>; mode: "crea
 export default function BackofficeWajibPajak() {
  const { hasRole } = useAuth();
  const isMobile = useIsMobile();
+ const [, setLocation] = useLocation();
+ const search = useSearch();
  const canMutate = hasRole(["admin", "editor"]);
  const [q, setQ] = useState("");
  const [page, setPage] = useState(1);
@@ -330,7 +334,6 @@ export default function BackofficeWajibPajak() {
  const [auditTarget, setAuditTarget] = useState<WajibPajakWithBadanUsaha | null>(null);
  const [qualityWarnings, setQualityWarnings] = useState<QualityWarning[]>([]);
  const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false);
- const fileInputRef = useRef<HTMLInputElement>(null);
  const { toast } = useToast();
  const debouncedQ = useDebouncedValue(q, 300);
  const activeCursor = cursorHistory[cursorHistory.length - 1] ?? INITIAL_CURSOR;
@@ -381,6 +384,16 @@ export default function BackofficeWajibPajak() {
  };
  const addForm = useForm<WpFormValues>({ resolver: zodResolver(wpSchema), defaultValues: defaults() });
  const editForm = useForm<WpFormValues>({ resolver: zodResolver(wpSchema), defaultValues: defaults() });
+
+ useEffect(() => {
+ if (!canMutate) return;
+ if (new URLSearchParams(search).get("create") !== "1") return;
+ setQualityWarnings([]);
+ setIsDuplicateDialogOpen(false);
+ addForm.reset(defaults());
+ setOpenAdd(true);
+ setLocation("/backoffice/wajib-pajak", { replace: true });
+ }, [addForm, canMutate, search, setLocation]);
 
  const runQualityCheck = async (payload: Record<string, unknown>) => {
  const badanUsaha = payload.badanUsaha && typeof payload.badanUsaha === "object"
@@ -473,26 +486,10 @@ export default function BackofficeWajibPajak() {
  }
  updateMutation.mutate({ id: edit.id, payload });
  };
- const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
- if (!canMutate) return;
-
- const file = e.target.files?.[0];
- if (!file) return;
- const formData = new FormData();
- formData.append("file", file);
- try {
- const res = await fetch("/api/wajib-pajak/import", { method: "POST", body: formData });
- const result = await res.json();
- if (!res.ok) toast({ title: "Gagal", description: result.message, variant: "destructive" });
- else { toast({ title: "Import Selesai", description: `${result.success} berhasil, ${result.failed} gagal dari ${result.total} data` }); invalidateWajibPajakQueries(); }
- } catch (err: any) { toast({ title: "Error", description: err.message, variant: "destructive" }); }
- if (fileInputRef.current) fileInputRef.current.value = "";
- };
 
  return (
  <BackofficeLayout>
- <div className="p-4 md:p-6" data-testid="backoffice-wp-page">
- <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleImport} />
+ <div className="p-3 md:p-6" data-testid="backoffice-wp-page">
  <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
  <div className="flex items-center gap-3">
  <div className="flex h-10 w-10 items-center justify-center shadow-card bg-primary">
@@ -504,9 +501,7 @@ export default function BackofficeWajibPajak() {
  </div>
  </div>
  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
- <Button variant="outline" className="shadow-card bg-white font-mono text-xs font-bold" onClick={() => window.open("/api/wajib-pajak/export", "_blank")}><Download className="mr-1 h-4 w-4" />EXPORT CSV</Button>
- {canMutate && <Button variant="outline" className="shadow-card bg-white font-mono text-xs font-bold" onClick={() => fileInputRef.current?.click()}><Upload className="mr-1 h-4 w-4" />IMPORT CSV</Button>}
- {canMutate && <Button className="w-full shadow-card bg-primary font-mono font-bold text-black sm:w-auto" onClick={() => { setQualityWarnings([]); setIsDuplicateDialogOpen(false); addForm.reset(defaults()); setOpenAdd(true); }}><Plus className="mr-2 h-4 w-4" />TAMBAH WP</Button>}
+ {canMutate && !isMobile && <Tooltip><TooltipTrigger asChild><Button className="shadow-card bg-primary font-mono font-bold text-black sm:w-auto" aria-label="Tambah WP" onClick={() => { setQualityWarnings([]); setIsDuplicateDialogOpen(false); addForm.reset(defaults()); setOpenAdd(true); }}><Plus className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">TAMBAH WP</span></Button></TooltipTrigger><TooltipContent>Tambah WP</TooltipContent></Tooltip>}
  </div>
  </div>
  <div className="mb-3 flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
@@ -519,7 +514,7 @@ export default function BackofficeWajibPajak() {
  className="pl-9 shadow-card font-mono text-sm"
  />
  </div>
- <Select value={jenisWpFilter} onValueChange={(value) => setJenisWpFilter(value as typeof jenisWpFilter)}>
+ {!isMobile && <Select value={jenisWpFilter} onValueChange={(value) => setJenisWpFilter(value as typeof jenisWpFilter)}>
  <SelectTrigger className="w-full shadow-card font-mono text-xs md:w-[170px]">
  <SelectValue placeholder="Jenis WP" />
  </SelectTrigger>
@@ -528,8 +523,8 @@ export default function BackofficeWajibPajak() {
  <SelectItem value="orang_pribadi">Orang Pribadi</SelectItem>
  <SelectItem value="badan_usaha">Badan Usaha</SelectItem>
  </SelectContent>
- </Select>
- <Select value={peranWpFilter} onValueChange={(value) => setPeranWpFilter(value as typeof peranWpFilter)}>
+ </Select>}
+ {!isMobile && <Select value={peranWpFilter} onValueChange={(value) => setPeranWpFilter(value as typeof peranWpFilter)}>
  <SelectTrigger className="w-full shadow-card font-mono text-xs md:w-[170px]">
  <SelectValue placeholder="Peran WP" />
  </SelectTrigger>
@@ -538,8 +533,8 @@ export default function BackofficeWajibPajak() {
  <SelectItem value="pemilik">Pemilik</SelectItem>
  <SelectItem value="pengelola">Pengelola</SelectItem>
  </SelectContent>
- </Select>
- <Select value={statusAktifFilter} onValueChange={(value) => setStatusAktifFilter(value as typeof statusAktifFilter)}>
+ </Select>}
+ {!isMobile && <Select value={statusAktifFilter} onValueChange={(value) => setStatusAktifFilter(value as typeof statusAktifFilter)}>
  <SelectTrigger className="w-full shadow-card font-mono text-xs md:w-[150px]">
  <SelectValue placeholder="Status" />
  </SelectTrigger>
@@ -548,7 +543,7 @@ export default function BackofficeWajibPajak() {
  <SelectItem value="active">Active</SelectItem>
  <SelectItem value="inactive">Inactive</SelectItem>
  </SelectContent>
- </Select>
+ </Select>}
  <Badge className="w-fit bg-primary font-mono text-xs text-white">{meta.total} WP</Badge>
  </div>
  <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -576,7 +571,7 @@ export default function BackofficeWajibPajak() {
  wp={wp}
  canMutate={canMutate}
  onEdit={openEdit}
- onHistory={setAuditTarget}
+ onView={(selectedWp) => setLocation(`/backoffice/wajib-pajak/${selectedWp.id}`)}
  onDelete={(id) => deleteMutation.mutate(id)}
  />
  ))}
@@ -593,17 +588,57 @@ export default function BackofficeWajibPajak() {
  <TableCell className="font-mono text-xs">{wp.jenisWp}</TableCell>
  <TableCell className="font-mono text-xs">{wp.peranWp}</TableCell>
  <TableCell className="font-mono text-xs">{wp.statusAktif}</TableCell>
- <TableCell className="text-right"><div className="flex justify-end gap-1">{canMutate && <Button size="icon" variant="ghost" className="" aria-label="Edit" onClick={() => openEdit(wp)}><Pencil className="w-4 h-4" /></Button>}<Button size="icon" variant="ghost" className="" aria-label="Riwayat audit" onClick={() => setAuditTarget(wp)}><History className="w-4 h-4" /></Button>{canMutate && <Button size="icon" variant="ghost" className="text-red-600" aria-label="Hapus" onClick={() => deleteMutation.mutate(wp.id)}><Trash2 className="w-4 h-4" /></Button>}</div></TableCell>
+ <TableCell className="text-right"><div className="flex justify-end gap-1">{canMutate && <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="" aria-label="Edit" onClick={() => openEdit(wp)}><Pencil className="w-4 h-4" /></Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip>}<Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="" aria-label="Riwayat audit" onClick={() => setAuditTarget(wp)}><History className="w-4 h-4" /></Button></TooltipTrigger><TooltipContent>Riwayat audit</TooltipContent></Tooltip>{canMutate && wp.statusAktif !== "active" && <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="text-red-600" aria-label="Hapus" onClick={() => deleteMutation.mutate(wp.id)}><Trash2 className="w-4 h-4" /></Button></TooltipTrigger><TooltipContent>Hapus</TooltipContent></Tooltip>}</div></TableCell>
  </TableRow>
  ))}
  </TableBody>
  </Table>
  </div>
  )}
- <div className="mt-4 flex items-center justify-between gap-3">
+ <div className={`mt-4 ${isMobile ? "space-y-3" : "flex items-center justify-between gap-3"}`}>
  <p className="font-mono text-[11px] text-gray-600">
  Menampilkan {wpList.length} dari {meta.total} data
  </p>
+ {isMobile ? (
+ <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-[22px] bg-[#eef2f5] px-2.5 py-2 shadow-[inset_6px_6px_14px_rgba(148,163,184,0.12),inset_-6px_-6px_14px_rgba(255,255,255,0.95)]">
+ <Button
+ type="button"
+ variant="ghost"
+ className={`h-10 justify-start rounded-[16px] px-2 font-mono text-[11px] uppercase tracking-[0.14em] text-black/45 ${
+ cursorHistory.length > 1 ? "" : "pointer-events-none opacity-40"
+ }`}
+ onClick={() => {
+ if (cursorHistory.length > 1) {
+ setCursorHistory((prev) => prev.slice(0, -1));
+ setPage((prev) => Math.max(1, prev - 1));
+ }
+ }}
+ >
+ <ChevronLeft className="mr-1.5 h-4 w-4 shrink-0" />
+ <span className="truncate">Prev</span>
+ </Button>
+ <div className="flex h-10 min-w-[44px] items-center justify-center rounded-[16px] bg-white px-3 font-mono text-sm font-bold text-black shadow-[6px_6px_14px_rgba(148,163,184,0.18),-6px_-6px_14px_rgba(255,255,255,0.92)]">
+ {page}
+ </div>
+ <Button
+ type="button"
+ variant="ghost"
+ className={`h-10 justify-end rounded-[16px] px-2 font-mono text-[11px] uppercase tracking-[0.14em] text-black/45 ${
+ meta.nextCursor ? "" : "pointer-events-none opacity-40"
+ }`}
+ onClick={() => {
+ const nextCursor = meta.nextCursor;
+ if (typeof nextCursor === "number") {
+ setCursorHistory((prev) => [...prev, nextCursor]);
+ setPage((prev) => prev + 1);
+ }
+ }}
+ >
+ <span className="truncate">Next</span>
+ <ChevronRight className="ml-1.5 h-4 w-4 shrink-0" />
+ </Button>
+ </div>
+ ) : (
  <Pagination className="w-auto">
  <PaginationContent>
  <PaginationItem>
@@ -640,16 +675,17 @@ export default function BackofficeWajibPajak() {
  </PaginationItem>
  </PaginationContent>
  </Pagination>
+ )}
  </div>
  </div>
 
  {canMutate && <Dialog open={openAdd} onOpenChange={(open) => { setOpenAdd(open); if (!open) { setQualityWarnings([]); setIsDuplicateDialogOpen(false); } }}>
- <DialogContent className="shadow-floating max-w-2xl bg-white p-0 max-h-[90vh] overflow-y-auto">
- <DialogHeader className="p-4 border-b border-border bg-primary"><DialogTitle className="font-sans text-xl font-black text-white">TAMBAH WAJIB PAJAK</DialogTitle><DialogDescription className="sr-only">Form tambah wajib pajak untuk mengisi identitas, peran, dan data badan usaha bila diperlukan.</DialogDescription></DialogHeader>
+ <DialogContent className="shadow-floating w-[calc(100vw-12px)] sm:max-w-2xl overflow-x-hidden bg-white p-0 max-h-[90vh] overflow-y-auto">
+ <DialogHeader className="border-b border-border bg-primary p-3 md:p-4"><DialogTitle className="font-sans text-xl font-black text-white">TAMBAH WAJIB PAJAK</DialogTitle><DialogDescription className="sr-only">Form tambah wajib pajak untuk mengisi identitas, peran, dan data badan usaha bila diperlukan.</DialogDescription></DialogHeader>
  <Form {...addForm}>
- <form onSubmit={addForm.handleSubmit(submitCreate)} className="p-4 space-y-4">
+ <form onSubmit={addForm.handleSubmit(submitCreate)} className="space-y-3 overflow-x-hidden p-3 md:space-y-4 md:p-4 [&_button[role=combobox]]:h-10 [&_button[role=combobox]]:px-3 md:[&_button[role=combobox]]:h-11">
  <WpForm form={addForm} mode="create" />
- <div className="border border-dashed border-border bg-background p-3 font-mono text-[11px] text-gray-700">
+ <div className="border border-dashed border-border bg-background p-2 font-mono text-[11px] text-gray-700 md:p-3">
  Attachment dokumen aktif setelah data Wajib Pajak berhasil dibuat.
  </div>
  <Button type="submit" className="w-full shadow-card bg-primary text-white font-mono font-bold">
@@ -661,10 +697,10 @@ export default function BackofficeWajibPajak() {
  </Dialog>}
 
  {canMutate && <Dialog open={!!edit} onOpenChange={(open) => { if (!open) { setEdit(null); setQualityWarnings([]); setIsDuplicateDialogOpen(false); } }}>
- <DialogContent className="shadow-floating max-w-2xl bg-white p-0 max-h-[90vh] overflow-y-auto">
- <DialogHeader className="p-4 border-b border-border bg-blue-600"><DialogTitle className="font-sans text-xl font-black text-white">EDIT WAJIB PAJAK</DialogTitle><DialogDescription className="sr-only">Form edit wajib pajak untuk memperbarui identitas, status aktif, dan lampiran dokumen.</DialogDescription></DialogHeader>
+ <DialogContent className="shadow-floating w-[calc(100vw-12px)] sm:max-w-2xl overflow-x-hidden bg-white p-0 max-h-[90vh] overflow-y-auto">
+ <DialogHeader className="border-b border-border bg-blue-600 p-3 md:p-4"><DialogTitle className="font-sans text-xl font-black text-white">EDIT WAJIB PAJAK</DialogTitle><DialogDescription className="sr-only">Form edit wajib pajak untuk memperbarui identitas, status aktif, dan lampiran dokumen.</DialogDescription></DialogHeader>
  <Form {...editForm}>
- <form onSubmit={editForm.handleSubmit(submitEdit)} className="p-4 space-y-4">
+ <form onSubmit={editForm.handleSubmit(submitEdit)} className="space-y-3 overflow-x-hidden p-3 md:space-y-4 md:p-4 [&_button[role=combobox]]:h-10 [&_button[role=combobox]]:px-3 md:[&_button[role=combobox]]:h-11">
  <WpForm form={editForm} mode="edit" />
  {edit ? (
  <AttachmentPanel

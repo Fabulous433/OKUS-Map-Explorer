@@ -15,6 +15,7 @@ import {
 import {
   auditLog,
   createWajibPajakSchema,
+  entityAttachment,
   insertObjekPajakSchema,
   JENIS_PAJAK_OPTIONS,
   masterKecamatan,
@@ -200,6 +201,8 @@ type DashboardSummaryData = {
   };
   totals: {
     totalWp: number;
+    validWp: number;
+    pendingWp: number;
     totalOp: number;
     totalUpdated: number;
     totalPending: number;
@@ -1391,6 +1394,12 @@ async function buildDashboardSummaryData(params: {
 
   const wpRows = await db.select({ count: sql<number>`cast(count(*) as int)` }).from(wajibPajak);
   const totalWp = Number(wpRows[0]?.count ?? 0);
+  const validWpRows = await db
+    .select({ count: sql<number>`cast(count(distinct ${entityAttachment.entityId}) as int)` })
+    .from(entityAttachment)
+    .where(eq(entityAttachment.entityType, "wajib_pajak"));
+  const validWp = Math.min(totalWp, Number(validWpRows[0]?.count ?? 0));
+  const pendingWp = Math.max(0, totalWp - validWp);
 
   const trendWindow = formatDashboardTrendRange(params.trendFrom, params.trendTo, params.groupBy);
   const trendStart = startOfUtcDay(trendWindow.from);
@@ -1465,6 +1474,8 @@ async function buildDashboardSummaryData(params: {
     },
     totals: {
       totalWp,
+      validWp,
+      pendingWp,
       totalOp,
       totalUpdated,
       totalPending,
@@ -2856,6 +2867,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ message: "rekPajakId tidak valid" });
     }
 
+    const wpId = parseOptionalNumber(req.query.wpId);
+    if (wpId === null) {
+      return res.status(400).json({ message: "wpId tidak valid" });
+    }
+
     const statusVerifikasi = parseVerificationStatus(req.query.statusVerifikasi);
     if (statusVerifikasi === null) {
       return res.status(400).json({ message: "statusVerifikasi tidak valid" });
@@ -2880,6 +2896,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       statusVerifikasi: effectiveStatusVerifikasi,
       kecamatanId,
       rekPajakId: rekPajakId ?? undefined,
+      wpId: wpId ?? undefined,
     });
 
     return sendJsonWithEtag(req, res, data);

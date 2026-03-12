@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MobileMapDrawer } from "@/components/map/mobile-map-drawer";
+import { MobileBottomNav } from "@/components/backoffice/mobile-bottom-nav";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { getQueryFn } from "@/lib/queryClient";
@@ -150,6 +151,21 @@ function MapTopRightControls(props: { isFetching: boolean; isMobile: boolean }) 
   );
 }
 
+function MapFocusController(props: {
+  target: { lat: number; lng: number } | null;
+  zoom: number;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!props.target) return;
+
+    map.flyTo([props.target.lat, props.target.lng], props.zoom, { duration: 0.85 });
+  }, [map, props.target, props.zoom]);
+
+  return null;
+}
+
 export default function MapPage() {
   const isMobile = useIsMobile();
   const [baseMap, setBaseMap] = useState<BaseMapKey>("osm");
@@ -159,9 +175,24 @@ export default function MapPage() {
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [bbox, setBbox] = useState<Bbox | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const focusedMarkerRef = useRef<L.Marker | null>(null);
 
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
   const debouncedBbox = useDebouncedValue(bbox, 250);
+  const focusParams = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const lat = Number(params.get("focusLat"));
+    const lng = Number(params.get("focusLng"));
+    const id = Number(params.get("focusOpId"));
+
+    return {
+      id: Number.isFinite(id) && id > 0 ? id : null,
+      target:
+        Number.isFinite(lat) && Number.isFinite(lng)
+          ? { lat, lng }
+          : null,
+    };
+  }, []);
 
   const mapQueryUrl = useMemo(() => {
     if (!debouncedBbox) return null;
@@ -196,6 +227,19 @@ export default function MapPage() {
   const totalInView = mapData?.meta.totalInView ?? 0;
   const isCapped = mapData?.meta.isCapped ?? false;
 
+  useEffect(() => {
+    if (!focusParams.id || markerList.length === 0 || !focusedMarkerRef.current) return;
+
+    const markerExists = markerList.some((item) => item.id === focusParams.id);
+    if (!markerExists) return;
+
+    const timer = window.setTimeout(() => {
+      focusedMarkerRef.current?.openPopup();
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [focusParams.id, markerList]);
+
   const { data: kecamatanData } = useQuery<MasterKecamatan[] | null>({
     queryKey: ["/api/master/kecamatan"],
     queryFn: getQueryFn({ on401: "returnNull" }),
@@ -219,14 +263,17 @@ export default function MapPage() {
               <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Viewport Query</p>
             </div>
             <Link href="/backoffice">
-              <Button className="font-mono text-[11px]">
-                <Settings className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                Backoffice
+              <Button
+                size="icon"
+                aria-label="Buka backoffice"
+                className="h-14 w-14 rounded-xl bg-primary text-primary-foreground shadow-floating"
+              >
+                <Settings className="h-5 w-5" aria-hidden="true" />
               </Button>
             </Link>
           </div>
 
-          <div className="absolute bottom-20 left-3 z-[1000] flex max-w-[70vw] flex-wrap gap-2">
+          <div className="absolute bottom-24 left-3 z-[1000] flex max-w-[70vw] flex-wrap gap-2">
             <Badge className="bg-[#2d3436] text-white">
               {totalInView} viewport
             </Badge>
@@ -242,12 +289,12 @@ export default function MapPage() {
 
           <Button
             type="button"
-            className="absolute bottom-20 right-3 z-[1000] px-4 py-6 font-mono text-xs font-bold shadow-floating"
+            aria-label="Buka filter peta"
+            className="absolute bottom-24 right-3 z-[1000] h-14 w-14 rounded-xl p-0 shadow-floating"
             variant="outline"
             onClick={() => setIsDrawerOpen(true)}
           >
-            <Filter className="mr-2 h-4 w-4" aria-hidden="true" />
-            Filter
+            <Filter className="h-5 w-5" aria-hidden="true" />
           </Button>
 
           <MobileMapDrawer
@@ -358,6 +405,7 @@ export default function MapPage() {
 
       <MapContainer center={OKU_SELATAN_CENTER} zoom={DEFAULT_ZOOM} className="h-full w-full" zoomControl={false}>
         <TileLayer attribution={mapConfig.attribution} url={mapConfig.url} maxZoom={mapConfig.maxZoom} />
+        <MapFocusController target={focusParams.target} zoom={Math.max(DEFAULT_ZOOM, 18)} />
         <MapViewportTracker
           onChange={(nextBbox, nextZoom) => {
             setBbox(nextBbox);
@@ -371,6 +419,11 @@ export default function MapPage() {
             key={item.id}
             position={[item.latitude, item.longitude]}
             icon={buildMarkerIcon(item.jenisPajak)}
+            ref={(marker) => {
+              if (item.id === focusParams.id) {
+                focusedMarkerRef.current = marker;
+              }
+            }}
           >
             <Popup>
               <div className="min-w-[180px] space-y-1 font-mono text-xs">
@@ -399,6 +452,8 @@ export default function MapPage() {
           </div>
         </div>
       )}
+
+      {isMobile ? <MobileBottomNav /> : null}
     </div>
   );
 }

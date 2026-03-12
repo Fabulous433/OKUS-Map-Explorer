@@ -1,6 +1,7 @@
-﻿import { CheckCircle2, Edit, History, MapPin, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, Edit, Eye, MapPin, Trash2, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ObjekPajakListItem, WajibPajakListItem } from "@shared/schema";
 import { jenisPajakColor, shortLabel } from "@/pages/backoffice/objek-pajak-shared";
 
@@ -9,10 +10,19 @@ type MobileOpCardProps = {
  wp?: WajibPajakListItem | null;
  canMutate: boolean;
  onEdit: (id: number) => void;
- onAudit: (id: number) => void;
+ onView: (id: number) => void;
  onDelete: (id: number) => void;
  onVerify: (id: number) => void;
  onReject: (id: number) => void;
+};
+
+type ActionItem = {
+ key: string;
+ label: string;
+ tooltip: string;
+ icon: typeof Edit;
+ className: string;
+ onClick: () => void;
 };
 
 function formatMoney(value?: string | number | null) {
@@ -25,11 +35,69 @@ export function MobileOpCard({
  wp,
  canMutate,
  onEdit,
- onAudit,
+ onView,
  onDelete,
  onVerify,
  onReject,
 }: MobileOpCardProps) {
+ const actions: ActionItem[] = [
+ {
+ key: "view",
+ label: "Lihat",
+ tooltip: "Lihat detail",
+ icon: Eye,
+ className:
+ "h-12 w-12 rounded-[16px] border border-white/80 bg-[#eef2f5] text-[#49515a] " +
+ "shadow-[6px_6px_14px_rgba(148,163,184,0.22),-6px_-6px_14px_rgba(255,255,255,0.92)] " +
+ "hover:bg-[#f5f7f9] hover:text-[#22272b]",
+ onClick: () => onView(op.id),
+ },
+ ];
+
+ if (canMutate) {
+ actions.unshift({
+ key: "edit",
+ label: "Edit",
+ tooltip: "Edit data",
+ icon: Edit,
+ className:
+ "h-12 w-12 rounded-[16px] border border-white/80 bg-[#eef2f5] text-[#49515a] " +
+ "shadow-[6px_6px_14px_rgba(148,163,184,0.22),-6px_-6px_14px_rgba(255,255,255,0.92)] " +
+ "hover:bg-[#f5f7f9] hover:text-[#22272b]",
+ onClick: () => onEdit(op.id),
+ });
+
+ actions.push(
+ {
+ key: "verify",
+ label: "Verif",
+ tooltip: "Verifikasi",
+ icon: CheckCircle2,
+ className: "h-12 w-12 rounded-[16px] border border-green-700 bg-white text-green-700 shadow-none hover:bg-green-50",
+ onClick: () => onVerify(op.id),
+ },
+ {
+ key: "reject",
+ label: "Tolak",
+ tooltip: "Tolak data",
+ icon: XCircle,
+ className: "h-12 w-12 rounded-[16px] border border-red-700 bg-white text-red-700 shadow-none hover:bg-red-50",
+ onClick: () => onReject(op.id),
+ },
+ );
+
+ if (op.status !== "active") {
+ actions.push({
+ key: "delete",
+ label: "Hapus",
+ tooltip: "Hapus data",
+ icon: Trash2,
+ className: "h-12 w-12 rounded-[16px] border border-red-600 bg-white text-red-600 shadow-none hover:bg-red-50",
+ onClick: () => onDelete(op.id),
+ });
+ }
+ }
+
  return (
  <article className="shadow-card bg-white p-4">
  <div className="flex items-start justify-between gap-3">
@@ -97,60 +165,37 @@ export function MobileOpCard({
  </Badge>
  </div>
 
- <div className="mt-4 grid grid-cols-2 gap-2">
- {canMutate ? (
+ <div className="mt-4 rounded-[24px] bg-[#edf1f4] px-3 py-3 shadow-[inset_8px_8px_18px_rgba(148,163,184,0.14),inset_-8px_-8px_18px_rgba(255,255,255,0.96)]">
+ <div
+ className="grid gap-2"
+ style={{ gridTemplateColumns: `repeat(${actions.length}, minmax(0, 1fr))` }}
+ >
+ {actions.map((action) => {
+ const Icon = action.icon;
+ return (
+ <div key={action.key} className="flex min-w-0 flex-col items-center gap-1.5">
+ <Tooltip>
+ <TooltipTrigger asChild>
  <Button
  type="button"
+ size="icon"
  variant="outline"
- className="font-mono text-[11px] font-bold"
- onClick={() => onEdit(op.id)}
+ className={action.className}
+ aria-label={action.tooltip}
+ onClick={action.onClick}
  >
- <Edit className="mr-2 h-4 w-4" />
- Edit
+ <Icon className="h-4 w-4" />
  </Button>
- ) : null}
- <Button
- type="button"
- variant="outline"
- className="font-mono text-[11px] font-bold"
- onClick={() => onAudit(op.id)}
- >
- <History className="mr-2 h-4 w-4" />
- Riwayat
- </Button>
- {canMutate ? (
- <Button
- type="button"
- variant="outline"
- className="border border-green-700 font-mono text-[11px] font-bold text-green-700"
- onClick={() => onVerify(op.id)}
- >
- <CheckCircle2 className="mr-2 h-4 w-4" />
- Verifikasi
- </Button>
- ) : null}
- {canMutate ? (
- <Button
- type="button"
- variant="outline"
- className="border border-red-700 font-mono text-[11px] font-bold text-red-700"
- onClick={() => onReject(op.id)}
- >
- <XCircle className="mr-2 h-4 w-4" />
- Tolak
- </Button>
- ) : null}
- {canMutate ? (
- <Button
- type="button"
- variant="outline"
- className="col-span-2 border border-red-600 font-mono text-[11px] font-bold text-red-600"
- onClick={() => onDelete(op.id)}
- >
- <Trash2 className="mr-2 h-4 w-4" />
- Hapus
- </Button>
- ) : null}
+ </TooltipTrigger>
+ <TooltipContent>{action.tooltip}</TooltipContent>
+ </Tooltip>
+ <span className="text-center font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-black/55">
+ {action.label}
+ </span>
+ </div>
+ );
+ })}
+ </div>
  </div>
  </article>
  );

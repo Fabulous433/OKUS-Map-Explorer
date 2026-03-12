@@ -1,6 +1,8 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
-import { Building2, CheckCircle2, Download, Edit, History, MapPin, Plus, Search, Trash2, Upload, XCircle } from "lucide-react";
+import { Building2, CheckCircle2, ChevronLeft, ChevronRight, Edit, History, MapPin, Plus, Search, Trash2, XCircle } from "lucide-react";
+import { useLocation, useSearch } from "wouter";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +56,8 @@ import {
 export default function BackofficeObjekPajak() {
  const { hasRole } = useAuth();
  const isMobile = useIsMobile();
+ const [, setLocation] = useLocation();
+ const search = useSearch();
  const canMutate = hasRole(["admin", "editor"]);
  const [isCreateOpen, setIsCreateOpen] = useState(false);
  const [editOp, setEditOp] = useState<ObjekPajak | null>(null);
@@ -66,7 +70,6 @@ export default function BackofficeObjekPajak() {
  const [page, setPage] = useState(1);
  const [limit, setLimit] = useState(25);
  const [cursorHistory, setCursorHistory] = useState<number[]>([INITIAL_CURSOR]);
- const fileInputRef = useRef<HTMLInputElement>(null);
  const debouncedSearch = useDebouncedValue(searchQuery, 300);
  const activeCursor = cursorHistory[cursorHistory.length - 1] ?? INITIAL_CURSOR;
 
@@ -74,6 +77,13 @@ export default function BackofficeObjekPajak() {
  setPage(1);
  setCursorHistory([INITIAL_CURSOR]);
  }, [debouncedSearch, statusFilter, verificationFilter, kecamatanFilterId, rekPajakFilterId, limit]);
+
+ useEffect(() => {
+ if (!canMutate) return;
+ if (new URLSearchParams(search).get("create") !== "1") return;
+ setIsCreateOpen(true);
+ setLocation("/backoffice/objek-pajak", { replace: true });
+ }, [canMutate, search, setLocation]);
 
  const objekPajakQueryKey = useMemo(() => {
  const params = new URLSearchParams();
@@ -129,56 +139,6 @@ export default function BackofficeObjekPajak() {
  const kelurahanList = Array.isArray(kelurahanListData) ? kelurahanListData : [];
 
  const { toast } = useToast();
-
- const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
- if (!canMutate) return;
-
- const file = e.target.files?.[0];
- if (!file) return;
-
- const formData = new FormData();
- formData.append("file", file);
-
- try {
- const res = await fetch("/api/objek-pajak/import", {
- method: "POST",
- body: formData,
- credentials: "include",
- });
- const result = await res.json();
- if (!res.ok) {
- const description =
- typeof result?.message === "string"
- ? result.message
- : "Import OP gagal diproses. Periksa file CSV lalu coba lagi.";
- toast({ title: "Gagal", description, variant: "destructive" });
- } else {
- const errorPreview = Array.isArray(result.errors)
- ? result.errors
- .slice(0, 3)
- .filter((item: unknown): item is string => typeof item === "string" && item.trim().length > 0)
- .join(" | ")
- : "";
- toast({
- title: "Import Selesai",
- description:
- result.failed > 0 && errorPreview
- ? `${result.success} berhasil, ${result.failed} gagal dari ${result.total} data. Contoh error: ${errorPreview}`
- : `${result.success} berhasil, ${result.failed} gagal dari ${result.total} data`,
- variant: result.failed > 0 ? "destructive" : "default",
- });
- if (result.errors?.length > 0) {
- console.log("Import errors:", result.errors);
- }
- invalidateObjekPajakQueries();
- }
- } catch (err: any) {
- const description = err instanceof Error ? err.message : "Import OP gagal diproses. Coba lagi.";
- toast({ title: "Error", description, variant: "destructive" });
- }
-
- if (fileInputRef.current) fileInputRef.current.value = "";
- };
 
  const deleteMutation = useMutation({
  mutationFn: async (id: number) => {
@@ -237,17 +197,13 @@ export default function BackofficeObjekPajak() {
  }
  };
 
+ const openView = (id: number) => {
+ setLocation(`/backoffice/objek-pajak/${id}`);
+ };
+
  return (
  <BackofficeLayout>
  <div className="p-4 md:p-6" data-testid="backoffice-op-page">
- <input
- ref={fileInputRef}
- type="file"
- accept=".csv"
- className="hidden"
- onChange={handleImportCSV}
- data-testid="input-import-op-file"
- />
  <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
  <div className="flex items-center gap-3">
  <div className="bg-[#2d3436] w-10 h-10 flex items-center justify-center border border-primary/30">
@@ -263,32 +219,15 @@ export default function BackofficeObjekPajak() {
  </div>
  </div>
  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
- <Button
- variant="outline"
- className="shadow-card bg-white text-black font-mono font-bold text-xs"
- onClick={() => window.open("/api/objek-pajak/export", "_blank")}
- data-testid="button-export-op"
- >
- <Download className="w-4 h-4 mr-1" />
- EXPORT CSV
- </Button>
- {canMutate && <Button
- variant="outline"
- className="shadow-card bg-white text-black font-mono font-bold text-xs"
- onClick={() => fileInputRef.current?.click()}
- data-testid="button-import-op"
- >
- <Upload className="w-4 h-4 mr-1" />
- IMPORT CSV
- </Button>}
- {canMutate && <Button
- className="w-full border border-primary/30 bg-[#2d3436] text-white font-mono font-bold sm:w-auto"
+ {canMutate && !isMobile && <Tooltip><TooltipTrigger asChild><Button
+ className="border border-primary/30 bg-[#2d3436] text-white font-mono font-bold sm:w-auto"
  onClick={() => setIsCreateOpen(true)}
  data-testid="button-add-op"
+ aria-label="Tambah OP"
  >
- <Plus className="w-4 h-4 mr-2" />
- TAMBAH OP
- </Button>}
+ <Plus className="w-4 h-4 sm:mr-2" />
+ <span className="hidden sm:inline">TAMBAH OP</span>
+ </Button></TooltipTrigger><TooltipContent>Tambah OP</TooltipContent></Tooltip>}
  </div>
  </div>
 
@@ -326,7 +265,7 @@ export default function BackofficeObjekPajak() {
  </Select>
  </div>
 
- <div className="mb-4 flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
+ {!isMobile && <div className="mb-4 flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
  <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}>
  <SelectTrigger className="w-full font-mono text-xs md:w-[170px]" data-testid="select-filter-status-op">
  <SelectValue placeholder="Filter status" />
@@ -390,7 +329,7 @@ export default function BackofficeObjekPajak() {
  RESET FILTER
  </Button>
  )}
- </div>
+ </div>}
 
  {canMutate && <OPFormDialog
  mode="create"
@@ -438,11 +377,11 @@ export default function BackofficeObjekPajak() {
  <MobileOpCard
  key={op.id}
  op={op}
- wp={wp}
- canMutate={canMutate}
- onEdit={openEdit}
- onAudit={setAuditTargetId}
- onDelete={(id) => deleteMutation.mutate(id)}
+                 wp={wp}
+                 canMutate={canMutate}
+                 onEdit={openEdit}
+                 onView={openView}
+                 onDelete={(id) => deleteMutation.mutate(id)}
  onVerify={(id) => verificationMutation.mutate({ id, statusVerifikasi: "verified" })}
  onReject={rejectOp}
  />
@@ -542,7 +481,7 @@ export default function BackofficeObjekPajak() {
  </TableCell>
  <TableCell>
  <div className="flex items-center gap-1">
- {canMutate && <Button
+ {canMutate && <Tooltip><TooltipTrigger asChild><Button
  size="icon"
  variant="ghost"
  className="border border-black"
@@ -551,8 +490,8 @@ export default function BackofficeObjekPajak() {
  data-testid={`button-edit-op-${op.id}`}
  >
  <Edit className="w-3.5 h-3.5 text-black" />
- </Button>}
- {canMutate && <Button
+ </Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip>}
+ {canMutate && <Tooltip><TooltipTrigger asChild><Button
  size="icon"
  variant="ghost"
  className="border border-green-700"
@@ -561,8 +500,8 @@ export default function BackofficeObjekPajak() {
  data-testid={`button-verify-op-${op.id}`}
  >
  <CheckCircle2 className="w-3.5 h-3.5 text-green-700" />
- </Button>}
- {canMutate && <Button
+ </Button></TooltipTrigger><TooltipContent>Verifikasi</TooltipContent></Tooltip>}
+ {canMutate && <Tooltip><TooltipTrigger asChild><Button
  size="icon"
  variant="ghost"
  className="border border-red-700"
@@ -571,8 +510,8 @@ export default function BackofficeObjekPajak() {
  data-testid={`button-reject-op-${op.id}`}
  >
  <XCircle className="w-3.5 h-3.5 text-red-700" />
- </Button>}
- <Button
+ </Button></TooltipTrigger><TooltipContent>Tolak</TooltipContent></Tooltip>}
+ <Tooltip><TooltipTrigger asChild><Button
  size="icon"
  variant="ghost"
  className="border border-black"
@@ -581,8 +520,8 @@ export default function BackofficeObjekPajak() {
  data-testid={`button-audit-op-${op.id}`}
  >
  <History className="w-3.5 h-3.5 text-black" />
- </Button>
- {canMutate && <Button
+ </Button></TooltipTrigger><TooltipContent>Riwayat audit</TooltipContent></Tooltip>
+ {canMutate && op.status !== "active" && <Tooltip><TooltipTrigger asChild><Button
  size="icon"
  variant="ghost"
  className=""
@@ -591,7 +530,7 @@ export default function BackofficeObjekPajak() {
  data-testid={`button-delete-op-${op.id}`}
  >
  <Trash2 className="w-3.5 h-3.5 text-red-600" />
- </Button>}
+ </Button></TooltipTrigger><TooltipContent>Hapus</TooltipContent></Tooltip>}
  </div>
  </TableCell>
  </TableRow>
@@ -601,10 +540,50 @@ export default function BackofficeObjekPajak() {
  </Table>
  </div>
  )}
- <div className="mt-4 flex items-center justify-between gap-3">
+ <div className={`mt-4 ${isMobile ? "space-y-3" : "flex items-center justify-between gap-3"}`}>
  <p className="font-mono text-[11px] text-gray-600">
  Menampilkan {opList.length} dari {opMeta.total} data
  </p>
+ {isMobile ? (
+ <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-[22px] bg-[#eef2f5] px-2.5 py-2 shadow-[inset_6px_6px_14px_rgba(148,163,184,0.12),inset_-6px_-6px_14px_rgba(255,255,255,0.95)]">
+ <Button
+ type="button"
+ variant="ghost"
+ className={`h-10 justify-start rounded-[16px] px-2 font-mono text-[11px] uppercase tracking-[0.14em] text-black/45 ${
+ cursorHistory.length > 1 ? "" : "pointer-events-none opacity-40"
+ }`}
+ onClick={() => {
+ if (cursorHistory.length > 1) {
+ setCursorHistory((prev) => prev.slice(0, -1));
+ setPage((prev) => Math.max(1, prev - 1));
+ }
+ }}
+ >
+ <ChevronLeft className="mr-1.5 h-4 w-4 shrink-0" />
+ <span className="truncate">Prev</span>
+ </Button>
+ <div className="flex h-10 min-w-[44px] items-center justify-center rounded-[16px] bg-white px-3 font-mono text-sm font-bold text-black shadow-[6px_6px_14px_rgba(148,163,184,0.18),-6px_-6px_14px_rgba(255,255,255,0.92)]">
+ {page}
+ </div>
+ <Button
+ type="button"
+ variant="ghost"
+ className={`h-10 justify-end rounded-[16px] px-2 font-mono text-[11px] uppercase tracking-[0.14em] text-black/45 ${
+ opMeta.nextCursor ? "" : "pointer-events-none opacity-40"
+ }`}
+ onClick={() => {
+ const nextCursor = opMeta.nextCursor;
+ if (typeof nextCursor === "number") {
+ setCursorHistory((prev) => [...prev, nextCursor]);
+ setPage((prev) => prev + 1);
+ }
+ }}
+ >
+ <span className="truncate">Next</span>
+ <ChevronRight className="ml-1.5 h-4 w-4 shrink-0" />
+ </Button>
+ </div>
+ ) : (
  <Pagination className="w-auto">
  <PaginationContent>
  <PaginationItem>
@@ -641,6 +620,7 @@ export default function BackofficeObjekPajak() {
  </PaginationItem>
  </PaginationContent>
  </Pagination>
+ )}
  </div>
  <AuditHistoryDialog
  open={auditTargetId !== null}

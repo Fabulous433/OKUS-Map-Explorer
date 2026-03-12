@@ -7,9 +7,12 @@ import NotFound from "@/pages/not-found";
 import MapPage from "@/pages/map-page";
 import BackofficeDashboard from "@/pages/backoffice/dashboard";
 import BackofficeWajibPajak from "@/pages/backoffice/wajib-pajak";
+import BackofficeWajibPajakDetail from "@/pages/backoffice/wajib-pajak-detail";
 import BackofficeObjekPajak from "@/pages/backoffice/objek-pajak";
+import BackofficeObjekPajakDetail from "@/pages/backoffice/objek-pajak-detail";
 import BackofficeFormMockup from "@/pages/backoffice/form-mockup";
 import BackofficeMasterData from "@/pages/backoffice/master-data";
+import BackofficeDataTools from "@/pages/backoffice/data-tools";
 import BackofficeLogin from "@/pages/backoffice/login";
 import { AuthProvider } from "@/lib/auth";
 
@@ -19,9 +22,12 @@ function Router() {
       <Route path="/" component={MapPage} />
       <Route path="/backoffice/login" component={BackofficeLogin} />
       <Route path="/backoffice" component={BackofficeDashboard} />
+      <Route path="/backoffice/wajib-pajak/:id" component={BackofficeWajibPajakDetail} />
       <Route path="/backoffice/wajib-pajak" component={BackofficeWajibPajak} />
+      <Route path="/backoffice/objek-pajak/:id" component={BackofficeObjekPajakDetail} />
       <Route path="/backoffice/objek-pajak" component={BackofficeObjekPajak} />
       <Route path="/backoffice/master-data" component={BackofficeMasterData} />
+      <Route path="/backoffice/data-tools" component={BackofficeDataTools} />
       <Route path="/backoffice/mockup-form" component={BackofficeFormMockup} />
       <Route component={NotFound} />
     </Switch>

@@ -63,14 +63,14 @@ export function AttachmentUploadDialog({
 
  return (
  <Dialog open={open} onOpenChange={onOpenChange}>
- <DialogContent className="shadow-floating max-w-lg bg-white p-0">
+ <DialogContent className="shadow-floating w-[calc(100vw-1.5rem)] max-w-lg max-h-[calc(100vh-6.5rem)] overflow-y-auto bg-white p-0 sm:max-h-[90vh] sm:w-full">
  <DialogHeader className="p-4 border-b border-border bg-primary">
  <DialogTitle className="font-sans text-xl font-black text-white uppercase">{title}</DialogTitle>
  <DialogDescription className="sr-only">
  Dialog upload attachment untuk memilih jenis dokumen, file, dan catatan opsional.
  </DialogDescription>
  </DialogHeader>
- <div className="p-4 space-y-4">
+ <div className="space-y-4 p-4 pb-24 sm:pb-4">
  <div className="space-y-2">
  <Label className="font-mono text-xs font-bold text-black">Jenis Dokumen</Label>
  <Select value={documentType} onValueChange={setDocumentType}>

@@ -1,8 +1,8 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { Crosshair, MapPin } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ChevronsUpDown, Crosshair, MapPin, Upload, X } from "lucide-react";
 import {
  Dialog,
  DialogContent,
@@ -19,11 +19,15 @@ import {
  FormMessage,
 } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { ApiError, type ApiFieldError, apiRequest } from "@/lib/queryClient";
 import { AttachmentPanel } from "@/components/attachments/attachment-panel";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type {
  MasterKecamatan,
  MasterKelurahan,
@@ -53,6 +57,24 @@ const OP_ATTACHMENT_OPTIONS = [
  { value: "izin_usaha", label: "Izin Usaha" },
  { value: "dokumen_lain", label: "Dokumen Lain" },
 ] as const;
+
+type DraftAttachment = {
+ id: string;
+ documentType: string;
+ file: File;
+ notes: string;
+};
+
+const CREATE_WIZARD_STEPS = [
+ { id: "rekening", label: "Jenis Pajak" },
+ { id: "detail", label: "Detail" },
+ { id: "data", label: "Data OP" },
+ { id: "lokasi", label: "Lokasi" },
+ { id: "lampiran", label: "Lampiran" },
+ { id: "review", label: "Review" },
+] as const;
+
+type CreateWizardStep = (typeof CREATE_WIZARD_STEPS)[number]["id"];
 export function OPFormDialog({
  mode,
  editOp,
@@ -75,9 +97,21 @@ export function OPFormDialog({
  onSaved?: () => void;
 }) {
  const { toast } = useToast();
+ const isMobile = useIsMobile();
+ const isCreateWizard = mode === "create" && isMobile;
+ const useJenisPajakSelector = isMobile;
+ const draftFileInputRef = useRef<HTMLInputElement>(null);
  const [showMapPicker, setShowMapPicker] = useState(false);
  const [qualityWarnings, setQualityWarnings] = useState<QualityWarning[]>([]);
  const [submitFieldErrors, setSubmitFieldErrors] = useState<ApiFieldError[]>([]);
+ const [wizardStep, setWizardStep] = useState<CreateWizardStep>("rekening");
+ const [selectedJenisPajak, setSelectedJenisPajak] = useState("");
+const [draftAttachments, setDraftAttachments] = useState<DraftAttachment[]>([]);
+const [draftDocumentType, setDraftDocumentType] = useState<string>(OP_ATTACHMENT_OPTIONS[0]?.value ?? "");
+const [draftNotes, setDraftNotes] = useState("");
+const [draftFile, setDraftFile] = useState<File | null>(null);
+ const [wpPickerOpen, setWpPickerOpen] = useState(false);
+ const [wpSearch, setWpSearch] = useState("");
 
  const form = useForm<OPFormValues>({
  resolver: zodResolver(opFormSchema),
@@ -102,7 +136,14 @@ export function OPFormDialog({
  useEffect(() => {
  setQualityWarnings([]);
  setSubmitFieldErrors([]);
+ setWizardStep("rekening");
+ setDraftAttachments([]);
+ setDraftDocumentType(OP_ATTACHMENT_OPTIONS[0]?.value ?? "");
+ setDraftNotes("");
+ setDraftFile(null);
+ setShowMapPicker(false);
  if (mode === "edit" && editOp) {
+ setSelectedJenisPajak(editOp.jenisPajak);
  form.reset({
  nopd: editOp.nopd,
  wpId: editOp.wpId,
@@ -120,23 +161,58 @@ export function OPFormDialog({
  status: editOp.status,
  });
  } else if (mode === "create") {
+ setSelectedJenisPajak("");
  form.reset();
  }
  }, [mode, editOp, form]);
 
- const createMutation = useMutation({
- mutationFn: async (payload: NormalizedOpPayload) => {
+const createMutation = useMutation({
+ mutationFn: async ({ payload, attachments }: { payload: NormalizedOpPayload; attachments: DraftAttachment[] }) => {
  const res = await apiRequest("POST", "/api/objek-pajak", payload);
- return res.json();
+ const created = await res.json();
+ const failedUploads: string[] = [];
+
+ for (const item of attachments) {
+ try {
+ const formData = new FormData();
+ formData.set("documentType", item.documentType);
+ if (item.notes.trim()) {
+ formData.set("notes", item.notes.trim());
+ }
+ formData.set("file", item.file);
+ await apiRequest("POST", `/api/objek-pajak/${created.id}/attachments`, formData);
+ } catch {
+ failedUploads.push(item.file.name);
+ }
+ }
+
+ return { created, failedUploads };
  },
- onSuccess: () => {
+ onSuccess: ({ failedUploads }: { created: ObjekPajak; failedUploads: string[] }) => {
  invalidateObjekPajakQueries();
  onSaved?.();
  onOpenChange(false);
  form.reset();
  setQualityWarnings([]);
  setSubmitFieldErrors([]);
- toast({ title: "Berhasil", description: "Objek Pajak berhasil ditambahkan" });
+ setWizardStep("rekening");
+ setSelectedJenisPajak("");
+ setDraftAttachments([]);
+ setDraftDocumentType(OP_ATTACHMENT_OPTIONS[0]?.value ?? "");
+ setDraftNotes("");
+ setDraftFile(null);
+ setShowMapPicker(false);
+ if (draftFileInputRef.current) {
+ draftFileInputRef.current.value = "";
+ }
+ toast({
+ title: failedUploads.length > 0 ? "Berhasil Sebagian" : "Berhasil",
+ description:
+ failedUploads.length > 0
+ ? `Objek Pajak berhasil ditambahkan, tetapi ${failedUploads.length} lampiran gagal diunggah.`
+ : "Objek Pajak berhasil ditambahkan",
+ variant: failedUploads.length > 0 ? "destructive" : "default",
+ });
  },
  onError: (err: Error) => {
  if (err instanceof ApiError) {
@@ -145,7 +221,7 @@ export function OPFormDialog({
  }
  toast({ title: "Gagal", description: err.message, variant: "destructive" });
  },
- });
+});
 
  const updateMutation = useMutation({
  mutationFn: async (payload: NormalizedOpPayload) => {
@@ -158,6 +234,12 @@ export function OPFormDialog({
  onOpenChange(false);
  setQualityWarnings([]);
  setSubmitFieldErrors([]);
+ setWizardStep("rekening");
+ setDraftAttachments([]);
+ setDraftDocumentType(OP_ATTACHMENT_OPTIONS[0]?.value ?? "");
+ setDraftNotes("");
+ setDraftFile(null);
+ setShowMapPicker(false);
  toast({ title: "Berhasil", description: "Objek Pajak berhasil diperbarui" });
  },
  onError: (err: Error) => {
@@ -173,11 +255,101 @@ export function OPFormDialog({
  const selectedRekPajakId = form.watch("rekPajakId");
  const selectedRekening = rekeningList.find((item) => item.id === selectedRekPajakId);
  const jenisPajak = selectedRekening?.jenisPajak || "";
+ const jenisPajakOptions = Array.from(new Set(rekeningList.map((item) => item.jenisPajak))).sort((a, b) =>
+ a.localeCompare(b, "id-ID"),
+ );
+ const rekeningOptions = rekeningList;
  const selectedKecamatanId = form.watch("kecamatanId");
+ const selectedWpId = form.watch("wpId");
+ const selectedWp = wpList.find((item) => item.id === selectedWpId);
  const selectedKecamatanKode = kecamatanList.find((item) => item.cpmKecId === selectedKecamatanId)?.cpmKodeKec;
  const filteredKelurahanList = selectedKecamatanKode
  ? kelurahanList.filter((item) => item.cpmKodeKec === selectedKecamatanKode)
  : [];
+ const currentValues = form.watch();
+ const currentStepIndex = CREATE_WIZARD_STEPS.findIndex((item) => item.id === wizardStep);
+ const draftDocumentLabelMap = Object.fromEntries(OP_ATTACHMENT_OPTIONS.map((item) => [item.value, item.label]));
+ const normalizedWpSearch = wpSearch.trim().toLocaleLowerCase("id-ID");
+ const filteredWpList = useMemo(() => {
+ if (normalizedWpSearch.length < 3) return [];
+ return [...wpList]
+ .map((wp) => {
+ const name = wp.displayName.toLocaleLowerCase("id-ID");
+ const haystack = `${wp.displayName} ${wp.npwpd ?? ""}`.toLocaleLowerCase("id-ID");
+ return {
+ wp,
+ startsWithName: name.startsWith(normalizedWpSearch),
+ includes: haystack.includes(normalizedWpSearch),
+ };
+ })
+ .filter((item) => item.includes)
+ .sort((a, b) => {
+ if (a.startsWithName !== b.startsWithName) return a.startsWithName ? -1 : 1;
+ return a.wp.displayName.localeCompare(b.wp.displayName, "id-ID");
+ })
+ .map((item) => item.wp);
+ }, [normalizedWpSearch, wpList]);
+
+ const resetDraftAttachmentInput = () => {
+ if (draftFileInputRef.current) {
+ draftFileInputRef.current.value = "";
+ }
+ };
+
+ const addDraftAttachment = () => {
+ if (!draftFile) {
+ toast({ title: "Gagal", description: "File lampiran wajib dipilih", variant: "destructive" });
+ return;
+ }
+
+ setDraftAttachments((prev) => [
+ ...prev,
+ {
+ id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+ documentType: draftDocumentType,
+ file: draftFile,
+ notes: draftNotes.trim(),
+ },
+ ]);
+ setDraftNotes("");
+ setDraftFile(null);
+ setDraftDocumentType(OP_ATTACHMENT_OPTIONS[0]?.value ?? "");
+ resetDraftAttachmentInput();
+ };
+
+ const removeDraftAttachment = (id: string) => {
+ setDraftAttachments((prev) => prev.filter((item) => item.id !== id));
+ };
+
+ const handleWizardBack = () => {
+ if (currentStepIndex <= 0) return;
+ setWizardStep(CREATE_WIZARD_STEPS[currentStepIndex - 1].id);
+ };
+
+ const handleWizardNext = async () => {
+ let fieldsToValidate: Array<keyof OPFormValues> = [];
+ if (wizardStep === "rekening") fieldsToValidate = [];
+ if (wizardStep === "data") fieldsToValidate = ["wpId", "namaOp", "alamatOp", "kecamatanId", "kelurahanId"];
+
+ if (fieldsToValidate.length > 0) {
+ const isValid = await form.trigger(fieldsToValidate);
+ if (!isValid) return;
+ }
+
+ if (wizardStep === "rekening" && isCreateWizard && !selectedJenisPajak) {
+ toast({ title: "Gagal", description: "Jenis pajak wajib dipilih", variant: "destructive" });
+ return;
+ }
+
+ if (wizardStep === "detail" && !selectedRekening) {
+ toast({ title: "Gagal", description: "Rekening pajak wajib dipilih", variant: "destructive" });
+ return;
+ }
+
+ if (currentStepIndex < CREATE_WIZARD_STEPS.length - 1) {
+ setWizardStep(CREATE_WIZARD_STEPS[currentStepIndex + 1].id);
+ }
+ };
 
  const runQualityCheck = async (payload: NormalizedOpPayload) => {
  const candidate = {
@@ -206,13 +378,84 @@ export function OPFormDialog({
  updateMutation.mutate(payload);
  return;
  }
- createMutation.mutate(payload);
+ createMutation.mutate({ payload, attachments: draftAttachments });
+ };
+const showStep = (step: CreateWizardStep) => !isCreateWizard || wizardStep === step;
+const isReviewStep = isCreateWizard && wizardStep === "review";
+const currentJenisPajakLabel = selectedJenisPajak || selectedRekening?.jenisPajak || "Belum dipilih";
+const reviewDetailEntries = (() => {
+ const detail = (currentValues.detailPajak ?? {}) as Record<string, string | number | string[] | null | undefined>;
+ const entries: Array<{ label: string; value: string }> = [];
+ const push = (label: string, value: unknown) => {
+ if (value === null || value === undefined || value === "") return;
+ if (Array.isArray(value) && value.length === 0) return;
+ if (Array.isArray(value)) {
+ entries.push({ label, value: value.join(", ") });
+ return;
+ }
+ entries.push({ label, value: String(value) });
  };
 
+ if (jenisPajak.includes("Makanan")) {
+ push("Jenis Usaha", detail.jenisUsaha);
+ push("Klasifikasi", detail.klasifikasi);
+ push("Kapasitas Tempat", detail.kapasitasTempat);
+ push("Jumlah Karyawan", detail.jumlahKaryawan);
+ push("Rata-rata Pengunjung", detail.rata2Pengunjung);
+ push("Jam Buka", detail.jamBuka);
+ push("Jam Tutup", detail.jamTutup);
+ push("Harga Termurah", formatMoneyInput(detail.hargaTermurah));
+ push("Harga Termahal", formatMoneyInput(detail.hargaTermahal));
+ } else if (jenisPajak.includes("Perhotelan")) {
+ push("Jenis Usaha", detail.jenisUsaha);
+ push("Jumlah Kamar", detail.jumlahKamar);
+ push("Klasifikasi", detail.klasifikasi);
+ push("Fasilitas", detail.fasilitas);
+ push("Rata-rata Pengunjung/Hari", detail.rata2PengunjungHarian);
+ push("Harga Termurah", formatMoneyInput(detail.hargaTermurah));
+ push("Harga Termahal", formatMoneyInput(detail.hargaTermahal));
+ } else if (jenisPajak.includes("Parkir")) {
+ push("Jenis Usaha", detail.jenisUsaha);
+ push("Jenis Lokasi", detail.jenisLokasi);
+ push("Kapasitas Kendaraan", detail.kapasitasKendaraan);
+ push("Tarif Parkir", formatMoneyInput(detail.tarifParkir));
+ push("Rata-rata per Hari", detail.rata2Pengunjung);
+ } else if (jenisPajak.includes("Hiburan") || jenisPajak.includes("Kesenian")) {
+ push("Jenis Hiburan", detail.jenisHiburan);
+ push("Kapasitas", detail.kapasitas);
+ push("Jam Operasional", detail.jamOperasional);
+ push("Jumlah Karyawan", detail.jumlahKaryawan);
+ } else if (jenisPajak.includes("Tenaga Listrik")) {
+ push("Jenis Tenaga Listrik", detail.jenisTenagaListrik);
+ push("Daya Listrik", detail.dayaListrik);
+ push("Kapasitas", detail.kapasitas);
+ } else if (jenisPajak.includes("Reklame")) {
+ push("Jenis Reklame", detail.jenisReklame);
+ push("Judul Reklame", detail.judulReklame);
+ push("Masa Berlaku", detail.masaBerlaku);
+ push("Status Reklame", detail.statusReklame);
+ push("Ukuran Panjang", detail.ukuranPanjang);
+ push("Ukuran Lebar", detail.ukuranLebar);
+ push("Ukuran Tinggi", detail.ukuranTinggi);
+ push("Nama Biro Jasa", detail.namaBiroJasa);
+ } else if (jenisPajak.includes("Air Tanah")) {
+ push("Jenis Air Tanah", detail.jenisAirTanah);
+ push("Kriteria Air Tanah", detail.kriteriaAirTanah);
+ push("Kelompok Usaha", detail.kelompokUsaha);
+ push("Rata-rata Ukuran Pemakaian", detail.rata2UkuranPemakaian);
+ } else if (jenisPajak.includes("Walet")) {
+ push("Jenis Burung Walet", detail.jenisBurungWalet);
+ push("Panen Per Tahun", detail.panenPerTahun);
+ push("Rata-rata Berat Panen", detail.rata2BeratPanen);
+ }
+
+ return entries;
+})();
+
  return (
- <Dialog open={isOpen} onOpenChange={onOpenChange}>
- <DialogContent className="shadow-floating max-w-lg bg-white p-0 max-h-[90vh] overflow-y-auto">
- <DialogHeader className="p-4 border-b-[3px] border-primary/30 bg-[#2d3436]">
+ <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { setWizardStep("rekening"); setDraftAttachments([]); setDraftDocumentType(OP_ATTACHMENT_OPTIONS[0]?.value ?? ""); setDraftNotes(""); setDraftFile(null); setWpPickerOpen(false); setWpSearch(""); resetDraftAttachmentInput(); setShowMapPicker(false); } onOpenChange(open); }}>
+ <DialogContent className="shadow-floating w-[calc(100vw-12px)] sm:max-w-lg overflow-x-hidden bg-white p-0 max-h-[90vh] overflow-y-auto">
+ <DialogHeader className="border-b-[3px] border-primary/30 bg-[#2d3436] p-3 md:p-4">
  <DialogTitle className="font-sans text-xl font-black text-white">
  {mode === "edit" ? "EDIT OBJEK PAJAK" : "TAMBAH OBJEK PAJAK"}
  </DialogTitle>
@@ -220,17 +463,62 @@ export function OPFormDialog({
  Form objek pajak untuk mengisi rekening, detail usaha, lokasi, dan data operasional.
  </DialogDescription>
  </DialogHeader>
+ {isCreateWizard ? (
+ <div className="border-b border-black/10 bg-[#f4f6fb] px-3 py-3 md:px-4">
+ <div className="mb-2 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.2em] text-black/55">
+ <span>Step {currentStepIndex + 1} / {CREATE_WIZARD_STEPS.length}</span>
+ <span>{CREATE_WIZARD_STEPS[currentStepIndex]?.label}</span>
+ </div>
+ <div className="grid grid-cols-6 gap-2">
+ {CREATE_WIZARD_STEPS.map((step, index) => (
+ <div key={step.id} className={`h-2 rounded-full ${index <= currentStepIndex ? "bg-primary" : "bg-black/10"}`} />
+ ))}
+ </div>
+ </div>
+ ) : null}
  <Form {...form}>
- <form onSubmit={form.handleSubmit(handleSubmit)} className="p-4 space-y-4">
- <FormField
+ <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-3 overflow-x-hidden p-3 pb-24 md:space-y-4 md:p-4 md:pb-4 [&_input]:h-10 [&_input]:px-3 [&_textarea]:px-3 [&_textarea]:py-2 [&_button[role=combobox]]:h-10 [&_button[role=combobox]]:px-3 md:[&_input]:h-11 md:[&_button[role=combobox]]:h-11">
+{showStep("rekening") && (
+<div className="space-y-4">
+ {useJenisPajakSelector ? (
+ <div className="space-y-2">
+ <FormLabel className="font-mono text-xs font-bold text-black">JENIS PAJAK</FormLabel>
+ <Select
+ onValueChange={(value) => {
+ setSelectedJenisPajak(value);
+ const firstMatchingRekening = rekeningList.find((item) => item.jenisPajak === value);
+ form.setValue("rekPajakId", firstMatchingRekening?.id as unknown as number);
+ form.setValue("detailPajak", null);
+ }}
+ value={selectedJenisPajak}
+ >
+ <SelectTrigger className="font-mono text-sm" data-testid="select-jenis-pajak-op">
+ <SelectValue placeholder="Pilih Jenis Pajak" />
+ </SelectTrigger>
+ <SelectContent className="border border-black">
+ {jenisPajakOptions.map((item) => (
+ <SelectItem key={item} value={item}>
+ {item}
+ </SelectItem>
+ ))}
+ </SelectContent>
+ </Select>
+ </div>
+ ) : null}
+ {!useJenisPajakSelector ? <FormField
  control={form.control}
  name="rekPajakId"
  render={({ field }) => (
  <FormItem>
- <FormLabel className="font-mono text-xs font-bold text-black">REKENING PAJAK</FormLabel>
+ <FormLabel className="font-mono text-xs font-bold text-black">
+ {isCreateWizard ? "REKENING PAJAK" : "REKENING PAJAK"}
+ </FormLabel>
  <Select
  onValueChange={(value) => {
  field.onChange(parseInt(value, 10));
+ if (useJenisPajakSelector) {
+ setSelectedJenisPajak(rekeningList.find((item) => item.id === parseInt(value, 10))?.jenisPajak ?? "");
+ }
  form.setValue("detailPajak", null);
  }}
  value={field.value ? String(field.value) : ""}
@@ -241,7 +529,7 @@ export function OPFormDialog({
  </SelectTrigger>
  </FormControl>
  <SelectContent className="border border-black">
- {rekeningList.map((rek) => (
+ {rekeningOptions.map((rek) => (
  <SelectItem key={rek.id} value={String(rek.id)}>
  {rek.kodeRekening} - {rek.namaRekening}
  </SelectItem>
@@ -251,11 +539,39 @@ export function OPFormDialog({
  <FormMessage />
  </FormItem>
  )}
- />
+ /> : null}
+ {isCreateWizard ? (
+ <div className="flex justify-end">
+ <Button type="button" className="h-10 bg-[#2d3436] px-4 font-mono text-[11px] font-bold text-white md:h-11 md:text-xs" onClick={handleWizardNext}>
+ Lanjut ke Detail
+ <ChevronRight className="ml-2 h-4 w-4" />
+ </Button>
+ </div>
+ ) : null}
+ </div>
+ )}
 
- {jenisPajak && <DetailFieldsByJenis jenisPajak={jenisPajak} form={form} />}
+ {showStep("detail") && jenisPajak && (
+ <div className="space-y-3 md:space-y-4">
+ <DetailFieldsByJenis jenisPajak={jenisPajak} form={form} />
+ {isCreateWizard ? (
+ <div className="flex items-center justify-between gap-2">
+ <Button type="button" variant="outline" className="h-10 min-w-0 flex-1 px-3 font-mono text-[11px] font-bold md:h-11 md:text-xs" onClick={handleWizardBack}>
+ <ChevronLeft className="mr-2 h-4 w-4" />
+ Kembali
+ </Button>
+ <Button type="button" className="h-10 min-w-0 flex-1 bg-[#2d3436] px-3 font-mono text-[11px] font-bold text-white md:h-11 md:text-xs" onClick={handleWizardNext}>
+ Lanjut
+ <ChevronRight className="ml-2 h-4 w-4" />
+ </Button>
+ </div>
+ ) : null}
+ </div>
+ )}
 
- <div className="grid grid-cols-2 gap-3">
+ {showStep("data") && (
+ <div className="space-y-3 md:space-y-4">
+ <div className="grid grid-cols-2 gap-2 md:gap-3">
  <FormField
  control={form.control}
  name="nopd"
@@ -289,23 +605,59 @@ export function OPFormDialog({
  render={({ field }) => (
  <FormItem>
  <FormLabel className="font-mono text-xs font-bold text-black">WAJIB PAJAK</FormLabel>
- <Select
- onValueChange={(val) => field.onChange(parseInt(val, 10))}
- value={field.value?.toString() || ""}
- >
+ <Popover open={wpPickerOpen} onOpenChange={setWpPickerOpen}>
+ <PopoverTrigger asChild>
  <FormControl>
- <SelectTrigger className="font-mono text-sm" data-testid="select-wp">
- <SelectValue placeholder="Pilih Wajib Pajak" />
- </SelectTrigger>
+ <Button
+ type="button"
+ variant="outline"
+ role="combobox"
+ aria-expanded={wpPickerOpen}
+ className="h-10 w-full justify-between px-3 font-mono text-sm md:h-11"
+ data-testid="select-wp"
+ >
+ <span className="truncate text-left">
+ {selectedWp ? `${selectedWp.displayName} - ${selectedWp.npwpd || "-"}` : "Cari nama WP"}
+ </span>
+ <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+ </Button>
  </FormControl>
- <SelectContent className="border border-black">
- {wpList.map((wp) => (
- <SelectItem key={wp.id} value={wp.id.toString()}>
- {wp.displayName} - {wp.npwpd || "-"}
- </SelectItem>
- ))}
- </SelectContent>
- </Select>
+ </PopoverTrigger>
+ <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-0 border border-black p-0">
+ <Command shouldFilter={false}>
+ <CommandInput
+ value={wpSearch}
+ onValueChange={setWpSearch}
+ placeholder="Ketik nama WP..."
+ className="font-mono text-sm"
+ />
+ <CommandList>
+ {normalizedWpSearch.length < 3 ? (
+ <CommandEmpty>Ketik minimal 3 huruf nama WP.</CommandEmpty>
+ ) : filteredWpList.length === 0 ? (
+ <CommandEmpty>Data WP tidak ditemukan.</CommandEmpty>
+ ) : (
+ filteredWpList.map((wp) => (
+ <CommandItem
+ key={wp.id}
+ value={`${wp.displayName} ${wp.npwpd ?? ""}`}
+ onSelect={() => {
+ field.onChange(wp.id);
+ setWpPickerOpen(false);
+ setWpSearch("");
+ }}
+ className="font-mono text-sm"
+ >
+ <Check className={`mr-2 h-4 w-4 ${field.value === wp.id ? "opacity-100" : "opacity-0"}`} />
+ <span className="truncate">{wp.displayName} - {wp.npwpd || "-"}</span>
+ </CommandItem>
+ ))
+ )}
+ </CommandList>
+ </Command>
+ </PopoverContent>
+ </Popover>
+ <FormMessage />
  </FormItem>
  )}
  />
@@ -322,7 +674,7 @@ export function OPFormDialog({
  </FormItem>
  )}
  />
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-2 gap-2 md:gap-3">
  <FormField
  control={form.control}
  name="kecamatanId"
@@ -378,7 +730,7 @@ export function OPFormDialog({
  )}
  />
  </div>
- <div className="grid grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 gap-2 md:grid-cols-3 md:gap-3">
  <FormField
  control={form.control}
  name="omsetBulanan"
@@ -386,14 +738,7 @@ export function OPFormDialog({
  <FormItem>
  <FormLabel className="font-mono text-xs font-bold text-black">OMSET/BLN (Rp)</FormLabel>
  <FormControl>
- <Input
- {...field}
- value={formatMoneyInput(field.value)}
- inputMode="numeric"
- onChange={(e) => field.onChange(normalizeMoneyDigits(e.target.value))}
- className="font-mono text-sm"
- data-testid="input-omset"
- />
+ <Input {...field} value={formatMoneyInput(field.value)} inputMode="numeric" onChange={(e) => field.onChange(normalizeMoneyDigits(e.target.value))} className="h-11 px-3 font-mono text-sm md:h-10" data-testid="input-omset" />
  </FormControl>
  </FormItem>
  )}
@@ -405,7 +750,7 @@ export function OPFormDialog({
  <FormItem>
  <FormLabel className="font-mono text-xs font-bold text-black">TARIF (%)</FormLabel>
  <FormControl>
- <Input {...field} value={field.value || ""} type="number" className="font-mono text-sm" data-testid="input-tarif" />
+ <Input {...field} value={field.value || ""} type="number" className="h-11 px-3 font-mono text-sm md:h-10" data-testid="input-tarif" />
  </FormControl>
  </FormItem>
  )}
@@ -417,31 +762,54 @@ export function OPFormDialog({
  <FormItem>
  <FormLabel className="font-mono text-xs font-bold text-black">PAJAK/BLN (Rp)</FormLabel>
  <FormControl>
- <Input
- {...field}
- value={formatMoneyInput(field.value)}
- inputMode="numeric"
- onChange={(e) => field.onChange(normalizeMoneyDigits(e.target.value))}
- className="font-mono text-sm"
- data-testid="input-pajak-bulanan"
- />
+ <Input {...field} value={formatMoneyInput(field.value)} inputMode="numeric" onChange={(e) => field.onChange(normalizeMoneyDigits(e.target.value))} className="h-11 px-3 font-mono text-sm md:h-10" data-testid="input-pajak-bulanan" />
  </FormControl>
  </FormItem>
  )}
  />
  </div>
+ <FormField
+ control={form.control}
+ name="status"
+ render={({ field }) => (
+ <FormItem>
+ <FormLabel className="font-mono text-xs font-bold text-black">STATUS</FormLabel>
+ <Select onValueChange={field.onChange} value={field.value}>
+ <FormControl>
+ <SelectTrigger className="font-mono text-sm" data-testid="select-status-op">
+ <SelectValue />
+ </SelectTrigger>
+ </FormControl>
+ <SelectContent className="border border-black">
+ <SelectItem value="active">Active</SelectItem>
+ <SelectItem value="inactive">Inactive</SelectItem>
+ </SelectContent>
+ </Select>
+ </FormItem>
+ )}
+ />
+ {isCreateWizard ? (
+ <div className="flex items-center justify-between gap-2">
+ <Button type="button" variant="outline" className="h-10 min-w-0 flex-1 px-3 font-mono text-[11px] font-bold md:h-11 md:text-xs" onClick={handleWizardBack}>
+ <ChevronLeft className="mr-2 h-4 w-4" />
+ Kembali
+ </Button>
+ <Button type="button" className="h-10 min-w-0 flex-1 bg-[#2d3436] px-3 font-mono text-[11px] font-bold text-white md:h-11 md:text-xs" onClick={handleWizardNext}>
+ Lanjut
+ <ChevronRight className="ml-2 h-4 w-4" />
+ </Button>
+ </div>
+ ) : null}
+ </div>
+ )}
 
+ {showStep("lokasi") && (
+ <div className="space-y-3 md:space-y-4">
  <div className="space-y-2">
  <div className="flex items-center justify-between">
  <span className="font-mono text-xs font-bold text-black">LOKASI KOORDINAT</span>
- <Button
- type="button"
- size="sm"
- className="bg-primary text-black font-mono text-xs"
- onClick={() => setShowMapPicker(!showMapPicker)}
- data-testid="button-toggle-map-picker"
- >
- <Crosshair className="w-3 h-3 mr-1" />
+ <Button type="button" size="sm" className="bg-primary text-black font-mono text-xs" onClick={() => setShowMapPicker(!showMapPicker)} data-testid="button-toggle-map-picker">
+ <Crosshair className="mr-1 h-3 w-3" />
  {showMapPicker ? "SEMBUNYIKAN PETA" : "PILIH DI PETA"}
  </Button>
  </div>
@@ -455,7 +823,7 @@ export function OPFormDialog({
  }}
  />
  )}
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <FormField
  control={form.control}
  name="latitude"
@@ -482,34 +850,143 @@ export function OPFormDialog({
  />
  </div>
  </div>
+ {isCreateWizard ? (
+ <div className="flex items-center justify-between gap-2">
+ <Button type="button" variant="outline" className="h-10 min-w-0 flex-1 px-3 font-mono text-[11px] font-bold md:h-11 md:text-xs" onClick={handleWizardBack}>
+ <ChevronLeft className="mr-2 h-4 w-4" />
+ Kembali
+ </Button>
+ <Button type="button" className="h-10 min-w-0 flex-1 bg-[#2d3436] px-3 font-mono text-[11px] font-bold text-white md:h-11 md:text-xs" onClick={handleWizardNext}>
+ Lanjut
+ <ChevronRight className="ml-2 h-4 w-4" />
+ </Button>
+ </div>
+ ) : null}
+ </div>
+ )}
 
- <FormField
- control={form.control}
- name="status"
- render={({ field }) => (
- <FormItem>
- <FormLabel className="font-mono text-xs font-bold text-black">STATUS</FormLabel>
- <Select onValueChange={field.onChange} value={field.value}>
- <FormControl>
- <SelectTrigger className="font-mono text-sm" data-testid="select-status-op">
- <SelectValue />
+ {showStep("lampiran") && (
+ <div className="space-y-3 md:space-y-4">
+ {mode === "edit" && editOp ? (
+ <AttachmentPanel entityType="objek_pajak" entityId={editOp.id} title="Lampiran Objek Pajak" documentTypeOptions={[...OP_ATTACHMENT_OPTIONS]} />
+ ) : isCreateWizard ? (
+ <div className="space-y-3 border border-dashed border-border bg-background p-2 md:p-3">
+ <div className="space-y-1">
+ <p className="font-mono text-xs font-bold text-black">LAMPIRAN DRAFT</p>
+ <p className="font-mono text-[11px] text-gray-700">Lampiran akan diunggah otomatis setelah data OP berhasil dibuat.</p>
+ </div>
+ <div className="space-y-3">
+ <div className="space-y-2">
+ <FormLabel className="font-mono text-xs font-bold text-black">Jenis Dokumen</FormLabel>
+ <Select value={draftDocumentType} onValueChange={setDraftDocumentType}>
+ <SelectTrigger className="font-mono text-sm">
+ <SelectValue placeholder="Pilih jenis dokumen" />
  </SelectTrigger>
- </FormControl>
  <SelectContent className="border border-black">
- <SelectItem value="active">Active</SelectItem>
- <SelectItem value="inactive">Inactive</SelectItem>
+ {OP_ATTACHMENT_OPTIONS.map((option) => (
+ <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+ ))}
  </SelectContent>
  </Select>
- </FormItem>
+ </div>
+ <div className="space-y-2">
+ <FormLabel className="font-mono text-xs font-bold text-black">File</FormLabel>
+ <Input ref={draftFileInputRef} type="file" accept=".pdf,image/jpeg,image/png,image/webp" className="font-mono text-sm" onChange={(event) => setDraftFile(event.target.files?.[0] ?? null)} />
+ </div>
+ <div className="space-y-2">
+ <FormLabel className="font-mono text-xs font-bold text-black">Catatan (Opsional)</FormLabel>
+ <Textarea value={draftNotes} onChange={(event) => setDraftNotes(event.target.value)} className="min-h-[88px] font-mono text-sm" />
+ </div>
+ <Button type="button" className="h-10 w-full bg-primary px-4 font-mono text-[11px] font-bold text-black md:h-11 md:text-xs" onClick={addDraftAttachment}>
+ <Upload className="mr-2 h-4 w-4" />
+ Tambahkan ke Draft
+ </Button>
+ </div>
+ {draftAttachments.length > 0 ? (
+ <div className="space-y-2">
+ {draftAttachments.map((item) => (
+ <div key={item.id} className="border border-black/20 bg-white p-3 shadow-card">
+ <div className="flex items-start justify-between gap-3">
+ <div className="min-w-0 space-y-1">
+ <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/55">{draftDocumentLabelMap[item.documentType] || item.documentType}</p>
+ <p className="truncate font-mono text-sm font-bold text-black">{item.file.name}</p>
+ <p className="font-mono text-[11px] text-black/70">{Math.round(item.file.size / 1024)} KB</p>
+ {item.notes ? <p className="font-mono text-[11px] text-black/70">{item.notes}</p> : null}
+ </div>
+ <Button type="button" variant="outline" className="h-10 w-10 p-0 text-red-600" onClick={() => removeDraftAttachment(item.id)}>
+ <X className="h-4 w-4" />
+ </Button>
+ </div>
+ </div>
+ ))}
+ </div>
+ ) : null}
+ <div className="flex items-center justify-between gap-2">
+ <Button type="button" variant="outline" className="h-10 min-w-0 flex-1 px-3 font-mono text-[11px] font-bold md:h-11 md:text-xs" onClick={handleWizardBack}>
+ <ChevronLeft className="mr-2 h-4 w-4" />
+ Kembali
+ </Button>
+ <Button type="button" className="h-10 min-w-0 flex-1 bg-[#2d3436] px-3 font-mono text-[11px] font-bold text-white md:h-11 md:text-xs" onClick={handleWizardNext}>
+ Lanjut
+ <ChevronRight className="ml-2 h-4 w-4" />
+ </Button>
+ </div>
+ </div>
+ ) : (
+ <div className="border border-dashed border-border bg-background p-3 font-mono text-[11px] text-gray-700">
+ Upload foto usaha, foto lokasi, dan izin usaha aktif setelah data Objek Pajak berhasil dibuat.
+ </div>
  )}
- />
+ </div>
+ )}
+
+ {isReviewStep ? (
+ <div className="space-y-3 border border-black/15 bg-[#f7f8fb] p-3 shadow-card md:space-y-4 md:p-4">
+ <div className="space-y-1">
+ <p className="font-sans text-lg font-black uppercase text-black">Review Objek Pajak</p>
+ <p className="font-mono text-[11px] text-gray-700">Periksa data sebelum menyimpan.</p>
+ </div>
+ <div className="space-y-3 font-mono text-xs text-black">
+ <div className="border border-black/10 bg-white p-2 md:p-3">
+ <p className="mb-1 text-[10px] uppercase tracking-[0.18em] text-black/55">Jenis Pajak</p>
+ <p className="font-bold">{currentJenisPajakLabel}</p>
+</div>
+ <div className="border border-black/10 bg-white p-2 md:p-3">
+ <p className="mb-1 text-[10px] uppercase tracking-[0.18em] text-black/55">Data OP</p>
+ <p>Nama Objek: <span className="font-bold">{currentValues.namaOp || "-"}</span></p>
+ <p>Wajib Pajak: <span className="font-bold">{wpList.find((wp) => wp.id === currentValues.wpId)?.displayName || "-"}</span></p>
+ <p>Alamat: <span className="font-bold">{currentValues.alamatOp || "-"}</span></p>
+ <p>NOPD: <span className="font-bold">{currentValues.nopd || "(otomatis)"}</span></p>
+ </div>
+ <div className="border border-black/10 bg-white p-2 md:p-3">
+ <p className="mb-1 text-[10px] uppercase tracking-[0.18em] text-black/55">Detail Usaha</p>
+ {reviewDetailEntries.length > 0 ? (
+ <div className="space-y-1">
+ {reviewDetailEntries.map((entry) => (
+ <p key={entry.label}>
+ {entry.label}: <span className="font-bold">{entry.value}</span>
+ </p>
+ ))}
+ </div>
+ ) : (
+ <p className="font-bold">Belum ada detail</p>
+ )}
+ </div>
+ <div className="border border-black/10 bg-white p-2 md:p-3">
+ <p className="mb-1 text-[10px] uppercase tracking-[0.18em] text-black/55">Lokasi</p>
+ <p>Latitude: <span className="font-bold">{currentValues.latitude || "-"}</span></p>
+ <p>Longitude: <span className="font-bold">{currentValues.longitude || "-"}</span></p>
+ </div>
+ <div className="border border-black/10 bg-white p-2 md:p-3">
+ <p className="mb-1 text-[10px] uppercase tracking-[0.18em] text-black/55">Lampiran Draft</p>
+ <p className="font-bold">{draftAttachments.length} file</p>
+ </div>
+ </div>
  {qualityWarnings.length > 0 && (
  <div className="border border-orange-500 bg-orange-50 p-3 space-y-1">
  <p className="font-mono text-xs font-bold text-orange-900">Warning Data Quality</p>
  {qualityWarnings.map((item) => (
- <p key={item.code} className="font-mono text-[11px] text-orange-800">
- {item.message}
- </p>
+ <p key={item.code} className="font-mono text-[11px] text-orange-800">{item.message}</p>
  ))}
  </div>
  )}
@@ -517,38 +994,63 @@ export function OPFormDialog({
  <div className="border border-red-600 bg-red-50 p-3 space-y-1">
  <p className="font-mono text-xs font-bold text-red-900">Periksa Isian Form</p>
  {submitFieldErrors.map((item, index) => (
- <p key={`${item.field}-${index}`} className="font-mono text-[11px] text-red-800">
- {item.message}
- </p>
+ <p key={`${item.field}-${index}`} className="font-mono text-[11px] text-red-800">{item.message}</p>
  ))}
  </div>
  )}
- {mode === "edit" && editOp ? (
- <AttachmentPanel
- entityType="objek_pajak"
- entityId={editOp.id}
- title="Lampiran Objek Pajak"
- documentTypeOptions={[...OP_ATTACHMENT_OPTIONS]}
- />
- ) : (
- <div className="border border-dashed border-border bg-background p-3 font-mono text-[11px] text-gray-700">
- Upload foto usaha, foto lokasi, dan izin usaha aktif setelah data Objek Pajak berhasil dibuat.
+ <div className="flex items-center justify-between gap-2">
+ <Button type="button" variant="outline" className="h-10 min-w-0 flex-1 px-3 font-mono text-[11px] font-bold md:h-11 md:text-xs" onClick={handleWizardBack}>
+ <ChevronLeft className="mr-2 h-4 w-4" />
+ Kembali
+ </Button>
+ <Button type="submit" disabled={isPending} className="h-10 min-w-0 flex-1 border border-primary/30 bg-[#2d3436] px-3 font-mono text-[11px] font-bold text-white md:h-11 md:text-xs" data-testid="button-submit-op">
+ {isPending ? "MENYIMPAN..." : "SIMPAN OP"}
+ </Button>
+ </div>
+ </div>
+ ) : null}
+
+ {!isCreateWizard && qualityWarnings.length > 0 && (
+ <div className="border border-orange-500 bg-orange-50 p-3 space-y-1">
+ <p className="font-mono text-xs font-bold text-orange-900">Warning Data Quality</p>
+ {qualityWarnings.map((item) => (
+ <p key={item.code} className="font-mono text-[11px] text-orange-800">{item.message}</p>
+ ))}
  </div>
  )}
- <Button
- type="submit"
- disabled={isPending}
- className="w-full border border-primary/30 bg-[#2d3436] text-white font-mono font-bold h-11"
- data-testid="button-submit-op"
- >
+ {!isCreateWizard && submitFieldErrors.length > 0 && (
+ <div className="border border-red-600 bg-red-50 p-3 space-y-1">
+ <p className="font-mono text-xs font-bold text-red-900">Periksa Isian Form</p>
+ {submitFieldErrors.map((item, index) => (
+ <p key={`${item.field}-${index}`} className="font-mono text-[11px] text-red-800">{item.message}</p>
+ ))}
+ </div>
+ )}
+ {!isCreateWizard && (
+ <Button type="submit" disabled={isPending} className="w-full border border-primary/30 bg-[#2d3436] text-white font-mono font-bold h-11" data-testid="button-submit-op">
  {isPending ? "MENYIMPAN..." : mode === "edit" ? "PERBARUI OBJEK PAJAK" : "SIMPAN OBJEK PAJAK"}
  </Button>
+ )}
  </form>
  </Form>
  </DialogContent>
  </Dialog>
  );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

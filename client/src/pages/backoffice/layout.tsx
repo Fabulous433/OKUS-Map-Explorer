@@ -1,16 +1,25 @@
 import { useEffect } from "react";
 import { Link, useLocation, useRoute } from "wouter";
-import { BarChart3, Users, Building2, Map, ChevronRight, Sparkles, Database, LogOut } from "lucide-react";
+import { BarChart3, Users, Building2, Map, ChevronRight, Sparkles, Database, LogOut, User, Settings, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import type { AppRole } from "@shared/schema";
 import { MobileBottomNav } from "@/components/backoffice/mobile-bottom-nav";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const NAV_ITEMS = [
   { href: "/backoffice", label: "Dashboard", icon: BarChart3, match: "/backoffice" },
   { href: "/backoffice/wajib-pajak", label: "Wajib Pajak", icon: Users, match: "/backoffice/wajib-pajak" },
   { href: "/backoffice/objek-pajak", label: "Objek Pajak", icon: Building2, match: "/backoffice/objek-pajak" },
   { href: "/backoffice/master-data", label: "Master Data", icon: Database, match: "/backoffice/master-data", roles: ["admin"] as const },
+  { href: "/backoffice/data-tools", label: "Data Tools", icon: FileSpreadsheet, match: "/backoffice/data-tools" },
   { href: "/backoffice/mockup-form", label: "Mockup Form", icon: Sparkles, match: "/backoffice/mockup-form" },
 ];
 
@@ -35,12 +44,15 @@ function NavItem({ href, label, icon: Icon, match }: (typeof NAV_ITEMS)[number])
   );
 }
 
-export default function BackofficeLayout({ children }: { children: React.ReactNode }) {
+export default function BackofficeLayout({
+  children,
+  hideMobileChrome = false,
+}: {
+  children: React.ReactNode;
+  hideMobileChrome?: boolean;
+}) {
   const { user, isLoading, isAuthenticated, hasRole, logout } = useAuth();
   const [location, setLocation] = useLocation();
-  const pageLabel =
-    visibleLabelForLocation(location) ??
-    (location.startsWith("/backoffice/master-data") ? "Master Data" : "Backoffice");
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -122,54 +134,54 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
         </Link>
       </aside>
 
-      <main className="min-h-screen flex-1 overflow-auto pb-28 lg:pb-0">
-        <header className="mobile-panel-shadow sticky top-0 z-40 bg-[#2d3436] px-4 py-3 text-white lg:hidden">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-[#ff4757] animate-pulse shadow-[var(--shadow-glow-accent)]" aria-hidden="true" />
-                <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-white/70">OKUS Backoffice</p>
-              </div>
-              <h1 className="truncate font-sans text-lg font-bold mt-1" style={{ textWrap: "balance" }}>{pageLabel}</h1>
+      <main className={`min-h-screen flex-1 overflow-auto ${hideMobileChrome ? "pb-0" : "pb-16"} lg:pb-0`}>
+        {!hideMobileChrome ? (
+        <header className="mobile-panel-shadow sticky top-0 z-40 bg-[#2d3436] px-4 py-2.5 text-white lg:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="h-2 w-2 rounded-full bg-[#ff4757] animate-pulse shadow-[var(--shadow-glow-accent)]" aria-hidden="true" />
+              <span className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-white/90">OKUS Backoffice</span>
             </div>
-            <Button
-              variant="outline"
-              className="h-10 rounded-lg border-white/20 bg-transparent px-3 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-white hover:bg-white/10"
-              onClick={async () => {
-                await logout();
-                setLocation("/backoffice/login");
-              }}
-              data-testid="button-logout-mobile"
-            >
-              Keluar
-            </Button>
-          </div>
-          <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/15 pt-3">
-            <div className="min-w-0">
-              <p className="truncate font-mono text-xs font-bold">{user.username}</p>
-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/65">{user.role}</p>
-            </div>
-            <Link
-              href="/"
-              className="cursor-pointer rounded-lg bg-primary px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-white shadow-card
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Peta
-            </Link>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Menu pengguna"
+                  data-testid="button-avatar-menu"
+                >
+                  <User className="h-4.5 w-4.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 shadow-floating">
+                <DropdownMenuLabel className="font-mono text-xs">
+                  <p className="font-bold">{user.username}</p>
+                  <p className="text-[10px] font-normal uppercase tracking-wider text-muted-foreground">{user.role}</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="font-mono text-xs" disabled>
+                  <Settings className="mr-2 h-4 w-4" />
+                  Pengaturan
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="font-mono text-xs text-red-600 focus:text-red-600"
+                  onClick={async () => {
+                    await logout();
+                    setLocation("/backoffice/login");
+                  }}
+                  data-testid="button-logout-mobile"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Keluar
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
+        ) : null}
         <div>{children}</div>
-        <MobileBottomNav />
+        {!hideMobileChrome ? <MobileBottomNav /> : null}
       </main>
     </div>
   );
-}
-
-function visibleLabelForLocation(location: string) {
-  if (location === "/backoffice") return "Dashboard";
-  if (location.startsWith("/backoffice/wajib-pajak")) return "Wajib Pajak";
-  if (location.startsWith("/backoffice/objek-pajak")) return "Objek Pajak";
-  if (location.startsWith("/backoffice/master-data")) return "Master Data";
-  if (location.startsWith("/backoffice/mockup-form")) return "Mockup Form";
-  return null;
 }
