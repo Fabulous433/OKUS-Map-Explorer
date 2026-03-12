@@ -1,5 +1,56 @@
 # Changelog
 
+## Phase 2.16a — Public Map City-First UX
+
+### Added
+- Drawer desktop tipis `Filter Peta` untuk map publik, menggantikan panel filter desktop besar yang sebelumnya menutup area map.
+- Komponen button list basemap reusable untuk desktop dan mobile:
+  - `OSM`
+  - `Carto`
+  - `ESRI Sat`
+- Regression suite `tests/integration/map-city-first-config.integration.ts` untuk mengunci center/reset Muaradua, zoom city-first, dan batas zoom `ESRI Satellite`.
+- Evidence smoke lokal frontend:
+  - `docs/uat/public-map-city-first-local-smoke-2026-03-13.md`
+
+### Improved
+- Home/reset map publik kini benar-benar city-first di pusat Muaradua dengan default zoom `15`.
+- Chrome desktop map dibuat lebih ringkas; judul tetap tampil, tetapi kontrol filter dipindah ke drawer kanan agar viewport lebih lega.
+- Pemilihan basemap kini langsung bisa dipilih lewat button list di drawer/filter UI, tanpa dropdown tambahan.
+
+### Fixed
+- `ESRI Satellite` sekarang dibatasi ke `maxZoom = 17` agar operator tidak terdorong ke zoom ekstrem yang sering menampilkan placeholder tile.
+- Z-index `Sheet` dinaikkan agar drawer desktop selalu tampil di atas layer map dan tidak terlihat seperti gagal render.
+
+### Notes
+- Batch ini melengkapi baseline WFS proxy tanpa mengubah keputusan source data aktif `backend-proxy`.
+- Smoke staging nyata untuk jalur proxy tetap pending di handoff UAT.
+
+## Phase 2.16 — Public Map WFS Proxy Baseline
+
+### Added
+- Endpoint proxy baru `/api/objek-pajak/map-wfs` yang mengembalikan GeoJSON `FeatureCollection` untuk viewport map publik.
+- Typed WFS adapter di frontend untuk:
+  - mapping `FeatureCollection -> MapViewportMarker`
+  - guard geometry point
+  - meta viewport yang tetap jujur
+
+### Improved
+- Source data map publik sekarang bisa diganti per instance lewat seam `mapDataMode`, dengan baseline aktif `backend-proxy`.
+- Filter `search`, `kecamatan`, dan `rekening` tetap berjalan server-side saat map publik memakai proxy WFS.
+- Map publik sekarang mulai dalam mode `browse-first`: load awal hanya menampilkan wilayah/basemap, lalu marker objek pajak baru dimuat setelah ada intent pengguna seperti pencarian, filter, atau focus link.
+- Badge viewport di desktop dan mobile sekarang memakai label yang mengikuti semantik meta aktual:
+  - `dalam viewport`
+  - `marker loaded`
+
+### Fixed
+- Load awal map publik tidak lagi salah fokus ke koordinat `0,0` saat query string kosong; parser focus kini hanya mengaktifkan deep-link jika parameter memang dikirim eksplisit.
+- Focus marker via query param tetap berfungsi setelah marker publik dipetakan ke shape internal stabil.
+- Drawer map mobile tetap sinkron dengan status viewport yang sama seperti layout desktop, termasuk idle hint sebelum query marker diaktifkan.
+
+### Breaking
+- Default `VITE_MAP_PROXY_ENDPOINT` sekarang mengarah ke `/api/objek-pajak/map-wfs`.
+- Mode `direct-wfs` masih belum diaktifkan penuh; memilih mode itu tetap akan fail fast sampai adapter source langsung selesai.
+
 ## Phase 2.15 — Mobile Backoffice Refactor
 
 ### Added

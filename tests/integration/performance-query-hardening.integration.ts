@@ -128,6 +128,30 @@ async function run() {
 
     const mapInvalidBbox = await requestJson("/api/objek-pajak/map?bbox=invalid");
     assert.equal(mapInvalidBbox.response.status, 400, "bbox invalid harus ditolak");
+
+    const mapWfsResult = await requestJson(
+      `/api/objek-pajak/map-wfs?bbox=104.0000,-4.6000,104.1000,-4.4000&q=${encodeURIComponent(uniq)}&limit=50`,
+    );
+    assert.equal(mapWfsResult.response.status, 200);
+    const mapWfsBody = mapWfsResult.body as JsonRecord;
+    assert.equal(mapWfsBody.type, "FeatureCollection");
+    assert.ok(Array.isArray(mapWfsBody.features), "map-wfs features harus array");
+    assert.equal(typeof mapWfsBody.numberMatched, "number");
+    const mapWfsFeatures = mapWfsBody.features as JsonRecord[];
+    const matchingFeature = mapWfsFeatures.find((feature) => Number(feature.id) === createdOpId);
+    assert.ok(matchingFeature, "OP harus muncul di proxy WFS");
+    assert.equal((matchingFeature?.type), "Feature");
+    assert.equal(((matchingFeature?.geometry as JsonRecord | undefined)?.type), "Point");
+    const coordinates = ((matchingFeature?.geometry as JsonRecord | undefined)?.coordinates) as unknown[];
+    assert.ok(Array.isArray(coordinates), "coordinates WFS harus array");
+    assert.equal(coordinates[0], 104.027);
+    assert.equal(coordinates[1], -4.525);
+    const properties = (matchingFeature?.properties as JsonRecord | undefined) ?? {};
+    assert.equal(properties.nama_op, uniq);
+    assert.equal(properties.alamat_op, "Jl. Performance Query");
+
+    const mapWfsInvalidBbox = await requestJson("/api/objek-pajak/map-wfs?bbox=invalid");
+    assert.equal(mapWfsInvalidBbox.response.status, 400, "bbox invalid harus ditolak pada proxy WFS");
   } finally {
     if (createdOpId !== null) {
       await jsonRequest(`/api/objek-pajak/${createdOpId}`, "DELETE");

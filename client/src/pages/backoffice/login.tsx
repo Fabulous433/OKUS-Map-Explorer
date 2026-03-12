@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { regionConfig } from "@/lib/region-config";
 
 export default function BackofficeLogin() {
   const { toast } = useToast();
@@ -73,9 +74,9 @@ export default function BackofficeLogin() {
               <LockKeyhole className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <h1 className="font-sans text-xl font-bold text-white">BACKOFFICE LOGIN</h1>
+              <h1 className="font-sans text-xl font-bold text-white">{regionConfig.brand.backofficeLoginTitle}</h1>
               <p className="font-mono text-[10px] text-white/50 uppercase tracking-[0.15em] mt-0.5">
-                OKU Selatan Pajak Daerah
+                {regionConfig.brand.backofficeLoginSubtitle}
               </p>
             </div>
           </div>

@@ -2,60 +2,30 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
-import { Filter, Layers, Loader2, MapPin, Search, Settings, Target } from "lucide-react";
+import { Filter, Loader2, MapPin, Search, Settings, Target } from "lucide-react";
 import L from "leaflet";
+import { DesktopMapFilterSheet } from "@/components/map/desktop-map-filter-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MobileMapDrawer } from "@/components/map/mobile-map-drawer";
 import { MobileBottomNav } from "@/components/backoffice/mobile-bottom-nav";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { PUBLIC_BASE_MAPS, type BaseMapKey } from "@/lib/map/map-basemap-config";
+import { parseMapFocusParams } from "@/lib/map/map-focus-params";
+import { buildMapDataRequest, type MapViewportBbox } from "@/lib/map/map-data-source";
+import {
+  loadMapViewportData,
+  shouldActivateViewportData,
+  shouldShowEmptyViewportState,
+  type MapViewportResult,
+} from "@/lib/map/map-viewport-query";
 import { getQueryFn } from "@/lib/queryClient";
-import type { MapObjekPajakItem, MasterKecamatan, MasterRekeningPajak } from "@shared/schema";
+import { regionConfig } from "@/lib/region-config";
+import type { MasterKecamatan, MasterRekeningPajak } from "@shared/schema";
 import "leaflet/dist/leaflet.css";
 
-const OKU_SELATAN_CENTER: [number, number] = [-4.525, 104.027];
-const DEFAULT_ZOOM = 13;
-
-const BASE_MAPS = {
-  osm: {
-    name: "OpenStreetMap",
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom: 19,
-  },
-  carto: {
-    name: "CartoDB Positron",
-    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-    attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
-    maxZoom: 20,
-  },
-  esri: {
-    name: "ESRI Satellite",
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    attribution: "&copy; Esri",
-    maxZoom: 18,
-  },
-} as const;
-
-type BaseMapKey = keyof typeof BASE_MAPS;
-
-type Bbox = {
-  minLng: number;
-  minLat: number;
-  maxLng: number;
-  maxLat: number;
-};
-
-type MapResponse = {
-  items: MapObjekPajakItem[];
-  meta: {
-    totalInView: number;
-    isCapped: boolean;
-  };
-};
+const IDLE_MAP_HINT = "Peta wilayah aktif. Cari OP / NOPD / alamat atau pilih filter untuk menampilkan marker.";
 
 function buildMarkerIcon(jenisPajak: string) {
   const palette = [
@@ -83,7 +53,7 @@ function buildMarkerIcon(jenisPajak: string) {
   });
 }
 
-function formatCurrency(value: string | null) {
+function formatCurrency(value: string | null | undefined) {
   if (!value) return "-";
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return "-";
@@ -94,7 +64,7 @@ function formatCurrency(value: string | null) {
   }).format(numeric);
 }
 
-function MapViewportTracker(props: { onChange: (bbox: Bbox, zoom: number) => void }) {
+function MapViewportTracker(props: { onChange: (bbox: MapViewportBbox, zoom: number) => void }) {
   const map = useMap();
 
   useMapEvents({
@@ -135,7 +105,7 @@ function MapTopRightControls(props: { isFetching: boolean; isMobile: boolean }) 
         size="icon"
         variant="outline"
         className="rounded-lg bg-background shadow-card"
-        onClick={() => map.flyTo(OKU_SELATAN_CENTER, DEFAULT_ZOOM, { duration: 0.7 })}
+        onClick={() => map.flyTo(regionConfig.map.center, regionConfig.map.defaultZoom, { duration: 0.7 })}
         title="Reset view"
         aria-label="Reset view"
       >
@@ -166,71 +136,94 @@ function MapFocusController(props: {
   return null;
 }
 
+function MapZoomBoundsController(props: { maxZoom: number }) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.setMaxZoom(props.maxZoom);
+
+    if (map.getZoom() > props.maxZoom) {
+      map.setZoom(props.maxZoom);
+    }
+  }, [map, props.maxZoom]);
+
+  return null;
+}
+
 export default function MapPage() {
   const isMobile = useIsMobile();
   const [baseMap, setBaseMap] = useState<BaseMapKey>("osm");
   const [searchQuery, setSearchQuery] = useState("");
   const [kecamatanId, setKecamatanId] = useState("all");
   const [rekPajakId, setRekPajakId] = useState("all");
-  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
-  const [bbox, setBbox] = useState<Bbox | null>(null);
+  const [zoom, setZoom] = useState(regionConfig.map.defaultZoom);
+  const [bbox, setBbox] = useState<MapViewportBbox | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const focusedMarkerRef = useRef<L.Marker | null>(null);
 
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
   const debouncedBbox = useDebouncedValue(bbox, 250);
-  const focusParams = useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
-    const lat = Number(params.get("focusLat"));
-    const lng = Number(params.get("focusLng"));
-    const id = Number(params.get("focusOpId"));
+  const focusParams = useMemo(() => parseMapFocusParams(window.location.search), []);
 
-    return {
-      id: Number.isFinite(id) && id > 0 ? id : null,
-      target:
-        Number.isFinite(lat) && Number.isFinite(lng)
-          ? { lat, lng }
-          : null,
-    };
-  }, []);
+  const isViewportQueryActive = useMemo(
+    () =>
+      shouldActivateViewportData({
+        bbox: debouncedBbox,
+        searchQuery: debouncedSearch,
+        kecamatanId,
+        rekPajakId,
+        focusId: focusParams.id,
+        focusTarget: focusParams.target,
+      }),
+    [debouncedBbox, debouncedSearch, focusParams.id, focusParams.target, kecamatanId, rekPajakId],
+  );
 
-  const mapQueryUrl = useMemo(() => {
-    if (!debouncedBbox) return null;
-    const params = new URLSearchParams();
-    params.set(
-      "bbox",
-      `${debouncedBbox.minLng},${debouncedBbox.minLat},${debouncedBbox.maxLng},${debouncedBbox.maxLat}`,
-    );
-    params.set("zoom", String(zoom));
-    params.set("limit", "500");
-    if (debouncedSearch) params.set("q", debouncedSearch);
-    if (kecamatanId !== "all") params.set("kecamatanId", kecamatanId);
-    if (rekPajakId !== "all") params.set("rekPajakId", rekPajakId);
-    return `/api/objek-pajak/map?${params.toString()}`;
-  }, [debouncedBbox, debouncedSearch, kecamatanId, rekPajakId, zoom]);
+  const mapDataRequest = useMemo(() => {
+    if (!debouncedBbox || !isViewportQueryActive) return null;
+    return buildMapDataRequest(regionConfig.map.dataSource, {
+      bbox: debouncedBbox,
+      zoom,
+      limit: 500,
+      searchQuery: debouncedSearch || undefined,
+      kecamatanId: kecamatanId !== "all" ? kecamatanId : undefined,
+      rekPajakId: rekPajakId !== "all" ? rekPajakId : undefined,
+    });
+  }, [debouncedBbox, debouncedSearch, isViewportQueryActive, kecamatanId, rekPajakId, zoom]);
 
-  const { data: mapData, isFetching, error } = useQuery<MapResponse>({
-    queryKey: [mapQueryUrl ?? "/api/objek-pajak/map?empty=true"],
-    enabled: mapQueryUrl !== null,
+  const { data: mapData, isFetching, error } = useQuery<MapViewportResult>({
+    queryKey: [
+      "public-map-data",
+      mapDataRequest?.mode ?? "empty",
+      mapDataRequest?.url ?? mapDataRequest?.errorMessage ?? "empty",
+    ],
+    enabled: mapDataRequest !== null,
     placeholderData: keepPreviousData,
-    queryFn: async ({ queryKey, signal }) => {
-      const response = await fetch(queryKey[0] as string, { credentials: "include", signal });
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || "Gagal memuat data peta");
-      }
-      return (await response.json()) as MapResponse;
-    },
+    queryFn: ({ signal }) =>
+      mapDataRequest
+        ? loadMapViewportData({
+            request: mapDataRequest,
+            signal,
+          })
+        : Promise.reject(new Error("Konfigurasi data peta belum tersedia.")),
   });
 
   const markerList = mapData?.items ?? [];
   const totalInView = mapData?.meta.totalInView ?? 0;
   const isCapped = mapData?.meta.isCapped ?? false;
+  const viewportLabel = mapData?.meta.primaryLabel ?? "dalam viewport";
+  const showEmptyViewportState = shouldShowEmptyViewportState({
+    isQueryActive: isViewportQueryActive,
+    bbox: debouncedBbox,
+    isFetching,
+    error,
+    markerCount: markerList.length,
+  });
+  const showIdleViewportHint = !isViewportQueryActive && !error;
 
   useEffect(() => {
     if (!focusParams.id || markerList.length === 0 || !focusedMarkerRef.current) return;
 
-    const markerExists = markerList.some((item) => item.id === focusParams.id);
+    const markerExists = markerList.some((item) => String(item.id) === String(focusParams.id));
     if (!markerExists) return;
 
     const timer = window.setTimeout(() => {
@@ -251,7 +244,7 @@ export default function MapPage() {
   const kecamatanList = kecamatanData ?? [];
   const rekeningList = rekeningData ?? [];
 
-  const mapConfig = BASE_MAPS[baseMap];
+  const mapConfig = PUBLIC_BASE_MAPS[baseMap];
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background" data-testid="map-page">
@@ -259,8 +252,10 @@ export default function MapPage() {
         <>
           <div className="absolute left-3 right-3 top-3 z-[1000] flex items-start justify-between gap-3">
             <div className="rounded-xl bg-background px-4 py-3 shadow-floating">
-              <h1 className="font-sans text-lg font-bold leading-none">PETA OP</h1>
-              <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Viewport Query</p>
+              <h1 className="font-sans text-lg font-bold leading-none">{regionConfig.brand.publicMapMobileTitle}</h1>
+              <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                {regionConfig.brand.publicMapSubtitleMobile}
+              </p>
             </div>
             <Link href="/backoffice">
               <Button
@@ -274,17 +269,23 @@ export default function MapPage() {
           </div>
 
           <div className="absolute bottom-24 left-3 z-[1000] flex max-w-[70vw] flex-wrap gap-2">
-            <Badge className="bg-[#2d3436] text-white">
-              {totalInView} viewport
-            </Badge>
-            <Badge variant="secondary">
-              {markerList.length} marker
-            </Badge>
-            {isCapped ? (
-              <Badge className="bg-primary text-primary-foreground">
-                capped
-              </Badge>
-            ) : null}
+            {isViewportQueryActive ? (
+              <>
+                <Badge className="bg-[#2d3436] text-white">
+                  {totalInView} {viewportLabel}
+                </Badge>
+                <Badge variant="secondary">
+                  {markerList.length} marker
+                </Badge>
+                {isCapped ? (
+                  <Badge className="bg-primary text-primary-foreground">
+                    capped
+                  </Badge>
+                ) : null}
+              </>
+            ) : (
+              <Badge variant="secondary">mode jelajah wilayah</Badge>
+            )}
           </div>
 
           <Button
@@ -311,101 +312,82 @@ export default function MapPage() {
             kecamatanList={kecamatanList}
             rekeningList={rekeningList}
             totalInView={totalInView}
+            viewportLabel={viewportLabel}
             markerCount={markerList.length}
             isCapped={isCapped}
+            isViewportQueryActive={isViewportQueryActive}
           />
         </>
       ) : (
         <>
-          <div className="absolute left-4 top-4 z-[1000] w-[360px] max-w-[calc(100vw-2rem)] space-y-3">
+          <div className="absolute left-4 top-4 z-[1000] flex max-w-[calc(100vw-2rem)] flex-col gap-3">
             <div className="rounded-xl bg-background p-4 shadow-floating">
-              <h1 className="font-sans text-xl font-bold leading-none">PETA OBJEK PAJAK</h1>
+              <h1 className="font-sans text-xl font-bold leading-none">{regionConfig.brand.publicMapDesktopTitle}</h1>
               <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                Viewport Query Mode
+                {regionConfig.brand.publicMapSubtitleDesktop}
               </p>
             </div>
 
-            <div className="space-y-2 rounded-xl bg-background p-4 shadow-card">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Cari nama OP / NOPD / alamat"
-                  className="pl-9"
-                />
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <Select value={kecamatanId} onValueChange={setKecamatanId}>
-                  <SelectTrigger className="font-mono text-xs">
-                    <SelectValue placeholder="Kecamatan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Semua Kecamatan</SelectItem>
-                    {kecamatanList.map((item) => (
-                      <SelectItem key={item.cpmKecId} value={item.cpmKecId}>
-                        {item.cpmKecamatan}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={rekPajakId} onValueChange={setRekPajakId}>
-                  <SelectTrigger className="font-mono text-xs">
-                    <SelectValue placeholder="Rekening Pajak" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Semua Rekening</SelectItem>
-                    {rekeningList.map((item) => (
-                      <SelectItem key={item.id} value={String(item.id)}>
-                        {item.kodeRekening}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Select value={baseMap} onValueChange={(value) => setBaseMap(value as BaseMapKey)}>
-                  <SelectTrigger className="font-mono text-xs">
-                    <Layers className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(BASE_MAPS) as BaseMapKey[]).map((key) => (
-                      <SelectItem key={key} value={key}>
-                        {BASE_MAPS[key].name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Link href="/backoffice">
-                  <Button className="w-full font-mono text-xs">
-                    <Settings className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                    Backoffice
-                  </Button>
-                </Link>
-              </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setIsDrawerOpen(true)}>
+                <Filter className="h-3.5 w-3.5" aria-hidden="true" />
+                Filter Peta
+              </Button>
+              <Link href="/backoffice">
+                <Button size="sm" className="font-mono text-xs">
+                  <Settings className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                  Backoffice
+                </Button>
+              </Link>
             </div>
+
+            <DesktopMapFilterSheet
+              open={isDrawerOpen}
+              onOpenChange={setIsDrawerOpen}
+              searchQuery={searchQuery}
+              onSearchQueryChange={setSearchQuery}
+              kecamatanId={kecamatanId}
+              onKecamatanIdChange={setKecamatanId}
+              rekPajakId={rekPajakId}
+              onRekPajakIdChange={setRekPajakId}
+              baseMap={baseMap}
+              onBaseMapChange={setBaseMap}
+              kecamatanList={kecamatanList}
+              rekeningList={rekeningList}
+            />
           </div>
 
           <div className="absolute bottom-4 right-4 z-[1000] flex gap-2">
-            <Badge className="bg-[#2d3436] text-white">
-              {totalInView} dalam viewport
-            </Badge>
-            <Badge variant="secondary">
-              {markerList.length} marker
-            </Badge>
-            {isCapped && (
-              <Badge className="bg-primary text-primary-foreground">
-                capped
-              </Badge>
+            {isViewportQueryActive ? (
+              <>
+                <Badge className="bg-[#2d3436] text-white">
+                  {totalInView} {viewportLabel}
+                </Badge>
+                <Badge variant="secondary">
+                  {markerList.length} marker
+                </Badge>
+                {isCapped && (
+                  <Badge className="bg-primary text-primary-foreground">
+                    capped
+                  </Badge>
+                )}
+              </>
+            ) : (
+              <Badge variant="secondary">mode jelajah wilayah</Badge>
             )}
           </div>
         </>
       )}
 
-      <MapContainer center={OKU_SELATAN_CENTER} zoom={DEFAULT_ZOOM} className="h-full w-full" zoomControl={false}>
+      <MapContainer
+        center={regionConfig.map.center}
+        zoom={regionConfig.map.defaultZoom}
+        className="h-full w-full"
+        zoomControl={false}
+      >
         <TileLayer attribution={mapConfig.attribution} url={mapConfig.url} maxZoom={mapConfig.maxZoom} />
-        <MapFocusController target={focusParams.target} zoom={Math.max(DEFAULT_ZOOM, 18)} />
+        <MapFocusController target={focusParams.target} zoom={Math.max(regionConfig.map.defaultZoom, 18)} />
+        <MapZoomBoundsController maxZoom={mapConfig.maxZoom} />
         <MapViewportTracker
           onChange={(nextBbox, nextZoom) => {
             setBbox(nextBbox);
@@ -416,11 +398,11 @@ export default function MapPage() {
 
         {markerList.map((item) => (
           <Marker
-            key={item.id}
+            key={item.focusKey}
             position={[item.latitude, item.longitude]}
             icon={buildMarkerIcon(item.jenisPajak)}
             ref={(marker) => {
-              if (item.id === focusParams.id) {
+              if (String(item.id) === String(focusParams.id)) {
                 focusedMarkerRef.current = marker;
               }
             }}
@@ -444,11 +426,20 @@ export default function MapPage() {
         </div>
       )}
 
-      {!error && !isFetching && markerList.length === 0 && bbox && (
+      {showEmptyViewportState && (
         <div className="absolute bottom-4 left-4 z-[1000] rounded-lg bg-background p-3 font-mono text-xs shadow-card">
           <div className="flex items-center gap-2">
             <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
             Tidak ada objek pajak pada viewport ini.
+          </div>
+        </div>
+      )}
+
+      {showIdleViewportHint && (
+        <div className="absolute bottom-4 left-4 z-[1000] max-w-[440px] rounded-lg bg-background p-3 font-mono text-xs shadow-card">
+          <div className="flex items-center gap-2">
+            <Search className="h-3.5 w-3.5" aria-hidden="true" />
+            {IDLE_MAP_HINT}
           </div>
         </div>
       )}

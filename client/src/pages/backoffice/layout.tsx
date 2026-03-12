@@ -3,6 +3,7 @@ import { Link, useLocation, useRoute } from "wouter";
 import { BarChart3, Users, Building2, Map, ChevronRight, Sparkles, Database, LogOut, User, Settings, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+import { regionConfig } from "@/lib/region-config";
 import type { AppRole } from "@shared/schema";
 import { MobileBottomNav } from "@/components/backoffice/mobile-bottom-nav";
 import {
@@ -86,11 +87,11 @@ export default function BackofficeLayout({
           <div className="flex items-center gap-2">
             <div className="h-2.5 w-2.5 rounded-full bg-[#ff4757] animate-pulse shadow-[var(--shadow-glow-accent)]" aria-hidden="true" />
             <h1 className="font-mono text-sm font-bold uppercase tracking-[0.2em] text-white" data-testid="text-backoffice-title">
-              BACKOFFICE
+              {regionConfig.brand.backofficeTitle}
             </h1>
           </div>
           <p className="font-mono text-[9px] text-white/50 tracking-widest uppercase mt-1">
-            Pajak Daerah OKU Selatan
+            {regionConfig.brand.backofficeSubtitle}
           </p>
         </div>
 
@@ -140,7 +141,7 @@ export default function BackofficeLayout({
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
               <div className="h-2 w-2 rounded-full bg-[#ff4757] animate-pulse shadow-[var(--shadow-glow-accent)]" aria-hidden="true" />
-              <span className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-white/90">OKUS Backoffice</span>
+              <span className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-white/90">{regionConfig.brand.backofficeMobileTitle}</span>
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

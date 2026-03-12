@@ -2965,6 +2965,85 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  app.get("/api/objek-pajak/map-wfs", async (req, res) => {
+    const bbox = parseBbox(req.query.bbox);
+    if (!bbox) {
+      return res.status(400).json({ message: "bbox tidak valid. Gunakan format minLng,minLat,maxLng,maxLat" });
+    }
+
+    const zoomRaw = req.query.zoom;
+    if (zoomRaw !== undefined && zoomRaw !== null && zoomRaw !== "") {
+      const zoom = Number(zoomRaw);
+      if (!Number.isFinite(zoom) || zoom < 0 || zoom > 24) {
+        return res.status(400).json({ message: "zoom tidak valid" });
+      }
+    }
+
+    const limit = parseMapLimit(req.query.limit);
+    if (!limit) {
+      return res.status(400).json({ message: "limit tidak valid" });
+    }
+
+    const q = parseSearchQuery(req.query.q);
+    if (q === null) {
+      return res.status(400).json({ message: `Query q harus <= ${SEARCH_QUERY_MAX_LENGTH} karakter` });
+    }
+
+    const kecamatanId = typeof req.query.kecamatanId === "string" ? req.query.kecamatanId : undefined;
+    const rekPajakId = parseOptionalNumber(req.query.rekPajakId);
+    if (rekPajakId === null) {
+      return res.status(400).json({ message: "rekPajakId tidak valid" });
+    }
+
+    const statusVerifikasi = parseVerificationStatus(req.query.statusVerifikasi);
+    if (statusVerifikasi === null) {
+      return res.status(400).json({ message: "statusVerifikasi tidak valid" });
+    }
+
+    const includeUnverified = parseBooleanFlag(req.query.includeUnverified);
+    if (includeUnverified === null) {
+      return res.status(400).json({ message: "includeUnverified harus true/false" });
+    }
+
+    const requiresInternalAccess = includeUnverified || (statusVerifikasi ? statusVerifikasi !== "verified" : false);
+    if (requiresInternalAccess && !requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
+    const effectiveStatusVerifikasi = statusVerifikasi ?? (includeUnverified ? undefined : "verified");
+
+    const result = await storage.getObjekPajakMap({
+      ...bbox,
+      q,
+      kecamatanId,
+      rekPajakId: rekPajakId ?? undefined,
+      statusVerifikasi: effectiveStatusVerifikasi,
+      limit,
+    });
+
+    return sendJsonWithEtag(req, res, {
+      type: "FeatureCollection",
+      numberMatched: result.totalInView,
+      numberReturned: result.items.length,
+      features: result.items.map((item) => ({
+        type: "Feature",
+        id: item.id,
+        geometry: {
+          type: "Point",
+          coordinates: [item.longitude, item.latitude],
+        },
+        properties: {
+          id: item.id,
+          wp_id: item.wpId,
+          nopd: item.nopd,
+          nama_op: item.namaOp,
+          jenis_pajak: item.jenisPajak,
+          alamat_op: item.alamatOp,
+          pajak_bulanan: item.pajakBulanan,
+          status_verifikasi: item.statusVerifikasi,
+        },
+      })),
+    });
+  });
+
   app.get("/api/objek-pajak/export", async (req, res) => {
     if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
 

@@ -1,4 +1,5 @@
 node_modules
+.worktrees
 dist
 .DS_Store
 server/public
@@ -9,4 +10,6 @@ vite.config.ts.*
 backups/**/okus-map-explorer_*.sql.gz
 backups/integration-ops-*/
 reports/**
+.playwright-cli/
+output/playwright/
 

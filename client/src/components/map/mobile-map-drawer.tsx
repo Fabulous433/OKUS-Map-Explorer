@@ -1,5 +1,6 @@
 import { Link } from "wouter";
-import { Layers, Search, Settings, X } from "lucide-react";
+import { Search, Settings, X } from "lucide-react";
+import { MapBasemapButtonList } from "@/components/map/map-basemap-button-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,9 +12,8 @@ import {
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { BaseMapKey } from "@/lib/map/map-basemap-config";
 import type { MasterKecamatan, MasterRekeningPajak } from "@shared/schema";
-
-type BaseMapKey = "osm" | "carto" | "esri";
 
 type MobileMapDrawerProps = {
   open: boolean;
@@ -29,14 +29,10 @@ type MobileMapDrawerProps = {
   kecamatanList: MasterKecamatan[];
   rekeningList: MasterRekeningPajak[];
   totalInView: number;
+  viewportLabel: string;
   markerCount: number;
   isCapped: boolean;
-};
-
-const BASE_MAP_LABELS: Record<BaseMapKey, string> = {
-  osm: "OpenStreetMap",
-  carto: "CartoDB Positron",
-  esri: "ESRI Satellite",
+  isViewportQueryActive: boolean;
 };
 
 const LEGEND_ITEMS = [
@@ -65,8 +61,10 @@ export function MobileMapDrawer({
   kecamatanList,
   rekeningList,
   totalInView,
+  viewportLabel,
   markerCount,
   isCapped,
+  isViewportQueryActive,
 }: MobileMapDrawerProps) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -135,21 +133,6 @@ export function MobileMapDrawer({
                 ))}
               </SelectContent>
             </Select>
-
-            <Select value={baseMap} onValueChange={(value) => onBaseMapChange(value as BaseMapKey)}>
-              <SelectTrigger className="font-mono text-xs">
-                <Layers className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(BASE_MAP_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
             <Link href="/backoffice">
               <Button className="w-full font-mono text-xs">
                 <Settings className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
@@ -160,19 +143,30 @@ export function MobileMapDrawer({
 
           <div className="space-y-3 rounded-xl bg-background p-4 shadow-card">
             <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Status Viewport</p>
-            <div className="flex flex-wrap gap-2">
-              <Badge className="bg-[#2d3436] text-white">
-                {totalInView} dalam viewport
-              </Badge>
-              <Badge variant="secondary">
-                {markerCount} marker
-              </Badge>
-              {isCapped ? (
-                <Badge className="bg-primary text-primary-foreground">
-                  capped
+            {isViewportQueryActive ? (
+              <div className="flex flex-wrap gap-2">
+                <Badge className="bg-[#2d3436] text-white">
+                  {totalInView} {viewportLabel}
                 </Badge>
-              ) : null}
-            </div>
+                <Badge variant="secondary">
+                  {markerCount} marker
+                </Badge>
+                {isCapped ? (
+                  <Badge className="bg-primary text-primary-foreground">
+                    capped
+                  </Badge>
+                ) : null}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border/80 bg-muted/30 px-3 py-2 font-mono text-[11px] text-muted-foreground">
+                Cari OP / NOPD / alamat atau pilih filter untuk memuat marker objek pajak.
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-3 rounded-xl bg-background p-4 shadow-card">
+            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Basemap</p>
+            <MapBasemapButtonList value={baseMap} onValueChange={onBaseMapChange} />
           </div>
 
           <div className="space-y-3 rounded-xl bg-background p-4 shadow-card">
