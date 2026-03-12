@@ -9,7 +9,7 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "shadcn-card rounded-xl border bg-card border-card-border text-card-foreground shadow-sm",
+      "shadcn-card rounded-xl bg-background text-card-foreground shadow-card relative transition-all duration-300 hover:-translate-y-1 hover:shadow-floating",
       className
     )}
     {...props}
@@ -75,6 +75,36 @@ const CardFooter = React.forwardRef<
   />
 ))
 CardFooter.displayName = "CardFooter"
+
+/** Corner screw decoration — place inside Card as first child */
+function CardScrews() {
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 rounded-xl"
+      style={{
+        background: [
+          "radial-gradient(circle at 12px 12px, rgba(0,0,0,0.12) 2px, transparent 3px)",
+          "radial-gradient(circle at calc(100% - 12px) 12px, rgba(0,0,0,0.12) 2px, transparent 3px)",
+          "radial-gradient(circle at 12px calc(100% - 12px), rgba(0,0,0,0.12) 2px, transparent 3px)",
+          "radial-gradient(circle at calc(100% - 12px) calc(100% - 12px), rgba(0,0,0,0.12) 2px, transparent 3px)",
+        ].join(", "),
+      }}
+      aria-hidden="true"
+    />
+  );
+}
+
+/** Vent slots decoration — place in CardHeader top-right */
+function CardVents() {
+  return (
+    <div className="flex gap-1" aria-hidden="true">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="h-6 w-1 rounded-full bg-muted shadow-[inset_1px_1px_2px_rgba(0,0,0,0.1)]" />
+      ))}
+    </div>
+  );
+}
+
 export {
   Card,
   CardHeader,
@@ -82,4 +112,6 @@ export {
   CardTitle,
   CardDescription,
   CardContent,
+  CardScrews,
+  CardVents,
 }

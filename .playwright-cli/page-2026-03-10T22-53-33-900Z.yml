@@ -1,0 +1,171 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - heading "BACKOFFICE" [level=1] [ref=e6]
+        - paragraph [ref=e7]: Pajak Daerah OKU Selatan
+      - generic [ref=e8]:
+        - paragraph [ref=e9]: Login sebagai
+        - paragraph [ref=e10]: admin
+        - paragraph [ref=e11]: admin
+      - navigation [ref=e12]:
+        - link "Dashboard" [ref=e13] [cursor=pointer]:
+          - /url: /backoffice
+          - generic [ref=e14]:
+            - img [ref=e15]
+            - generic [ref=e17]: Dashboard
+        - link "Wajib Pajak" [ref=e18] [cursor=pointer]:
+          - /url: /backoffice/wajib-pajak
+          - generic [ref=e19]:
+            - img [ref=e20]
+            - generic [ref=e25]: Wajib Pajak
+        - link "Objek Pajak" [ref=e26] [cursor=pointer]:
+          - /url: /backoffice/objek-pajak
+          - generic [ref=e27]:
+            - img [ref=e28]
+            - generic [ref=e32]: Objek Pajak
+        - link "Master Data" [ref=e33] [cursor=pointer]:
+          - /url: /backoffice/master-data
+          - generic [ref=e34]:
+            - img [ref=e35]
+            - generic [ref=e39]: Master Data
+            - img [ref=e40]
+        - link "Mockup Form" [ref=e42] [cursor=pointer]:
+          - /url: /backoffice/mockup-form
+          - generic [ref=e43]:
+            - img [ref=e44]
+            - generic [ref=e46]: Mockup Form
+      - button "Logout" [ref=e48] [cursor=pointer]:
+        - img
+        - text: Logout
+      - link "Kembali ke Peta" [ref=e49] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e50]:
+          - img [ref=e51]
+          - generic [ref=e53]: Kembali ke Peta
+    - main [ref=e54]:
+      - generic [ref=e56]:
+        - generic [ref=e57]:
+          - heading "MASTER DATA" [level=1] [ref=e58]
+          - paragraph [ref=e59]: Rekening pajak aktif untuk form operasional
+        - generic [ref=e60]:
+          - paragraph [ref=e61]: Referensi wilayah disembunyikan dari FE
+          - paragraph [ref=e62]: Kecamatan dan kelurahan tetap dipakai sebagai dropdown di form WP/OP, tetapi pengelolaannya dilakukan lewat seed, import, atau admin script backend.
+        - generic [ref=e63]:
+          - generic [ref=e64]:
+            - textbox "Kode rekening" [ref=e65]
+            - textbox "Nama rekening" [ref=e66]
+            - textbox "Jenis pajak" [ref=e67]
+            - button "Tambah" [ref=e68] [cursor=pointer]:
+              - img
+              - text: Tambah
+          - table [ref=e71]:
+            - rowgroup [ref=e72]:
+              - row "Kode Nama Jenis Aktif Aksi" [ref=e73]:
+                - columnheader "Kode" [ref=e74]
+                - columnheader "Nama" [ref=e75]
+                - columnheader "Jenis" [ref=e76]
+                - columnheader "Aktif" [ref=e77]
+                - columnheader "Aksi" [ref=e78]
+            - rowgroup [ref=e79]:
+              - row "4.1.01.09.01.0001 Pajak Reklame Pajak Reklame Yes" [ref=e80]:
+                - cell "4.1.01.09.01.0001" [ref=e81]
+                - cell "Pajak Reklame" [ref=e82]
+                - cell "Pajak Reklame" [ref=e83]
+                - cell "Yes" [ref=e84]
+                - cell [ref=e85]:
+                  - generic [ref=e86]:
+                    - button [ref=e87] [cursor=pointer]:
+                      - img
+                    - button [ref=e88] [cursor=pointer]:
+                      - img
+              - row "4.1.01.12.01.0001 Pajak Air Tanah Pajak Air Tanah Yes" [ref=e89]:
+                - cell "4.1.01.12.01.0001" [ref=e90]
+                - cell "Pajak Air Tanah" [ref=e91]
+                - cell "Pajak Air Tanah" [ref=e92]
+                - cell "Yes" [ref=e93]
+                - cell [ref=e94]:
+                  - generic [ref=e95]:
+                    - button [ref=e96] [cursor=pointer]:
+                      - img
+                    - button [ref=e97] [cursor=pointer]:
+                      - img
+              - row "4.1.01.13.01.0001 Pajak Sarang Burung Walet Pajak Sarang Burung Walet Yes" [ref=e98]:
+                - cell "4.1.01.13.01.0001" [ref=e99]
+                - cell "Pajak Sarang Burung Walet" [ref=e100]
+                - cell "Pajak Sarang Burung Walet" [ref=e101]
+                - cell "Yes" [ref=e102]
+                - cell [ref=e103]:
+                  - generic [ref=e104]:
+                    - button [ref=e105] [cursor=pointer]:
+                      - img
+                    - button [ref=e106] [cursor=pointer]:
+                      - img
+              - row "4.1.01.14.01.0001 Pajak Mineral Bukan Logam dan Batuan Pajak MBLB Yes" [ref=e107]:
+                - cell "4.1.01.14.01.0001" [ref=e108]
+                - cell "Pajak Mineral Bukan Logam dan Batuan" [ref=e109]
+                - cell "Pajak MBLB" [ref=e110]
+                - cell "Yes" [ref=e111]
+                - cell [ref=e112]:
+                  - generic [ref=e113]:
+                    - button [ref=e114] [cursor=pointer]:
+                      - img
+                    - button [ref=e115] [cursor=pointer]:
+                      - img
+              - row "4.1.01.19.01.0001 PBJT - Makanan dan/atau Minuman PBJT Makanan dan Minuman Yes" [ref=e116]:
+                - cell "4.1.01.19.01.0001" [ref=e117]
+                - cell "PBJT - Makanan dan/atau Minuman" [ref=e118]
+                - cell "PBJT Makanan dan Minuman" [ref=e119]
+                - cell "Yes" [ref=e120]
+                - cell [ref=e121]:
+                  - generic [ref=e122]:
+                    - button [ref=e123] [cursor=pointer]:
+                      - img
+                    - button [ref=e124] [cursor=pointer]:
+                      - img
+              - row "4.1.01.19.02.0001 PBJT - Tenaga Listrik PBJT Tenaga Listrik Yes" [ref=e125]:
+                - cell "4.1.01.19.02.0001" [ref=e126]
+                - cell "PBJT - Tenaga Listrik" [ref=e127]
+                - cell "PBJT Tenaga Listrik" [ref=e128]
+                - cell "Yes" [ref=e129]
+                - cell [ref=e130]:
+                  - generic [ref=e131]:
+                    - button [ref=e132] [cursor=pointer]:
+                      - img
+                    - button [ref=e133] [cursor=pointer]:
+                      - img
+              - row "4.1.01.19.03.0001 PBJT - Jasa Perhotelan PBJT Jasa Perhotelan Yes" [ref=e134]:
+                - cell "4.1.01.19.03.0001" [ref=e135]
+                - cell "PBJT - Jasa Perhotelan" [ref=e136]
+                - cell "PBJT Jasa Perhotelan" [ref=e137]
+                - cell "Yes" [ref=e138]
+                - cell [ref=e139]:
+                  - generic [ref=e140]:
+                    - button [ref=e141] [cursor=pointer]:
+                      - img
+                    - button [ref=e142] [cursor=pointer]:
+                      - img
+              - row "4.1.01.19.04.0001 PBJT - Jasa Parkir PBJT Jasa Parkir Yes" [ref=e143]:
+                - cell "4.1.01.19.04.0001" [ref=e144]
+                - cell "PBJT - Jasa Parkir" [ref=e145]
+                - cell "PBJT Jasa Parkir" [ref=e146]
+                - cell "Yes" [ref=e147]
+                - cell [ref=e148]:
+                  - generic [ref=e149]:
+                    - button [ref=e150] [cursor=pointer]:
+                      - img
+                    - button [ref=e151] [cursor=pointer]:
+                      - img
+              - row "4.1.01.19.05.0001 PBJT - Jasa Kesenian dan Hiburan PBJT Jasa Kesenian dan Hiburan Yes" [ref=e152]:
+                - cell "4.1.01.19.05.0001" [ref=e153]
+                - cell "PBJT - Jasa Kesenian dan Hiburan" [ref=e154]
+                - cell "PBJT Jasa Kesenian dan Hiburan" [ref=e155]
+                - cell "Yes" [ref=e156]
+                - cell [ref=e157]:
+                  - generic [ref=e158]:
+                    - button [ref=e159] [cursor=pointer]:
+                      - img
+                    - button [ref=e160] [cursor=pointer]:
+                      - img

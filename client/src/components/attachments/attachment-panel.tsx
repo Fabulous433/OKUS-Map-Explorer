@@ -4,6 +4,7 @@ import { Eye, FileText, Image as ImageIcon, Paperclip, Trash2, Upload } from "lu
 import { Button } from "@/components/ui/button";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { EntityAttachmentResponse } from "@shared/schema";
 import { AttachmentPreviewDialog } from "./attachment-preview-dialog";
 import { AttachmentUploadDialog } from "./attachment-upload-dialog";
@@ -43,6 +44,7 @@ export function AttachmentPanel({
   documentTypeOptions: Array<{ value: string; label: string }>;
 }) {
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [previewItem, setPreviewItem] = useState<EntityAttachmentResponse | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const endpointBase = `/api/${entityType === "wajib_pajak" ? "wajib-pajak" : "objek-pajak"}/${entityId}/attachments`;
@@ -70,27 +72,32 @@ export function AttachmentPanel({
   const rows = data ?? [];
 
   return (
-    <div className="space-y-3 border-[3px] border-black bg-[#fffaf0] p-4 shadow-[6px_6px_0_#00000010]">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <p className="font-serif text-lg font-black uppercase text-black">{title}</p>
-          <p className="font-mono text-[11px] uppercase tracking-wider text-gray-600">Preview, download, dan hapus bukti dokumen</p>
-        </div>
-        <Button
-          type="button"
-          className="rounded-none border-[2px] border-black bg-[#FFFF00] text-black font-mono text-xs font-bold"
-          onClick={() => setUploadOpen(true)}
-        >
-          <Upload className="w-4 h-4 mr-2" />
-          Upload
-        </Button>
+    <div className="space-y-3 bg-background p-4 shadow-card">
+      <div className="space-y-1">
+        <p className="font-sans text-lg font-black uppercase text-black">{title}</p>
+        <p className="font-mono text-[11px] uppercase tracking-wider text-gray-600">
+          Preview, download, dan hapus bukti dokumen
+        </p>
       </div>
 
       {isLoading ? (
-        <div className="border-[2px] border-dashed border-black p-4 font-mono text-sm">Memuat attachment...</div>
+        <div className="border border-dashed border-border p-4 font-mono text-sm">Memuat attachment...</div>
       ) : rows.length === 0 ? (
-        <div className="border-[2px] border-dashed border-black p-4 font-mono text-sm text-gray-600">
-          Belum ada attachment untuk data ini.
+        <div className="space-y-3">
+          <div className="border border-dashed border-border p-4 font-mono text-sm text-gray-600">
+            Belum ada attachment untuk data ini.
+          </div>
+          <div className={`flex ${isMobile ? "justify-end" : "justify-start"}`}>
+            <Button
+              type="button"
+              className="bg-primary text-black font-mono text-xs font-bold"
+              onClick={() => setUploadOpen(true)}
+              aria-label="Upload attachment"
+            >
+              <Upload className="h-4 w-4" />
+              {!isMobile ? <span className="ml-2">Upload</span> : null}
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="space-y-3">
@@ -99,13 +106,13 @@ export function AttachmentPanel({
             return (
               <div
                 key={item.id}
-                className="flex items-center justify-between gap-3 border-[2px] border-black bg-white p-3 transition-all duration-150 hover:-translate-y-[1px] hover:shadow-[4px_4px_0_#000]"
+                className="bg-white p-3 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-floating"
               >
-                <div className="flex min-w-0 flex-1 items-start gap-3">
-                  <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center border-[2px] border-black bg-black text-[#FFFF00]">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center bg-[#2d3436] text-white">
                     {isImage(item.mimeType) ? <ImageIcon className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
                   </div>
-                  <div className="min-w-0 space-y-1">
+                  <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <AttachmentTypeBadge documentType={item.documentType} />
                       <span className="font-mono text-[11px] text-gray-600">{formatBytes(item.fileSize)}</span>
@@ -117,38 +124,52 @@ export function AttachmentPanel({
                     {item.notes ? <p className="font-mono text-[11px] text-black/75">{item.notes}</p> : null}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className={`mt-3 flex flex-wrap gap-2 ${isMobile ? "justify-end" : "items-center"}`}>
                   <Button
                     type="button"
                     variant="outline"
-                    className="rounded-none border-[2px] border-black font-mono text-xs"
+                    className="font-mono text-xs"
                     onClick={() => setPreviewItem(item)}
+                    aria-label="Lihat attachment"
                   >
-                    <Eye className="w-4 h-4 mr-2" />
-                    Lihat
+                    <Eye className="h-4 w-4" />
+                    {!isMobile ? <span className="ml-2">Lihat</span> : null}
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
-                    className="rounded-none border-[2px] border-black font-mono text-xs"
+                    className="font-mono text-xs"
                     onClick={() => window.open(downloadUrl, "_blank", "noopener,noreferrer")}
+                    aria-label="Download attachment"
                   >
-                    <Paperclip className="w-4 h-4 mr-2" />
-                    Download
+                    <Paperclip className="h-4 w-4" />
+                    {!isMobile ? <span className="ml-2">Download</span> : null}
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
-                    className="rounded-none border-[2px] border-red-600 text-red-600 font-mono text-xs"
+                    className="border border-red-600 text-red-600 font-mono text-xs"
                     onClick={() => deleteMutation.mutate(item.id)}
+                    aria-label="Hapus attachment"
                   >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Hapus
+                    <Trash2 className="h-4 w-4" />
+                    {!isMobile ? <span className="ml-2">Hapus</span> : null}
                   </Button>
                 </div>
               </div>
             );
           })}
+          <div className={`flex ${isMobile ? "justify-end" : "justify-start"}`}>
+            <Button
+              type="button"
+              className="bg-primary text-black font-mono text-xs font-bold"
+              onClick={() => setUploadOpen(true)}
+              aria-label="Upload attachment"
+            >
+              <Upload className="h-4 w-4" />
+              {!isMobile ? <span className="ml-2">Upload</span> : null}
+            </Button>
+          </div>
         </div>
       )}
 

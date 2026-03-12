@@ -89,6 +89,20 @@ npm run dev
 ```
 Aplikasi: `http://localhost:5000`
 
+## Responsive QA Baseline
+- Viewport smoke mobile/tablet mengikuti:
+  - `390x844`
+  - `768x1024`
+  - `1024x768`
+- Checklist manual:
+  - `docs/uat/mobile-backoffice-smoke-checklist.md`
+- Fokus validasi:
+  - bottom navigation backoffice muncul di mobile
+  - WP/OP list tampil sebagai card pada `< md`
+  - dialog form tetap scrollable
+  - attachment panel WP/OP tetap usable
+  - peta mobile memakai drawer/FAB tanpa mengganggu pan/zoom
+
 Health check:
 - `http://localhost:5000/health`
 - `http://localhost:5000/api/health`

@@ -1,0 +1,72 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - heading "BACKOFFICE" [level=1] [ref=e6]
+        - paragraph [ref=e7]: Pajak Daerah OKU Selatan
+      - generic [ref=e8]:
+        - paragraph [ref=e9]: Login sebagai
+        - paragraph [ref=e10]: admin
+        - paragraph [ref=e11]: admin
+      - navigation [ref=e12]:
+        - link "Dashboard" [ref=e13] [cursor=pointer]:
+          - /url: /backoffice
+          - generic [ref=e14]:
+            - img [ref=e15]
+            - generic [ref=e17]: Dashboard
+        - link "Wajib Pajak" [ref=e18] [cursor=pointer]:
+          - /url: /backoffice/wajib-pajak
+          - generic [ref=e19]:
+            - img [ref=e20]
+            - generic [ref=e25]: Wajib Pajak
+        - link "Objek Pajak" [ref=e26] [cursor=pointer]:
+          - /url: /backoffice/objek-pajak
+          - generic [ref=e27]:
+            - img [ref=e28]
+            - generic [ref=e32]: Objek Pajak
+        - link "Master Data" [ref=e33] [cursor=pointer]:
+          - /url: /backoffice/master-data
+          - generic [ref=e34]:
+            - img [ref=e35]
+            - generic [ref=e39]: Master Data
+            - img [ref=e40]
+        - link "Mockup Form" [ref=e42] [cursor=pointer]:
+          - /url: /backoffice/mockup-form
+          - generic [ref=e43]:
+            - img [ref=e44]
+            - generic [ref=e46]: Mockup Form
+      - button "Logout" [ref=e48] [cursor=pointer]:
+        - img
+        - text: Logout
+      - link "Kembali ke Peta" [ref=e49] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e50]:
+          - img [ref=e51]
+          - generic [ref=e53]: Kembali ke Peta
+    - main [ref=e54]:
+      - generic [ref=e56]:
+        - generic [ref=e57]:
+          - heading "MASTER DATA" [level=1] [ref=e58]
+          - paragraph [ref=e59]: Rekening pajak aktif untuk form operasional
+        - generic [ref=e60]:
+          - paragraph [ref=e61]: Referensi wilayah disembunyikan dari FE
+          - paragraph [ref=e62]: Kecamatan dan kelurahan tetap dipakai sebagai dropdown di form WP/OP, tetapi pengelolaannya dilakukan lewat seed, import, atau admin script backend.
+        - generic [ref=e63]:
+          - generic [ref=e64]:
+            - textbox "Kode rekening" [ref=e65]
+            - textbox "Nama rekening" [ref=e66]
+            - textbox "Jenis pajak" [ref=e67]
+            - button "Tambah" [ref=e68] [cursor=pointer]:
+              - img
+              - text: Tambah
+          - table [ref=e71]:
+            - rowgroup [ref=e72]:
+              - row "Kode Nama Jenis Aktif Aksi" [ref=e73]:
+                - columnheader "Kode" [ref=e74]
+                - columnheader "Nama" [ref=e75]
+                - columnheader "Jenis" [ref=e76]
+                - columnheader "Aktif" [ref=e77]
+                - columnheader "Aksi" [ref=e78]
+            - rowgroup

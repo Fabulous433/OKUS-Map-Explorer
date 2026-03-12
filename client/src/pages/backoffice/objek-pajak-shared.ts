@@ -36,6 +36,10 @@ export const opFormSchema = z.object({
 export type OPFormValues = z.infer<typeof opFormSchema>;
 export type OPDetailValue = string | number | string[] | null;
 export type OPDetailRecord = Record<string, OPDetailValue>;
+export type ObjekPajakDetailEntry = {
+  label: string;
+  value: string;
+};
 export type QualityWarning = {
   level: string;
   code: string;
@@ -265,7 +269,7 @@ export function invalidateObjekPajakQueries() {
 }
 
 export function jenisPajakColor(jenis: string) {
-  if (jenis.includes("Makanan")) return "bg-[#FF6B00] text-white";
+  if (jenis.includes("Makanan")) return "bg-primary text-white";
   if (jenis.includes("Perhotelan")) return "bg-blue-600 text-white";
   if (jenis.includes("Reklame")) return "bg-purple-600 text-white";
   if (jenis.includes("Parkir")) return "bg-green-600 text-white";
@@ -284,6 +288,159 @@ export function shortLabel(jenis: string) {
   if (jenis.includes("Walet")) return "WLT";
   if (jenis.includes("MBLB")) return "MBLB";
   return jenis.substring(0, 3).toUpperCase();
+}
+
+function hasRenderableValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return false;
+  if (Array.isArray(value) && value.length === 0) return false;
+  return true;
+}
+
+function formatNumberDisplay(value: unknown, options?: Intl.NumberFormatOptions) {
+  if (!hasRenderableValue(value)) return "";
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return new Intl.NumberFormat("id-ID", {
+      maximumFractionDigits: Number.isInteger(value) ? 0 : 2,
+      ...options,
+    }).format(value);
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return new Intl.NumberFormat("id-ID", {
+        maximumFractionDigits: parsed % 1 === 0 ? 0 : 2,
+        ...options,
+      }).format(parsed);
+    }
+
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.join(", ");
+  }
+
+  return String(value);
+}
+
+function formatCurrencyDisplay(value: unknown) {
+  if (!hasRenderableValue(value)) return "";
+
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    return String(value);
+  }
+
+  return `Rp ${new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: parsed % 1 === 0 ? 0 : 2,
+  }).format(parsed)}`;
+}
+
+function pushDetailEntry(entries: ObjekPajakDetailEntry[], label: string, value: unknown) {
+  if (!hasRenderableValue(value)) return;
+  entries.push({
+    label,
+    value: Array.isArray(value) ? value.join(", ") : String(value),
+  });
+}
+
+export function getObjekPajakDetailEntries(
+  jenisPajak: string,
+  detailPajak: Record<string, unknown> | null | undefined,
+): ObjekPajakDetailEntry[] {
+  if (!detailPajak || typeof detailPajak !== "object") {
+    return [];
+  }
+
+  const detail = detailPajak as OPDetailRecord;
+  const entries: ObjekPajakDetailEntry[] = [];
+
+  if (jenisPajak.includes("Makanan")) {
+    pushDetailEntry(entries, "Jenis Usaha", detail.jenisUsaha);
+    if (isRestoranJenisUsaha(detail.jenisUsaha)) {
+      pushDetailEntry(entries, "Klasifikasi", detail.klasifikasi);
+    }
+    pushDetailEntry(entries, "Kapasitas Tempat", formatNumberDisplay(detail.kapasitasTempat));
+    pushDetailEntry(entries, "Jumlah Karyawan", formatNumberDisplay(detail.jumlahKaryawan));
+    pushDetailEntry(entries, "Rata-rata Pengunjung", formatNumberDisplay(detail.rata2Pengunjung));
+    pushDetailEntry(entries, "Jam Buka", detail.jamBuka);
+    pushDetailEntry(entries, "Jam Tutup", detail.jamTutup);
+    pushDetailEntry(entries, "Harga Termurah", formatCurrencyDisplay(detail.hargaTermurah));
+    pushDetailEntry(entries, "Harga Termahal", formatCurrencyDisplay(detail.hargaTermahal));
+    return entries;
+  }
+
+  if (jenisPajak.includes("Perhotelan")) {
+    pushDetailEntry(entries, "Jenis Usaha", detail.jenisUsaha);
+    pushDetailEntry(entries, "Jumlah Kamar", formatNumberDisplay(detail.jumlahKamar));
+    if (requiresHotelKlasifikasi(detail.jenisUsaha)) {
+      pushDetailEntry(entries, "Klasifikasi", detail.klasifikasi);
+    }
+    pushDetailEntry(entries, "Fasilitas", detail.fasilitas);
+    pushDetailEntry(entries, "Rata-rata Pengunjung/Hari", formatNumberDisplay(detail.rata2PengunjungHarian));
+    pushDetailEntry(entries, "Harga Termurah", formatCurrencyDisplay(detail.hargaTermurah));
+    pushDetailEntry(entries, "Harga Termahal", formatCurrencyDisplay(detail.hargaTermahal));
+    return entries;
+  }
+
+  if (jenisPajak.includes("Parkir")) {
+    pushDetailEntry(entries, "Jenis Usaha", detail.jenisUsaha);
+    pushDetailEntry(entries, "Jenis Lokasi", detail.jenisLokasi);
+    pushDetailEntry(entries, "Kapasitas Kendaraan", formatNumberDisplay(detail.kapasitasKendaraan));
+    pushDetailEntry(entries, "Tarif Parkir", formatCurrencyDisplay(detail.tarifParkir));
+    pushDetailEntry(entries, "Rata-rata Pengunjung/Hari", formatNumberDisplay(detail.rata2Pengunjung));
+    return entries;
+  }
+
+  if (jenisPajak.includes("Hiburan") || jenisPajak.includes("Kesenian")) {
+    pushDetailEntry(entries, "Jenis Hiburan", detail.jenisHiburan);
+    pushDetailEntry(entries, "Kapasitas", formatNumberDisplay(detail.kapasitas));
+    pushDetailEntry(entries, "Jam Operasional", detail.jamOperasional);
+    pushDetailEntry(entries, "Jumlah Karyawan", formatNumberDisplay(detail.jumlahKaryawan));
+    return entries;
+  }
+
+  if (jenisPajak.includes("Tenaga Listrik")) {
+    pushDetailEntry(entries, "Jenis Tenaga Listrik", detail.jenisTenagaListrik);
+    pushDetailEntry(entries, "Daya Listrik", formatNumberDisplay(detail.dayaListrik));
+    pushDetailEntry(entries, "Kapasitas", formatNumberDisplay(detail.kapasitas));
+    return entries;
+  }
+
+  if (jenisPajak.includes("Reklame")) {
+    const ukuran = [
+      hasRenderableValue(detail.ukuranPanjang) ? `${formatNumberDisplay(detail.ukuranPanjang)} m` : null,
+      hasRenderableValue(detail.ukuranLebar) ? `${formatNumberDisplay(detail.ukuranLebar)} m` : null,
+      hasRenderableValue(detail.ukuranTinggi) ? `${formatNumberDisplay(detail.ukuranTinggi)} m` : null,
+    ].filter(Boolean);
+
+    pushDetailEntry(entries, "Jenis Reklame", detail.jenisReklame);
+    pushDetailEntry(entries, "Judul Reklame", detail.judulReklame);
+    pushDetailEntry(entries, "Masa Berlaku", detail.masaBerlaku);
+    pushDetailEntry(entries, "Status Reklame", detail.statusReklame);
+    pushDetailEntry(entries, "Ukuran Reklame", ukuran.join(" x "));
+    pushDetailEntry(entries, "Nama Biro Jasa", detail.namaBiroJasa);
+    return entries;
+  }
+
+  if (jenisPajak.includes("Air Tanah")) {
+    pushDetailEntry(entries, "Jenis Air Tanah", detail.jenisAirTanah);
+    pushDetailEntry(entries, "Rata-rata Ukuran Pemakaian", formatNumberDisplay(detail.rata2UkuranPemakaian));
+    pushDetailEntry(entries, "Kriteria Air Tanah", detail.kriteriaAirTanah);
+    pushDetailEntry(entries, "Kelompok Usaha", detail.kelompokUsaha);
+    return entries;
+  }
+
+  if (jenisPajak.includes("Walet")) {
+    pushDetailEntry(entries, "Jenis Burung Walet", detail.jenisBurungWalet);
+    pushDetailEntry(entries, "Panen per Tahun", formatNumberDisplay(detail.panenPerTahun));
+    pushDetailEntry(entries, "Rata-rata Berat Panen", formatNumberDisplay(detail.rata2BeratPanen));
+    return entries;
+  }
+
+  return entries;
 }
 
 export {

@@ -1,0 +1,26 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - generic [ref=e4]:
+    - generic [ref=e6]:
+      - img [ref=e8]
+      - generic [ref=e12]:
+        - heading "BACKOFFICE LOGIN" [level=1] [ref=e13]
+        - paragraph [ref=e14]: OKU Selatan Pajak Daerah
+    - generic [ref=e15]:
+      - generic [ref=e16]:
+        - text: USERNAME
+        - textbox [ref=e17]
+      - generic [ref=e18]:
+        - text: PASSWORD
+        - textbox [ref=e19]
+      - button "MASUK" [ref=e20] [cursor=pointer]:
+        - img
+        - text: MASUK
+      - generic [ref=e21]:
+        - paragraph [ref=e22]: Gunakan akun admin/editor/viewer.
+        - link "Peta" [ref=e23] [cursor=pointer]:
+          - /url: /
+          - button "Peta" [ref=e24]:
+            - img
+            - text: Peta

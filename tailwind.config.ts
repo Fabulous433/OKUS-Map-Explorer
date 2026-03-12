@@ -6,9 +6,11 @@ export default {
   theme: {
     extend: {
       borderRadius: {
-        lg: ".5625rem", /* 9px */
-        md: ".375rem", /* 6px */
-        sm: ".1875rem", /* 3px */
+        sm: "4px",     /* tight mechanical edges */
+        md: "8px",     /* standard controls */
+        lg: "16px",    /* large panels */
+        xl: "24px",    /* hero components */
+        "2xl": "30px", /* oversized containers */
       },
       colors: {
         // Flat / base colors (regular buttons)
@@ -84,7 +86,6 @@ export default {
       },
       fontFamily: {
         sans: ["var(--font-sans)"],
-        serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
       },
       keyframes: {
@@ -96,6 +97,15 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+      },
+      boxShadow: {
+        card: "var(--shadow-card)",
+        floating: "var(--shadow-floating)",
+        pressed: "var(--shadow-pressed)",
+        recessed: "var(--shadow-recessed)",
+        sharp: "var(--shadow-sharp)",
+        "glow-accent": "var(--shadow-glow-accent)",
+        "glow-green": "var(--shadow-glow-green)",
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",

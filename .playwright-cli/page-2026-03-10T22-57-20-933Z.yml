@@ -1,0 +1,54 @@
+- generic:
+  - generic:
+    - list
+    - generic:
+      - generic:
+        - generic:
+          - heading [level=1]: PETA OBJEK PAJAK
+          - paragraph: Viewport Query Mode
+        - generic:
+          - generic:
+            - img
+            - textbox:
+              - /placeholder: Cari nama OP / NOPD / alamat
+          - generic:
+            - combobox:
+              - generic: Semua Kecamatan
+              - img
+            - combobox:
+              - generic: Semua Rekening
+              - img
+          - generic:
+            - combobox [expanded]:
+              - img
+              - generic: CartoDB Positron
+              - img
+            - link:
+              - /url: /backoffice
+              - button:
+                - img
+                - text: Backoffice
+      - generic:
+        - generic: 0 dalam viewport
+        - generic: 0 marker
+      - generic:
+        - generic [ref=e32]:
+          - link [ref=e62] [cursor=pointer]:
+            - /url: https://leafletjs.com
+            - img [ref=e57]
+            - text: Leaflet
+          - text: "| ©"
+          - link [ref=e63] [cursor=pointer]:
+            - /url: https://carto.com/attributions
+            - text: CARTO
+        - generic:
+          - button:
+            - img
+  - listbox [ref=e64]:
+    - option "OpenStreetMap" [ref=e65]:
+      - generic [ref=e67]: OpenStreetMap
+    - option "CartoDB Positron" [active] [selected] [ref=e68]:
+      - img [ref=e71]
+      - generic [ref=e73]: CartoDB Positron
+    - option "ESRI Satellite" [ref=e74]:
+      - generic [ref=e76]: ESRI Satellite

@@ -93,6 +93,7 @@ type ObjekPajakListFilter = PaginationParams & {
   kecamatanId?: string;
   rekPajakId?: number;
   jenisPajak?: string;
+  wpId?: number;
 };
 
 type ObjekPajakMapFilter = {
@@ -1057,6 +1058,10 @@ export class DatabaseStorage implements IStorage {
 
     if (filters.rekPajakId) {
       baseConditions.push(eq(objekPajak.rekPajakId, filters.rekPajakId));
+    }
+
+    if (filters.wpId) {
+      baseConditions.push(eq(objekPajak.wpId, filters.wpId));
     }
 
     if (filters.jenisPajak) {

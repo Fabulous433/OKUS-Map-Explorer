@@ -13,6 +13,16 @@
 - Rehearsal latest status ready -> FAIL (baru local dry-run)
 - Open defect severity tinggi = 0 -> pending konfirmasi release owner
 
+## Update Staging — 2026-03-10
+- `codex/staging` berhasil ter-deploy ke environment staging.
+- Schema staging berhasil disinkronkan dengan kontrak detail OP terbaru setelah hard-cutover detail hotel/parkir/reklame.
+- Smoke test staging untuk alur aktif berikut dinyatakan PASS:
+  - duplicate warning modal WP,
+  - create/update OP,
+  - list OP/WP dengan record terbaru naik ke atas halaman awal,
+  - Master Data rekening-only.
+- Status board tetap **NO-GO untuk production** karena approval owner final dan evidence gate produksi penuh belum ditutup.
+
 ## Keputusan
 - Decision: **NO-GO untuk production**
 - Alasan:

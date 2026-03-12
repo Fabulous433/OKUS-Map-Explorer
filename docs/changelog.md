@@ -1,5 +1,39 @@
 # Changelog
 
+## Phase 2.15 — Mobile Backoffice Refactor
+
+### Added
+- Mobile bottom navigation khusus backoffice untuk:
+  - Dashboard
+  - Wajib Pajak
+  - Objek Pajak
+  - Peta
+- Card layout mobile untuk list:
+  - Wajib Pajak
+  - Objek Pajak
+- Drawer mobile untuk halaman peta yang memuat:
+  - search
+  - filter kecamatan
+  - filter rekening
+  - basemap switch
+  - legend ringkas
+  - status viewport
+- UAT checklist khusus mobile/tablet:
+  - `docs/uat/mobile-backoffice-smoke-checklist.md`
+
+### Improved
+- Shell backoffice di mobile sekarang memakai compact top bar dan bottom spacing yang aman terhadap fixed navigation.
+- Halaman WP/OP kini tetap usable pada phone portrait tanpa tabel horizontal sebagai pola utama.
+- Dashboard mobile dirapikan dengan spacing yang lebih rapat dan kartu progress jenis pajak khusus mobile.
+- Master Data rekening kini tampil sebagai stack cards di mobile, sementara tabel desktop tetap dipertahankan.
+- Halaman peta mobile tidak lagi memaksa panel filter desktop; kontrol utama dipindah ke drawer + FAB filter.
+
+### Fixed
+- UX mobile sebelumnya yang terlalu desktop-first pada halaman WP, OP, peta, dashboard, dan master data.
+
+### Breaking
+- Tidak ada breaking API. Perubahan berada di layer responsive UI backoffice.
+
 ## Phase 2.14 — WP/OP Attachments MVP
 
 ### Added

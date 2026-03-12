@@ -41,9 +41,14 @@ async function getAuthMe(): Promise<AuthMeResponse | null> {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const shouldLoadAuth = typeof window === "undefined"
+    ? true
+    : window.location.pathname.startsWith("/backoffice");
+
   const { data, isLoading } = useQuery<AuthMeResponse | null>({
     queryKey: ["/api/auth/me"],
     queryFn: getAuthMe,
+    enabled: shouldLoadAuth,
     staleTime: 0,
   });
 

@@ -1,0 +1,281 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - region "Notifications (F8)":
+      - list
+    - generic [ref=e299]:
+      - complementary [ref=e300]:
+        - generic [ref=e301]:
+          - heading "BACKOFFICE" [level=1] [ref=e302]
+          - paragraph [ref=e303]: Pajak Daerah OKU Selatan
+        - generic [ref=e304]:
+          - paragraph [ref=e305]: Login sebagai
+          - paragraph [ref=e306]: admin
+          - paragraph [ref=e307]: admin
+        - navigation [ref=e308]:
+          - link "Dashboard" [ref=e309] [cursor=pointer]:
+            - /url: /backoffice
+            - generic [ref=e310]:
+              - img [ref=e311]
+              - generic [ref=e313]: Dashboard
+          - link "Wajib Pajak" [ref=e314] [cursor=pointer]:
+            - /url: /backoffice/wajib-pajak
+            - generic [ref=e315]:
+              - img [ref=e316]
+              - generic [ref=e321]: Wajib Pajak
+              - img [ref=e322]
+          - link "Objek Pajak" [ref=e324] [cursor=pointer]:
+            - /url: /backoffice/objek-pajak
+            - generic [ref=e325]:
+              - img [ref=e326]
+              - generic [ref=e330]: Objek Pajak
+          - link "Master Data" [ref=e331] [cursor=pointer]:
+            - /url: /backoffice/master-data
+            - generic [ref=e332]:
+              - img [ref=e333]
+              - generic [ref=e337]: Master Data
+          - link "Mockup Form" [ref=e338] [cursor=pointer]:
+            - /url: /backoffice/mockup-form
+            - generic [ref=e339]:
+              - img [ref=e340]
+              - generic [ref=e342]: Mockup Form
+        - button "Logout" [ref=e344] [cursor=pointer]:
+          - img
+          - text: Logout
+        - link "Kembali ke Peta" [ref=e345] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e346]:
+            - img [ref=e347]
+            - generic [ref=e349]: Kembali ke Peta
+      - main [ref=e350]:
+        - generic [ref=e352]:
+          - generic [ref=e353]:
+            - generic [ref=e354]:
+              - img [ref=e356]
+              - generic [ref=e361]:
+                - heading "WAJIB PAJAK" [level=1] [ref=e362]
+                - paragraph [ref=e363]: Model Baru
+            - generic [ref=e364]:
+              - button "EXPORT CSV" [ref=e365] [cursor=pointer]:
+                - img
+                - text: EXPORT CSV
+              - button "IMPORT CSV" [ref=e366] [cursor=pointer]:
+                - img
+                - text: IMPORT CSV
+              - button "TAMBAH WP" [ref=e367] [cursor=pointer]:
+                - img
+                - text: TAMBAH WP
+          - generic [ref=e368]:
+            - generic [ref=e369]:
+              - img [ref=e370]
+              - textbox "Cari nama / NPWPD" [ref=e373]
+            - combobox [ref=e374] [cursor=pointer]:
+              - generic: Semua Jenis
+              - img [ref=e375]
+            - combobox [ref=e377] [cursor=pointer]:
+              - generic: Semua Peran
+              - img [ref=e378]
+            - combobox [ref=e380] [cursor=pointer]:
+              - generic: Semua Status
+              - img [ref=e381]
+            - generic [ref=e383]: 12 WP
+          - generic [ref=e384]:
+            - paragraph [ref=e385]: Halaman 1 dari 1
+            - combobox [ref=e386] [cursor=pointer]:
+              - generic: 25 / halaman
+              - img [ref=e387]
+          - table [ref=e391]:
+            - rowgroup [ref=e392]:
+              - row "NPWPD DISPLAY NAME JENIS PERAN STATUS AKSI" [ref=e393]:
+                - columnheader "NPWPD" [ref=e394]
+                - columnheader "DISPLAY NAME" [ref=e395]
+                - columnheader "JENIS" [ref=e396]
+                - columnheader "PERAN" [ref=e397]
+                - columnheader "STATUS" [ref=e398]
+                - columnheader "AKSI" [ref=e399]
+            - rowgroup [ref=e400]:
+              - row "IT-1772809695301 H. Syarifudin orang_pribadi pemilik active" [ref=e401]:
+                - cell "IT-1772809695301" [ref=e402]
+                - cell "H. Syarifudin" [ref=e403]
+                - cell "orang_pribadi" [ref=e404]
+                - cell "pemilik" [ref=e405]
+                - cell "active" [ref=e406]
+                - cell [ref=e407]:
+                  - generic [ref=e408]:
+                    - button [ref=e409] [cursor=pointer]:
+                      - img
+                    - button [ref=e410] [cursor=pointer]:
+                      - img
+                    - button [ref=e411] [cursor=pointer]:
+                      - img
+              - row "DUMMY-NPWPD-002 Budi Santoso orang_pribadi pemilik active" [ref=e412]:
+                - cell "DUMMY-NPWPD-002" [ref=e413]
+                - cell "Budi Santoso" [ref=e414]
+                - cell "orang_pribadi" [ref=e415]
+                - cell "pemilik" [ref=e416]
+                - cell "active" [ref=e417]
+                - cell [ref=e418]:
+                  - generic [ref=e419]:
+                    - button [ref=e420] [cursor=pointer]:
+                      - img
+                    - button [ref=e421] [cursor=pointer]:
+                      - img
+                    - button [ref=e422] [cursor=pointer]:
+                      - img
+              - row "DUMMY-NPWPD-006 Fajar Pemilik BU badan_usaha pemilik active" [ref=e423]:
+                - cell "DUMMY-NPWPD-006" [ref=e424]
+                - cell "Fajar Pemilik BU" [ref=e425]
+                - cell "badan_usaha" [ref=e426]
+                - cell "pemilik" [ref=e427]
+                - cell "active" [ref=e428]
+                - cell [ref=e429]:
+                  - generic [ref=e430]:
+                    - button [ref=e431] [cursor=pointer]:
+                      - img
+                    - button [ref=e432] [cursor=pointer]:
+                      - img
+                    - button [ref=e433] [cursor=pointer]:
+                      - img
+              - row "DUMMY-NPWPD-004 Deni Pengelola orang_pribadi pengelola active" [ref=e434]:
+                - cell "DUMMY-NPWPD-004" [ref=e435]
+                - cell "Deni Pengelola" [ref=e436]
+                - cell "orang_pribadi" [ref=e437]
+                - cell "pengelola" [ref=e438]
+                - cell "active" [ref=e439]
+                - cell [ref=e440]:
+                  - generic [ref=e441]:
+                    - button [ref=e442] [cursor=pointer]:
+                      - img
+                    - button [ref=e443] [cursor=pointer]:
+                      - img
+                    - button [ref=e444] [cursor=pointer]:
+                      - img
+              - row "DUMMY-NPWPD-005 Eka Pemilik BU badan_usaha pemilik active" [ref=e445]:
+                - cell "DUMMY-NPWPD-005" [ref=e446]
+                - cell "Eka Pemilik BU" [ref=e447]
+                - cell "badan_usaha" [ref=e448]
+                - cell "pemilik" [ref=e449]
+                - cell "active" [ref=e450]
+                - cell [ref=e451]:
+                  - generic [ref=e452]:
+                    - button [ref=e453] [cursor=pointer]:
+                      - img
+                    - button [ref=e454] [cursor=pointer]:
+                      - img
+                    - button [ref=e455] [cursor=pointer]:
+                      - img
+              - row "DUMMY-NPWPD-001 Andi Pratama orang_pribadi pemilik active" [ref=e456]:
+                - cell "DUMMY-NPWPD-001" [ref=e457]
+                - cell "Andi Pratama" [ref=e458]
+                - cell "orang_pribadi" [ref=e459]
+                - cell "pemilik" [ref=e460]
+                - cell "active" [ref=e461]
+                - cell [ref=e462]:
+                  - generic [ref=e463]:
+                    - button [ref=e464] [cursor=pointer]:
+                      - img
+                    - button [ref=e465] [cursor=pointer]:
+                      - img
+                    - button [ref=e466] [cursor=pointer]:
+                      - img
+              - row "DUMMY-NPWPD-009 Indra Pemilik BU badan_usaha pemilik active" [ref=e467]:
+                - cell "DUMMY-NPWPD-009" [ref=e468]
+                - cell "Indra Pemilik BU" [ref=e469]
+                - cell "badan_usaha" [ref=e470]
+                - cell "pemilik" [ref=e471]
+                - cell "active" [ref=e472]
+                - cell [ref=e473]:
+                  - generic [ref=e474]:
+                    - button [ref=e475] [cursor=pointer]:
+                      - img
+                    - button [ref=e476] [cursor=pointer]:
+                      - img
+                    - button [ref=e477] [cursor=pointer]:
+                      - img
+              - row "DUMMY-NPWPD-008 Hadi Pemilik BU badan_usaha pemilik active" [ref=e478]:
+                - cell "DUMMY-NPWPD-008" [ref=e479]
+                - cell "Hadi Pemilik BU" [ref=e480]
+                - cell "badan_usaha" [ref=e481]
+                - cell "pemilik" [ref=e482]
+                - cell "active" [ref=e483]
+                - cell [ref=e484]:
+                  - generic [ref=e485]:
+                    - button [ref=e486] [cursor=pointer]:
+                      - img
+                    - button [ref=e487] [cursor=pointer]:
+                      - img
+                    - button [ref=e488] [cursor=pointer]:
+                      - img
+              - row "DUMMY-NPWPD-007 Gina Pemilik BU badan_usaha pemilik active" [ref=e489]:
+                - cell "DUMMY-NPWPD-007" [ref=e490]
+                - cell "Gina Pemilik BU" [ref=e491]
+                - cell "badan_usaha" [ref=e492]
+                - cell "pemilik" [ref=e493]
+                - cell "active" [ref=e494]
+                - cell [ref=e495]:
+                  - generic [ref=e496]:
+                    - button [ref=e497] [cursor=pointer]:
+                      - img
+                    - button [ref=e498] [cursor=pointer]:
+                      - img
+                    - button [ref=e499] [cursor=pointer]:
+                      - img
+              - row "DUMMY-NPWPD-003 Citra Lestari orang_pribadi pemilik active" [ref=e500]:
+                - cell "DUMMY-NPWPD-003" [ref=e501]
+                - cell "Citra Lestari" [ref=e502]
+                - cell "orang_pribadi" [ref=e503]
+                - cell "pemilik" [ref=e504]
+                - cell "active" [ref=e505]
+                - cell [ref=e506]:
+                  - generic [ref=e507]:
+                    - button [ref=e508] [cursor=pointer]:
+                      - img
+                    - button [ref=e509] [cursor=pointer]:
+                      - img
+                    - button [ref=e510] [cursor=pointer]:
+                      - img
+              - row "- Bambang Hermanto badan_usaha pemilik active" [ref=e511]:
+                - cell "-" [ref=e512]
+                - cell "Bambang Hermanto" [ref=e513]
+                - cell "badan_usaha" [ref=e514]
+                - cell "pemilik" [ref=e515]
+                - cell "active" [ref=e516]
+                - cell [ref=e517]:
+                  - generic [ref=e518]:
+                    - button [ref=e519] [cursor=pointer]:
+                      - img
+                    - button [ref=e520] [cursor=pointer]:
+                      - img
+                    - button [ref=e521] [cursor=pointer]:
+                      - img
+              - row "- Ny. Ratna Dewi badan_usaha pemilik active" [ref=e522]:
+                - cell "-" [ref=e523]
+                - cell "Ny. Ratna Dewi" [ref=e524]
+                - cell "badan_usaha" [ref=e525]
+                - cell "pemilik" [ref=e526]
+                - cell "active" [ref=e527]
+                - cell [ref=e528]:
+                  - generic [ref=e529]:
+                    - button [ref=e530] [cursor=pointer]:
+                      - img
+                    - button [ref=e531] [cursor=pointer]:
+                      - img
+                    - button [ref=e532] [cursor=pointer]:
+                      - img
+          - generic [ref=e533]:
+            - paragraph [ref=e534]: Menampilkan 12 dari 12 data
+            - navigation "pagination" [ref=e535]:
+              - list [ref=e536]:
+                - listitem [ref=e537]:
+                  - link "Go to previous page":
+                    - /url: "#"
+                    - img
+                    - generic: Previous
+                - listitem [ref=e538]:
+                  - link "1" [ref=e539] [cursor=pointer]:
+                    - /url: "#"
+                - listitem [ref=e540]:
+                  - link "Go to next page":
+                    - /url: "#"
+                    - generic: Next
+                    - img
+  - generic [ref=e298]: "0"

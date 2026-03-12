@@ -65,40 +65,49 @@ export default function BackofficeLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4" data-testid="backoffice-login-page">
-      <div className="w-full max-w-md border-[4px] border-black bg-white">
-        <div className="bg-black border-b-[4px] border-[#FFFF00] p-5">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4" data-testid="backoffice-login-page">
+      <div className="w-full max-w-md rounded-2xl bg-background shadow-floating overflow-hidden">
+        <div className="bg-[#2d3436] p-5">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 border-[2px] border-[#FFFF00] bg-[#FFFF00] flex items-center justify-center">
-              <LockKeyhole className="w-5 h-5 text-black" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-background shadow-floating">
+              <LockKeyhole className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <h1 className="font-serif text-2xl font-black text-[#FFFF00] leading-none">BACKOFFICE LOGIN</h1>
-              <p className="font-mono text-[10px] text-white/70 uppercase tracking-wider mt-1">
+              <h1 className="font-sans text-xl font-bold text-white">BACKOFFICE LOGIN</h1>
+              <p className="font-mono text-[10px] text-white/50 uppercase tracking-[0.15em] mt-0.5">
                 OKU Selatan Pajak Daerah
               </p>
             </div>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div className="space-y-1.5">
-            <label className="font-mono text-xs font-bold">USERNAME</label>
+            <label htmlFor="login-username" className="font-mono text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              USERNAME
+            </label>
             <Input
+              id="login-username"
+              name="username"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
-              className="rounded-none border-[2px] border-black font-mono"
+              placeholder="masukkan username…"
+              spellCheck={false}
               autoComplete="username"
               data-testid="input-login-username"
             />
           </div>
           <div className="space-y-1.5">
-            <label className="font-mono text-xs font-bold">PASSWORD</label>
+            <label htmlFor="login-password" className="font-mono text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              PASSWORD
+            </label>
             <Input
+              id="login-password"
+              name="password"
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="rounded-none border-[2px] border-black font-mono"
+              placeholder="masukkan password…"
               autoComplete="current-password"
               data-testid="input-login-password"
             />
@@ -106,23 +115,23 @@ export default function BackofficeLogin() {
           <Button
             type="submit"
             disabled={loginMutation.isPending}
-            className="w-full rounded-none border-[3px] border-black bg-[#FFFF00] text-black font-mono font-bold"
+            className="w-full"
             data-testid="button-login-submit"
           >
-            <LogIn className="w-4 h-4 mr-2" />
-            {loginMutation.isPending ? "MEMPROSES..." : "MASUK"}
+            <LogIn className="w-4 h-4" aria-hidden="true" />
+            {loginMutation.isPending ? "MEMPROSES…" : "MASUK"}
           </Button>
 
           <div className="flex items-center justify-between pt-1">
-            <p className="font-mono text-[11px] text-gray-500">Gunakan akun admin/editor/viewer.</p>
+            <p className="font-mono text-[11px] text-muted-foreground">Gunakan akun admin/editor/viewer.</p>
             <Link href="/">
               <Button
                 type="button"
                 variant="outline"
-                className="rounded-none border-[2px] border-black font-mono text-[11px]"
+                className="font-mono text-[11px]"
                 data-testid="button-login-back-map"
               >
-                <MapPin className="w-3 h-3 mr-1" />
+                <MapPin className="w-3 h-3 mr-1" aria-hidden="true" />
                 Peta
               </Button>
             </Link>
