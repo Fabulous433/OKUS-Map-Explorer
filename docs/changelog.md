@@ -1,5 +1,59 @@
 # Changelog
 
+## Phase 2.16d — Objek Pajak Table Follow-up
+
+### Improved
+- Pencarian pada daftar desktop `Objek Pajak` sekarang juga menjangkau nama `Wajib Pajak`, bukan hanya nama objek, `NOPD`, dan alamat.
+- Kolom `LOKASI` kini merangkum alamat, kecamatan, dan kelurahan dalam satu lane yang lebih padat dengan susunan tiga baris tetap:
+  - alamat
+  - kecamatan
+  - kelurahan
+- Header nominal desktop ditegaskan menjadi `PAJAK/BLN` agar informasi cukup dibaca dari header tabel.
+
+### Fixed
+- Kolom `WILAYAH` yang memecah scan line tabel dihapus dan dilebur ke kolom lokasi.
+- Wrapper kecil `pajak/bln` di setiap baris dihilangkan agar cell nominal lebih bersih dan tidak terasa bertumpuk.
+- Search server-side `Objek Pajak` kini ikut menjangkau kandidat identitas WP yang tampil di operator flow, termasuk nama badan usaha pada record WP badan usaha.
+
+## Phase 2.16b — Desktop OP Table Compaction
+
+### Improved
+- Tabel desktop `Objek Pajak` dipadatkan agar muat dalam viewport desktop tanpa scroll horizontal sebagai pola utama.
+- Identitas objek sekarang digabung dalam satu lane `OBJEK`:
+  - nama objek
+  - NOPD
+  - wajib pajak
+- Kolom `WILAYAH` ditambahkan kembali dalam format yang lebih ringkas lewat kombinasi kecamatan dan kelurahan.
+- Informasi `jenis pajak` dan `pajak/bln` sekarang dibaca lebih cepat lewat cell kompak yang menonjolkan nominal.
+- State record sekarang diringkas dalam satu kolom:
+  - status
+  - verifikasi
+  - kelengkapan detail
+
+### Fixed
+- Kolom desktop yang sebelumnya terlalu terpecah (`NOPD`, `NAMA OBJEK`, `JENIS PAJAK`, `WAJIB PAJAK`, `ALAMAT`, `PAJAK/BLN`, `STATUS`, `VERIFIKASI`, `DETAIL`, `AKSI`) kini dipangkas menjadi layout yang lebih ringkas.
+- Baris aksi desktop tidak lagi memaksa lebar tabel membesar; aksi sekunder dipindah ke menu overflow.
+- Aksi desktop sekarang punya tombol khusus `lihat lokasi` untuk membuka titik objek langsung ke peta saat koordinat tersedia.
+
+## Phase 2.16c — Desktop WP Table Compaction
+
+### Improved
+- Tabel desktop `Wajib Pajak` diratakan tanpa wrapper kartu kecil di dalam cell agar scan line lebih bersih.
+- Kolom `Identitas WP` sekarang memuat isi operasional yang langsung dibutuhkan:
+  - nama
+  - NPWPD
+  - NIK
+  - kontak aktif dengan ikon telepon
+- Kolom `Alamat` sekarang fokus ke lokasi aktif:
+  - alamat
+  - kecamatan
+  - kelurahan
+- Header `STATE` diganti menjadi `STATUS` tanpa mengubah cluster badge record yang sudah dipakai.
+
+### Fixed
+- Wrapper visual di dalam cell desktop WP dihilangkan agar tabel tidak terasa bertumpuk dan lebih dekat ke pola register operasional.
+- Struktur kolom desktop WP sekarang lebih jujur terhadap isi data yang dilihat operator.
+
 ## Phase 2.16a — Public Map City-First UX
 
 ### Added

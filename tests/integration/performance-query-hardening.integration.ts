@@ -24,6 +24,16 @@ async function run() {
     const wpItems = (wpResult.body as JsonRecord).items as JsonRecord[];
     assert.ok(wpItems.length > 0);
     const wpId = requiredNumber(wpItems[0]?.id, "wp id wajib ada");
+    const wpSearchTerm = requiredString(
+      wpItems[0]?.displayName ?? wpItems[0]?.namaWp ?? wpItems[0]?.namaPengelola,
+      "nama wajib pajak wajib ada",
+    );
+
+    const seededGinaWp = await requestJson("/api/wajib-pajak?page=1&limit=25&q=Gina");
+    assert.equal(seededGinaWp.response.status, 200);
+    const seededGinaWpItems = ((seededGinaWp.body as JsonRecord).items as JsonRecord[]);
+    const ginaWp = seededGinaWpItems.find((item) => item.displayName === "Gina Pemilik BU");
+    assert.ok(ginaWp, "seed Gina Pemilik BU wajib tersedia untuk regression search");
 
     const wpLimited = await requestJson("/api/wajib-pajak?page=1&limit=999");
     assert.equal(wpLimited.response.status, 200);
@@ -95,6 +105,24 @@ async function run() {
     assert.ok(found, "hasil search server-first harus menemukan OP");
     assert.equal("detailPajak" in (found as JsonRecord), false, "list tidak boleh hydrate detailPajak penuh");
     assert.equal(typeof (found as JsonRecord).hasDetail, "boolean");
+
+    const wpSearchResult = await requestJson(
+      `/api/objek-pajak?page=1&limit=25&includeUnverified=true&q=${encodeURIComponent(wpSearchTerm)}`,
+    );
+    assert.equal(wpSearchResult.response.status, 200);
+    const wpSearchItems = ((wpSearchResult.body as JsonRecord).items as JsonRecord[]);
+    assert.ok(
+      wpSearchItems.some((item) => Number(item.id) === createdOpId),
+      "hasil search OP harus bisa ditemukan lewat nama wajib pajak",
+    );
+
+    const ginaSearchResult = await requestJson("/api/objek-pajak?page=1&limit=25&includeUnverified=true&q=Gina");
+    assert.equal(ginaSearchResult.response.status, 200);
+    const ginaSearchItems = ((ginaSearchResult.body as JsonRecord).items as JsonRecord[]);
+    assert.ok(
+      ginaSearchItems.some((item) => Number(item.wpId) === Number(ginaWp?.id)),
+      "search OP dengan nama WP seeded `Gina` harus tetap menemukan data terkait",
+    );
 
     const opCursorFirst = await requestJson("/api/objek-pajak?limit=2&cursor=999999999&includeUnverified=true");
     assert.equal(opCursorFirst.response.status, 200);

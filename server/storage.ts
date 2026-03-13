@@ -1074,6 +1074,9 @@ export class DatabaseStorage implements IStorage {
         ilike(objekPajak.namaOp, like),
         ilike(objekPajak.nopd, like),
         ilike(objekPajak.alamatOp, like),
+        ilike(wajibPajak.namaWp, like),
+        ilike(wajibPajak.namaPengelola, like),
+        ilike(wpBadanUsaha.namaBadanUsaha, like),
       );
       if (searchCondition) {
         baseConditions.push(searchCondition);
@@ -1088,7 +1091,9 @@ export class DatabaseStorage implements IStorage {
     const countQuery = db
       .select({ count: sql<number>`cast(count(*) as int)` })
       .from(objekPajak)
-      .leftJoin(masterRekeningPajak, eq(objekPajak.rekPajakId, masterRekeningPajak.id));
+      .leftJoin(masterRekeningPajak, eq(objekPajak.rekPajakId, masterRekeningPajak.id))
+      .leftJoin(wajibPajak, eq(objekPajak.wpId, wajibPajak.id))
+      .leftJoin(wpBadanUsaha, eq(wajibPajak.id, wpBadanUsaha.wpId));
     const countRows = baseConditions.length > 0 ? await countQuery.where(and(...baseConditions)) : await countQuery;
     const total = Number(countRows[0]?.count ?? 0);
 
@@ -1111,12 +1116,16 @@ export class DatabaseStorage implements IStorage {
             .select({
               op: objekPajak,
               rekening: masterRekeningPajak,
+              wajibPajak,
+              badanUsaha: wpBadanUsaha,
               kecamatan: masterKecamatan,
               kelurahan: masterKelurahan,
               hasDetail: hasDetailExpr,
             })
             .from(objekPajak)
             .leftJoin(masterRekeningPajak, eq(objekPajak.rekPajakId, masterRekeningPajak.id))
+            .leftJoin(wajibPajak, eq(objekPajak.wpId, wajibPajak.id))
+            .leftJoin(wpBadanUsaha, eq(wajibPajak.id, wpBadanUsaha.wpId))
             .leftJoin(masterKecamatan, eq(objekPajak.kecamatanId, masterKecamatan.cpmKecId))
             .leftJoin(masterKelurahan, eq(objekPajak.kelurahanId, masterKelurahan.cpmKelId))
             .orderBy(desc(objekPajak.id))
@@ -1125,12 +1134,16 @@ export class DatabaseStorage implements IStorage {
             .select({
               op: objekPajak,
               rekening: masterRekeningPajak,
+              wajibPajak,
+              badanUsaha: wpBadanUsaha,
               kecamatan: masterKecamatan,
               kelurahan: masterKelurahan,
               hasDetail: hasDetailExpr,
             })
             .from(objekPajak)
             .leftJoin(masterRekeningPajak, eq(objekPajak.rekPajakId, masterRekeningPajak.id))
+            .leftJoin(wajibPajak, eq(objekPajak.wpId, wajibPajak.id))
+            .leftJoin(wpBadanUsaha, eq(wajibPajak.id, wpBadanUsaha.wpId))
             .leftJoin(masterKecamatan, eq(objekPajak.kecamatanId, masterKecamatan.cpmKecId))
             .leftJoin(masterKelurahan, eq(objekPajak.kelurahanId, masterKelurahan.cpmKelId))
             .orderBy(desc(objekPajak.updatedAt), desc(objekPajak.id))

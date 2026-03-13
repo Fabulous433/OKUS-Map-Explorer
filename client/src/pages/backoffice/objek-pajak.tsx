@@ -1,10 +1,31 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
-import { Building2, CheckCircle2, ChevronLeft, ChevronRight, Edit, History, MapPin, Plus, Search, Trash2, XCircle } from "lucide-react";
+import {
+ Building2,
+ CheckCircle2,
+ ChevronLeft,
+ ChevronRight,
+ Edit,
+ Eye,
+ History,
+ MapPin,
+ MoreHorizontal,
+ Plus,
+ Search,
+ Trash2,
+ XCircle,
+} from "lucide-react";
 import { useLocation, useSearch } from "wouter";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+ DropdownMenu,
+ DropdownMenuContent,
+ DropdownMenuItem,
+ DropdownMenuSeparator,
+ DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
  Pagination,
@@ -53,6 +74,25 @@ import {
  jenisPajakColor,
  shortLabel,
 } from "./objek-pajak-shared";
+
+function formatPajakBulanan(value: string | null | undefined) {
+ if (!value) return "-";
+ const numeric = Number(value);
+ if (!Number.isFinite(numeric)) return "-";
+ return `Rp ${numeric.toLocaleString("id-ID")}`;
+}
+
+function verificationBadgeClass(statusVerifikasi: ObjekPajakListItem["statusVerifikasi"]) {
+ if (statusVerifikasi === "verified") {
+ return "bg-green-100 text-green-800 border-green-700";
+ }
+
+ if (statusVerifikasi === "rejected") {
+ return "bg-red-100 text-red-800 border-red-700";
+ }
+
+ return "bg-yellow-100 text-yellow-800 border-yellow-700";
+}
 export default function BackofficeObjekPajak() {
  const { hasRole } = useAuth();
  const isMobile = useIsMobile();
@@ -137,6 +177,8 @@ export default function BackofficeObjekPajak() {
  queryKey: ["/api/master/kelurahan"],
  });
  const kelurahanList = Array.isArray(kelurahanListData) ? kelurahanListData : [];
+ const kecamatanMap = useMemo(() => new Map(kecamatanList.map((item) => [item.cpmKecId, item.cpmKecamatan])), [kecamatanList]);
+ const kelurahanMap = useMemo(() => new Map(kelurahanList.map((item) => [item.cpmKelId, item.cpmKelurahan])), [kelurahanList]);
 
  const { toast } = useToast();
 
@@ -201,6 +243,16 @@ export default function BackofficeObjekPajak() {
  setLocation(`/backoffice/objek-pajak/${id}`);
  };
 
+ const openLocation = (op: ObjekPajakListItem) => {
+ if (!op.latitude || !op.longitude) return;
+
+ const params = new URLSearchParams();
+ params.set("focusOpId", String(op.id));
+ params.set("focusLat", op.latitude);
+ params.set("focusLng", op.longitude);
+ window.open(`/?${params.toString()}`, "_blank", "noopener,noreferrer");
+ };
+
  return (
  <BackofficeLayout>
  <div className="p-4 md:p-6" data-testid="backoffice-op-page">
@@ -237,7 +289,7 @@ export default function BackofficeObjekPajak() {
  <Input
  value={searchQuery}
  onChange={(e) => setSearchQuery(e.target.value)}
- placeholder="Cari nama objek, NOPD, alamat..."
+ placeholder="Cari nama objek, nama WP, NOPD, alamat..."
  className="pl-9 shadow-card font-mono text-sm"
  data-testid="input-search-op"
  />
@@ -389,63 +441,81 @@ export default function BackofficeObjekPajak() {
  })}
  </div>
  ) : (
- <div className="shadow-card overflow-x-auto">
- <Table>
+ <div className="overflow-hidden shadow-card">
+ <Table className="table-fixed">
  <TableHeader>
  <TableRow className="bg-[#2d3436] border-b-[2px] border-primary/30">
- <TableHead className="font-mono text-[10px] font-bold text-white whitespace-nowrap">NOPD</TableHead>
- <TableHead className="font-mono text-[10px] font-bold text-white whitespace-nowrap">NAMA OBJEK</TableHead>
- <TableHead className="font-mono text-[10px] font-bold text-white whitespace-nowrap">JENIS PAJAK</TableHead>
- <TableHead className="font-mono text-[10px] font-bold text-white whitespace-nowrap">WAJIB PAJAK</TableHead>
- <TableHead className="font-mono text-[10px] font-bold text-white whitespace-nowrap">ALAMAT</TableHead>
- <TableHead className="font-mono text-[10px] font-bold text-white whitespace-nowrap">PAJAK/BLN</TableHead>
- <TableHead className="font-mono text-[10px] font-bold text-white whitespace-nowrap">STATUS</TableHead>
- <TableHead className="font-mono text-[10px] font-bold text-white whitespace-nowrap">VERIFIKASI</TableHead>
- <TableHead className="font-mono text-[10px] font-bold text-white whitespace-nowrap">DETAIL</TableHead>
- <TableHead className="font-mono text-[10px] font-bold text-white whitespace-nowrap">AKSI</TableHead>
+ <TableHead className="w-[32%] font-mono text-[10px] font-bold text-white whitespace-nowrap">OBJEK</TableHead>
+ <TableHead className="w-[28%] font-mono text-[10px] font-bold text-white whitespace-nowrap">LOKASI</TableHead>
+ <TableHead className="w-[14%] font-mono text-[10px] font-bold text-white whitespace-nowrap">PAJAK/BLN</TableHead>
+ <TableHead className="w-[15%] font-mono text-[10px] font-bold text-white whitespace-nowrap">STATE</TableHead>
+ <TableHead className="w-[11%] text-right font-mono text-[10px] font-bold text-white whitespace-nowrap">AKSI</TableHead>
  </TableRow>
  </TableHeader>
  <TableBody>
  {opList.map((op) => {
  const wp = op.wpId ? wpMap.get(op.wpId) : null;
  const hasDetail = op.hasDetail;
+ const kecamatanName = kecamatanMap.get(op.kecamatanId) ?? "-";
+ const kelurahanName = kelurahanMap.get(op.kelurahanId) ?? "-";
+ const hasCoordinates = Boolean(op.latitude && op.longitude);
  return (
  <TableRow
  key={op.id}
- className="border-b border-gray-200 hover:bg-gray-50 transition-all duration-150 animate-in fade-in"
+ className="animate-in border-b border-gray-200 transition-all duration-150 hover:bg-gray-50/80 fade-in"
  data-testid={`row-op-${op.id}`}
  >
- <TableCell className="font-mono text-xs text-black" data-testid={`text-nopd-${op.id}`}>
- {op.nopd}
- </TableCell>
- <TableCell className="font-mono text-xs font-bold text-black max-w-[200px] truncate" data-testid={`text-nama-objek-${op.id}`}>
+ <TableCell className="align-top">
+ <div className="min-w-0 space-y-2 pr-3">
+ <div className="flex min-w-0 items-start justify-between gap-3">
+ <div className="min-w-0">
+ <p className="truncate font-sans text-[15px] font-black leading-tight text-black" data-testid={`text-nama-objek-${op.id}`}>
  {op.namaOp}
- </TableCell>
- <TableCell>
+ </p>
+ <p className="truncate font-mono text-[11px] uppercase tracking-[0.12em] text-gray-500" data-testid={`text-nopd-${op.id}`}>
+ {op.nopd}
+ </p>
+ </div>
  <Badge
- className={`font-mono text-[10px] ${jenisPajakColor(op.jenisPajak)}`}
+ className={`shrink-0 font-mono text-[10px] ${jenisPajakColor(op.jenisPajak)}`}
  data-testid={`badge-jenis-${op.id}`}
  >
  {shortLabel(op.jenisPajak)}
  </Badge>
- </TableCell>
- <TableCell className="font-mono text-xs text-gray-600 max-w-[150px] truncate" data-testid={`text-wp-${op.id}`}>
+ </div>
+ <div className="min-w-0 rounded-xl border border-black/10 bg-white/70 px-3 py-2 shadow-[inset_1px_1px_0_rgba(255,255,255,0.7)]">
+ <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-400">Wajib Pajak</p>
+ <p className="truncate font-sans text-sm font-medium text-slate-700" data-testid={`text-wp-${op.id}`}>
  {wp ? wp.displayName : "-"}
- </TableCell>
- <TableCell className="font-mono text-xs text-gray-600 max-w-[200px] truncate">
- <div className="flex items-center gap-1">
- <MapPin className="w-3 h-3 flex-shrink-0" />
- <span className="truncate">{op.alamatOp}</span>
+ </p>
+ </div>
  </div>
  </TableCell>
- <TableCell className="font-mono text-xs text-black whitespace-nowrap">
- {op.pajakBulanan ? (
- <div className="flex items-center gap-1">
- <span>Rp {Number(op.pajakBulanan).toLocaleString("id-ID")}</span>
+ <TableCell className="align-top">
+ <div className="min-w-0 space-y-1.5 pr-4">
+ <div className="flex min-w-0 gap-2 font-mono text-xs leading-snug text-slate-600">
+ <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
+ <span className="overflow-hidden text-ellipsis" title={op.alamatOp ?? ""}>
+ {op.alamatOp || "-"}
+ </span>
  </div>
- ) : "-"}
+ <p className="truncate font-mono text-[11px] tracking-[0.12em] text-slate-500" title={kecamatanName}>
+ {kecamatanName}
+ </p>
+ <p className="truncate font-mono text-[11px] tracking-[0.12em] text-slate-500" title={kelurahanName}>
+ {kelurahanName}
+ </p>
+ </div>
  </TableCell>
- <TableCell>
+ <TableCell className="align-top">
+ <div className="pr-3">
+ <p className="font-mono text-sm font-bold leading-tight text-black whitespace-nowrap">
+ {formatPajakBulanan(op.pajakBulanan)}
+ </p>
+ </div>
+ </TableCell>
+ <TableCell className="align-top">
+ <div className="flex max-w-[220px] flex-wrap gap-1.5">
  <Badge
  className={`font-mono text-[10px] ${
  op.status === "active" ? "bg-primary text-black" : "bg-gray-200 text-gray-600"
@@ -454,83 +524,96 @@ export default function BackofficeObjekPajak() {
  >
  {op.status.toUpperCase()}
  </Badge>
- </TableCell>
- <TableCell>
- <Badge
- className={`font-mono text-[10px] ${
- op.statusVerifikasi === "verified"
- ? "bg-green-100 text-green-800 border-green-700"
- : op.statusVerifikasi === "rejected"
- ? "bg-red-100 text-red-800 border-red-700"
- : "bg-yellow-100 text-yellow-800 border-yellow-700"
- }`}
- >
+ <Badge className={`border font-mono text-[10px] ${verificationBadgeClass(op.statusVerifikasi)}`}>
  {op.statusVerifikasi.toUpperCase()}
  </Badge>
- </TableCell>
- <TableCell>
  {hasDetail ? (
- <Badge className="border border-green-600 bg-green-100 text-green-800 font-mono text-[10px]" data-testid={`badge-detail-ok-${op.id}`}>
- LENGKAP
+ <Badge className="border border-green-600 bg-green-100 font-mono text-[10px] text-green-800" data-testid={`badge-detail-ok-${op.id}`}>
+ DETAIL OK
  </Badge>
  ) : (
- <Badge className="border border-orange-500 bg-orange-100 text-orange-700 font-mono text-[10px]" data-testid={`badge-detail-pending-${op.id}`}>
- BELUM
+ <Badge className="border border-orange-500 bg-orange-100 font-mono text-[10px] text-orange-700" data-testid={`badge-detail-pending-${op.id}`}>
+ DETAIL BLM
  </Badge>
  )}
+ </div>
  </TableCell>
- <TableCell>
- <div className="flex items-center gap-1">
+ <TableCell className="align-top">
+ <div className="flex items-center justify-end gap-1">
+ <Tooltip><TooltipTrigger asChild><Button
+ size="icon"
+ variant="ghost"
+ className="border border-black/15 bg-white/80"
+ aria-label="Lihat lokasi"
+ onClick={() => openLocation(op)}
+ data-testid={`button-location-op-${op.id}`}
+ disabled={!hasCoordinates}
+ >
+ <MapPin className="h-3.5 w-3.5 text-black" />
+ </Button></TooltipTrigger><TooltipContent>{hasCoordinates ? "Lihat lokasi" : "Koordinat belum tersedia"}</TooltipContent></Tooltip>
+ <Tooltip><TooltipTrigger asChild><Button
+ size="icon"
+ variant="ghost"
+ className="border border-black/15 bg-white/80"
+ aria-label="Lihat detail"
+ onClick={() => openView(op.id)}
+ data-testid={`button-view-op-${op.id}`}
+ >
+ <Eye className="h-3.5 w-3.5 text-black" />
+ </Button></TooltipTrigger><TooltipContent>Lihat detail</TooltipContent></Tooltip>
  {canMutate && <Tooltip><TooltipTrigger asChild><Button
  size="icon"
  variant="ghost"
- className="border border-black"
+ className="border border-black/15 bg-white/80"
  aria-label="Edit"
  onClick={() => openEdit(op.id)}
  data-testid={`button-edit-op-${op.id}`}
  >
- <Edit className="w-3.5 h-3.5 text-black" />
+ <Edit className="h-3.5 w-3.5 text-black" />
  </Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip>}
- {canMutate && <Tooltip><TooltipTrigger asChild><Button
+ <DropdownMenu>
+ <DropdownMenuTrigger asChild>
+ <Button
  size="icon"
  variant="ghost"
- className="border border-green-700"
- aria-label="Verifikasi"
+ className="border border-black/15 bg-white/80"
+ aria-label="Aksi lainnya"
+ data-testid={`button-more-op-${op.id}`}
+ >
+ <MoreHorizontal className="h-3.5 w-3.5 text-black" />
+ </Button>
+ </DropdownMenuTrigger>
+ <DropdownMenuContent align="end" className="w-48 border border-black/10">
+ <DropdownMenuItem onClick={() => setAuditTargetId(op.id)}>
+ <History className="h-4 w-4" />
+ Riwayat audit
+ </DropdownMenuItem>
+ {canMutate && (
+ <DropdownMenuItem
  onClick={() => verificationMutation.mutate({ id: op.id, statusVerifikasi: "verified" })}
- data-testid={`button-verify-op-${op.id}`}
  >
- <CheckCircle2 className="w-3.5 h-3.5 text-green-700" />
- </Button></TooltipTrigger><TooltipContent>Verifikasi</TooltipContent></Tooltip>}
- {canMutate && <Tooltip><TooltipTrigger asChild><Button
- size="icon"
- variant="ghost"
- className="border border-red-700"
- aria-label="Tolak"
- onClick={() => rejectOp(op.id)}
- data-testid={`button-reject-op-${op.id}`}
- >
- <XCircle className="w-3.5 h-3.5 text-red-700" />
- </Button></TooltipTrigger><TooltipContent>Tolak</TooltipContent></Tooltip>}
- <Tooltip><TooltipTrigger asChild><Button
- size="icon"
- variant="ghost"
- className="border border-black"
- aria-label="Riwayat audit"
- onClick={() => setAuditTargetId(op.id)}
- data-testid={`button-audit-op-${op.id}`}
- >
- <History className="w-3.5 h-3.5 text-black" />
- </Button></TooltipTrigger><TooltipContent>Riwayat audit</TooltipContent></Tooltip>
- {canMutate && op.status !== "active" && <Tooltip><TooltipTrigger asChild><Button
- size="icon"
- variant="ghost"
- className=""
- aria-label="Hapus"
+ <CheckCircle2 className="h-4 w-4 text-green-700" />
+ Tandai verified
+ </DropdownMenuItem>
+ )}
+ {canMutate && (
+ <DropdownMenuItem onClick={() => rejectOp(op.id)}>
+ <XCircle className="h-4 w-4 text-red-700" />
+ Tolak verifikasi
+ </DropdownMenuItem>
+ )}
+ {canMutate && op.status !== "active" && (
+ <><DropdownMenuSeparator /><DropdownMenuItem
+ className="text-red-600 focus:text-red-700"
  onClick={() => deleteMutation.mutate(op.id)}
  data-testid={`button-delete-op-${op.id}`}
  >
- <Trash2 className="w-3.5 h-3.5 text-red-600" />
- </Button></TooltipTrigger><TooltipContent>Hapus</TooltipContent></Tooltip>}
+ <Trash2 className="h-4 w-4 text-red-600" />
+ Hapus objek
+ </DropdownMenuItem></>
+ )}
+ </DropdownMenuContent>
+ </DropdownMenu>
  </div>
  </TableCell>
  </TableRow>

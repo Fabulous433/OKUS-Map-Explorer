@@ -1,10 +1,26 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { useForm, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocation, useSearch } from "wouter";
-import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, History, Pencil, Plus, Search, Trash2, Users, X } from "lucide-react";
+import {
+ AlertTriangle,
+ ArrowRight,
+ ChevronLeft,
+ ChevronRight,
+ Eye,
+ History,
+ MapPin,
+ MoreHorizontal,
+ Pencil,
+ Phone,
+ Plus,
+ Search,
+ Trash2,
+ Users,
+ X,
+} from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import BackofficeLayout from "./layout";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -13,6 +29,13 @@ import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+ DropdownMenu,
+ DropdownMenuContent,
+ DropdownMenuItem,
+ DropdownMenuSeparator,
+ DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -176,6 +199,38 @@ function duplicateRegisteredLabel(item: QualityWarningDuplicate) {
 function normalize(value?: string) {
  const v = (value ?? "").trim();
  return v.length > 0 ? v : null;
+}
+
+function compactJenisWpLabel(jenisWp: string) {
+ return jenisWp === "badan_usaha" ? "Badan Usaha" : "Orang Pribadi";
+}
+
+function compactPeranLabel(peranWp: string) {
+ return peranWp === "pengelola" ? "Pengelola" : "Pemilik";
+}
+
+function compactStatusLabel(statusAktif: string) {
+ return statusAktif === "inactive" ? "Inactive" : "Active";
+}
+
+function activeAddress(wp: WajibPajakListItem) {
+ return wp.peranWp === "pengelola" ? wp.alamatPengelola : wp.alamatWp;
+}
+
+function activeKecamatan(wp: WajibPajakListItem) {
+ return wp.peranWp === "pengelola" ? wp.kecamatanPengelola : wp.kecamatanWp;
+}
+
+function activeKelurahan(wp: WajibPajakListItem) {
+ return wp.peranWp === "pengelola" ? wp.kelurahanPengelola : wp.kelurahanWp;
+}
+
+function activeNik(wp: WajibPajakListItem) {
+ return wp.peranWp === "pengelola" ? wp.nikPengelola : wp.nikKtpWp;
+}
+
+function activeContact(wp: WajibPajakListItem) {
+ return wp.peranWp === "pengelola" ? wp.teleponWaPengelola : wp.teleponWaWp;
 }
 
 function defaults(wp?: WajibPajakWithBadanUsaha | null): WpFormValues {
@@ -577,20 +632,133 @@ export default function BackofficeWajibPajak() {
  ))}
  </div>
  ) : (
- <div className="shadow-card overflow-x-auto">
- <Table>
- <TableHeader><TableRow className="bg-[#2d3436]"><TableHead className="text-white font-mono text-xs">NPWPD</TableHead><TableHead className="text-white font-mono text-xs">DISPLAY NAME</TableHead><TableHead className="text-white font-mono text-xs">JENIS</TableHead><TableHead className="text-white font-mono text-xs">PERAN</TableHead><TableHead className="text-white font-mono text-xs">STATUS</TableHead><TableHead className="text-white font-mono text-xs text-right">AKSI</TableHead></TableRow></TableHeader>
- <TableBody>
- {wpList.map((wp) => (
- <TableRow key={wp.id} className="border-b border-border transition-all duration-150 hover:bg-accent/50 animate-in fade-in">
- <TableCell className="font-mono text-xs">{wp.npwpd || "-"}</TableCell>
- <TableCell className="font-mono text-sm font-bold">{wp.displayName}</TableCell>
- <TableCell className="font-mono text-xs">{wp.jenisWp}</TableCell>
- <TableCell className="font-mono text-xs">{wp.peranWp}</TableCell>
- <TableCell className="font-mono text-xs">{wp.statusAktif}</TableCell>
- <TableCell className="text-right"><div className="flex justify-end gap-1">{canMutate && <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="" aria-label="Edit" onClick={() => openEdit(wp)}><Pencil className="w-4 h-4" /></Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip>}<Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="" aria-label="Riwayat audit" onClick={() => setAuditTarget(wp)}><History className="w-4 h-4" /></Button></TooltipTrigger><TooltipContent>Riwayat audit</TooltipContent></Tooltip>{canMutate && wp.statusAktif !== "active" && <Tooltip><TooltipTrigger asChild><Button size="icon" variant="ghost" className="text-red-600" aria-label="Hapus" onClick={() => deleteMutation.mutate(wp.id)}><Trash2 className="w-4 h-4" /></Button></TooltipTrigger><TooltipContent>Hapus</TooltipContent></Tooltip>}</div></TableCell>
+ <div className="overflow-hidden shadow-card">
+ <Table className="table-fixed">
+ <TableHeader>
+ <TableRow className="bg-[#2d3436] border-b-[2px] border-primary/30">
+ <TableHead className="w-[40%] text-white font-mono text-[10px] whitespace-nowrap">IDENTITAS WP</TableHead>
+ <TableHead className="w-[32%] text-white font-mono text-[10px] whitespace-nowrap">ALAMAT</TableHead>
+ <TableHead className="w-[16%] text-white font-mono text-[10px] whitespace-nowrap">STATUS</TableHead>
+ <TableHead className="w-[12%] text-right text-white font-mono text-[10px] whitespace-nowrap">AKSI</TableHead>
  </TableRow>
- ))}
+ </TableHeader>
+ <TableBody>
+ {wpList.map((wp) => {
+ const address = activeAddress(wp);
+ const kecamatan = activeKecamatan(wp);
+ const kelurahan = activeKelurahan(wp);
+ const nik = activeNik(wp);
+ const contact = activeContact(wp);
+
+ return (
+ <TableRow key={wp.id} className="animate-in border-b border-border transition-all duration-150 hover:bg-accent/50 fade-in">
+ <TableCell className="align-top">
+       <div className="min-w-0 space-y-1.5 pr-3">
+       <div className="min-w-0 space-y-1">
+       <p className="truncate font-sans text-[15px] font-black leading-tight text-black">{wp.displayName}</p>
+       <p className="truncate font-mono text-[11px] uppercase tracking-[0.12em] text-black/55">
+       NPWPD {wp.npwpd || "-"}
+       </p>
+       <p className="truncate font-mono text-[11px] uppercase tracking-[0.12em] text-black/55">
+       NIK {nik || "-"}
+       </p>
+       </div>
+       <div className="flex min-w-0 items-center gap-2 font-mono text-[11px] uppercase tracking-[0.1em] text-black/55">
+       <Phone className="h-3.5 w-3.5 shrink-0 text-black/45" />
+       <span className="truncate">{contact || "-"}</span>
+       </div>
+       </div>
+       </TableCell>
+ <TableCell className="align-top">
+       <div className="space-y-1.5 pr-3">
+       <div className="flex min-w-0 gap-2 font-mono text-xs leading-snug text-slate-600">
+       <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
+       <span className="overflow-hidden text-ellipsis" title={address ?? ""}>
+       {address || "-"}
+       </span>
+       </div>
+       <p className="truncate font-mono text-[11px] uppercase tracking-[0.12em] text-slate-500">
+       Kecamatan {kecamatan || "-"}
+       </p>
+       <p className="truncate font-mono text-[11px] uppercase tracking-[0.12em] text-slate-500">
+       Kelurahan {kelurahan || "-"}
+       </p>
+       </div>
+       </TableCell>
+ <TableCell className="align-top">
+ <div className="flex max-w-[220px] flex-wrap gap-1.5">
+ <Badge className="font-mono text-[10px] bg-slate-800 text-white">
+ {compactJenisWpLabel(wp.jenisWp)}
+ </Badge>
+ <Badge className="font-mono text-[10px] border border-black/15 bg-white text-slate-700">
+ {compactPeranLabel(wp.peranWp)}
+ </Badge>
+ <Badge
+ className={`font-mono text-[10px] ${
+ wp.statusAktif === "active"
+ ? "bg-primary text-black"
+ : "border border-slate-300 bg-slate-200 text-slate-600"
+ }`}
+ >
+ {compactStatusLabel(wp.statusAktif)}
+ </Badge>
+ </div>
+ </TableCell>
+ <TableCell className="align-top">
+ <div className="flex items-center justify-end gap-1">
+ <Tooltip><TooltipTrigger asChild><Button
+ size="icon"
+ variant="ghost"
+ className="border border-black/15 bg-white/80"
+ aria-label="Lihat detail"
+ onClick={() => setLocation(`/backoffice/wajib-pajak/${wp.id}`)}
+ >
+ <Eye className="h-4 w-4 text-black" />
+ </Button></TooltipTrigger><TooltipContent>Lihat detail</TooltipContent></Tooltip>
+ {canMutate && <Tooltip><TooltipTrigger asChild><Button
+ size="icon"
+ variant="ghost"
+ className="border border-black/15 bg-white/80"
+ aria-label="Edit"
+ onClick={() => openEdit(wp)}
+ >
+ <Pencil className="h-4 w-4 text-black" />
+ </Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip>}
+ <DropdownMenu>
+ <DropdownMenuTrigger asChild>
+ <Button
+ size="icon"
+ variant="ghost"
+ className="border border-black/15 bg-white/80"
+ aria-label="Aksi lainnya"
+ >
+ <MoreHorizontal className="h-4 w-4 text-black" />
+ </Button>
+ </DropdownMenuTrigger>
+ <DropdownMenuContent align="end" className="w-44 border border-black/10">
+ <DropdownMenuItem onClick={() => setAuditTarget(wp)}>
+ <History className="h-4 w-4" />
+ Riwayat audit
+ </DropdownMenuItem>
+ {canMutate && wp.statusAktif !== "active" && (
+ <>
+ <DropdownMenuSeparator />
+ <DropdownMenuItem
+ className="text-red-600 focus:text-red-700"
+ onClick={() => deleteMutation.mutate(wp.id)}
+ >
+ <Trash2 className="h-4 w-4 text-red-600" />
+ Hapus WP
+ </DropdownMenuItem>
+ </>
+ )}
+ </DropdownMenuContent>
+ </DropdownMenu>
+ </div>
+ </TableCell>
+ </TableRow>
+ );
+ })}
  </TableBody>
  </Table>
  </div>
