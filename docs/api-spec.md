@@ -94,8 +94,15 @@ Rule umum:
 - Auth export: `admin|editor|viewer`
 - Auth import: `admin|editor`
 
-Kolom CSV WP:
-`jenis_wp, peran_wp, npwpd, status_aktif, nama_wp, nik_ktp_wp, alamat_wp, kecamatan_wp, kelurahan_wp, telepon_wa_wp, email_wp, nama_pengelola, nik_pengelola, alamat_pengelola, kecamatan_pengelola, kelurahan_pengelola, telepon_wa_pengelola, nama_badan_usaha, npwp_badan_usaha, alamat_badan_usaha, kecamatan_badan_usaha, kelurahan_badan_usaha, telepon_badan_usaha, email_badan_usaha`
+Kolom CSV WP export (compact):
+`jenis_wp, peran_wp, npwpd, status_aktif, nama_subjek, nik_subjek, alamat_subjek, kecamatan_subjek, kelurahan_subjek, telepon_wa_subjek, email_subjek, lampiran, nama_badan_usaha, npwp_badan_usaha, alamat_badan_usaha, kecamatan_badan_usaha, kelurahan_badan_usaha, telepon_badan_usaha, email_badan_usaha`
+
+Catatan:
+- `peran_wp` menentukan apakah kolom `*_subjek` mewakili pemilik atau pengelola.
+- `lampiran` berisi `ADA` jika entity memiliki minimal satu attachment.
+- Import WP menerima:
+  - header compact baru di atas
+  - header legacy lama (`nama_wp`, `nama_pengelola`, dst.) untuk backward compatibility
 
 ### Attachment WP
 - `GET /api/wajib-pajak/:id/attachments`
@@ -272,6 +279,9 @@ Aturan:
 - `POST /api/objek-pajak/import`
 - Auth export: `admin|editor|viewer`
 - Auth import: `admin|editor`
+- Query export:
+  - default / `mode=template`: template universal yang tetap importable
+  - `mode=operational&jenisPajak=<label-jenis>`: export operasional per jenis pajak
 - `detail_fasilitas` untuk perhotelan memakai format satu kolom dengan delimiter `|`
 - reklame tidak lagi memakai `detail_ukuran_reklame`, tetapi:
   - `detail_ukuran_panjang`
@@ -281,6 +291,19 @@ Aturan:
 - Error import dikembalikan per baris dalam bentuk pesan yang sudah dinormalisasi, misalnya:
   - `Baris 4: Format NOPD salah, mohon diperiksa kembali`
   - `Baris 8: NOPD sudah digunakan oleh objek pajak lain`
+
+Kolom template export OP:
+- kolom basis:
+  - `nopd, wp_id, rek_pajak_id, no_rek_pajak, nama_rek_pajak, nama_op, npwp_op, alamat_op, kecamatan_id, kecamatan_nama, kelurahan_id, kelurahan_nama, omset_bulanan, tarif_persen, pajak_bulanan, latitude, longitude, status, lampiran`
+- ditambah seluruh kolom `detail_*` lintas jenis pajak
+
+Kolom export operasional OP:
+- memakai kolom basis di atas
+- hanya menambahkan kolom `detail_*` yang relevan untuk `jenisPajak` yang diminta
+- tidak ditujukan sebagai template import utama
+
+Catatan:
+- `lampiran` berisi `ADA` jika OP memiliki minimal satu attachment.
 
 ### Attachment OP
 - `GET /api/objek-pajak/:id/attachments`

@@ -62,10 +62,11 @@ const OP_CSV_COLUMNS = [
 
 async function run() {
   const server = await createIntegrationServer();
-  const { requestJson, requestText, jsonRequest, loginAs } = server;
+  const { requestJson, requestText, requestForm, jsonRequest, loginAs } = server;
 
   let sourceId: number | null = null;
   let importedId: number | null = null;
+  let attachmentId: string | null = null;
 
   try {
     const loginResult = await loginAs("admin", "admin123");
@@ -109,6 +110,13 @@ async function run() {
     assert.equal(createSource.response.status, 201);
     sourceId = requiredNumber((createSource.body as JsonRecord).id, "source id wajib ada");
 
+    const attachmentForm = new FormData();
+    attachmentForm.set("documentType", "dokumen_lain");
+    attachmentForm.set("file", new Blob([Buffer.from("%PDF-1.4 op csv export")], { type: "application/pdf" }), "op-csv.pdf");
+    const uploadAttachment = await requestForm(`/api/objek-pajak/${sourceId}/attachments`, "POST", attachmentForm);
+    assert.equal(uploadAttachment.response.status, 201);
+    attachmentId = String((uploadAttachment.body as JsonRecord).id);
+
     const exportCsv = await requestText("/api/objek-pajak/export");
     assert.equal(exportCsv.response.status, 200);
 
@@ -124,10 +132,72 @@ async function run() {
     assert.ok(firstRowKeys.includes("rek_pajak_id"));
     assert.ok(firstRowKeys.includes("kecamatan_id"));
     assert.ok(firstRowKeys.includes("kelurahan_id"));
+    assert.ok(firstRowKeys.includes("lampiran"));
     assert.equal(firstRowKeys.includes("detail_pajak"), false, "Kolom legacy detail_pajak tidak boleh ada");
 
     const sourceRow = rows.find((row) => row.nama_op === sourceName);
     assert.ok(sourceRow, "Row sumber harus muncul di hasil export");
+    assert.equal(sourceRow?.lampiran, "ADA");
+
+    const internalList = await requestJson("/api/objek-pajak?includeUnverified=true&limit=50");
+    assert.equal(internalList.response.status, 200);
+    const internalItems = ((internalList.body as JsonRecord).items ?? []) as JsonRecord[];
+    const operationalCandidate = internalItems.find((item) => typeof item.jenisPajak === "string" && item.jenisPajak !== "Pajak MBLB");
+    assert.ok(operationalCandidate, "Minimal harus ada satu OP seeded dengan detail jenis pajak spesifik");
+    const operationalJenis = requiredString(operationalCandidate?.jenisPajak, "jenis pajak kandidat export wajib ada");
+
+    const operationalExport = await requestText(
+      `/api/objek-pajak/export?mode=operational&jenisPajak=${encodeURIComponent(operationalJenis)}`,
+    );
+    assert.equal(operationalExport.response.status, 200);
+    const operationalRows = parse<Record<string, string>>(operationalExport.body, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+    });
+    assert.ok(operationalRows.length > 0, "Export operasional per jenis harus berisi data");
+    const operationalHeaders = Object.keys(operationalRows[0]);
+    assert.ok(operationalHeaders.includes("lampiran"), "Export operasional harus memuat status lampiran");
+    assert.ok(operationalHeaders.includes("nama_op"));
+    assert.ok(operationalHeaders.includes("rek_pajak_id"));
+    const operationalExpectationByJenis: Record<string, { include: string; exclude: string }> = {
+      "PBJT Makanan dan Minuman": {
+        include: "detail_rata2_pengunjung",
+        exclude: "detail_jenis_reklame",
+      },
+      "PBJT Jasa Perhotelan": {
+        include: "detail_jumlah_kamar",
+        exclude: "detail_jenis_air_tanah",
+      },
+      "PBJT Jasa Parkir": {
+        include: "detail_tarif_parkir",
+        exclude: "detail_jenis_reklame",
+      },
+      "PBJT Jasa Kesenian dan Hiburan": {
+        include: "detail_jenis_hiburan",
+        exclude: "detail_jenis_air_tanah",
+      },
+      "PBJT Tenaga Listrik": {
+        include: "detail_daya_listrik",
+        exclude: "detail_jenis_reklame",
+      },
+      "Pajak Reklame": {
+        include: "detail_jenis_reklame",
+        exclude: "detail_jenis_air_tanah",
+      },
+      "Pajak Air Tanah": {
+        include: "detail_jenis_air_tanah",
+        exclude: "detail_jenis_reklame",
+      },
+      "Pajak Sarang Burung Walet": {
+        include: "detail_jenis_burung_walet",
+        exclude: "detail_jenis_reklame",
+      },
+    };
+    const operationalExpectation = operationalExpectationByJenis[operationalJenis];
+    assert.ok(operationalExpectation, `Jenis pajak export operasional belum dipetakan di test: ${operationalJenis}`);
+    assert.ok(operationalHeaders.includes(operationalExpectation.include));
+    assert.equal(operationalHeaders.includes(operationalExpectation.exclude), false);
 
     const importName = `IT CSV Imported ${Date.now()}`;
     const importRow: Record<string, string> = {
@@ -202,6 +272,10 @@ async function run() {
       "Import harus melaporkan format NOPD lama sebagai error yang jelas",
     );
   } finally {
+    if (attachmentId !== null && sourceId !== null) {
+      await jsonRequest(`/api/objek-pajak/${sourceId}/attachments/${attachmentId}`, "DELETE");
+    }
+
     if (importedId !== null) {
       await jsonRequest(`/api/objek-pajak/${importedId}`, "DELETE");
     }

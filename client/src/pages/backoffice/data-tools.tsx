@@ -1,10 +1,19 @@
 import { useRef } from "react";
-import { Download, Upload, Users, Building2, FileSpreadsheet } from "lucide-react";
+import { Download, Upload, Users, Building2, FileSpreadsheet, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { queryClient } from "@/lib/queryClient";
+import { JENIS_PAJAK_OPTIONS } from "@shared/schema";
 import BackofficeLayout from "./layout";
 
 export default function BackofficeDataTools() {
@@ -13,6 +22,10 @@ export default function BackofficeDataTools() {
   const { toast } = useToast();
   const wpFileRef = useRef<HTMLInputElement>(null);
   const opFileRef = useRef<HTMLInputElement>(null);
+  const opOperationalExports = JENIS_PAJAK_OPTIONS.map((jenisPajak) => ({
+    label: jenisPajak,
+    href: `/api/objek-pajak/export?mode=operational&jenisPajak=${encodeURIComponent(jenisPajak)}`,
+  }));
 
   async function handleImport(entity: "wajib-pajak" | "objek-pajak", file: File) {
     const formData = new FormData();
@@ -32,6 +45,10 @@ export default function BackofficeDataTools() {
     } catch (err: unknown) {
       toast({ title: "Error", description: err instanceof Error ? err.message : "Terjadi kesalahan", variant: "destructive" });
     }
+  }
+
+  function openCsvExport(href: string) {
+    window.open(href, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -65,11 +82,14 @@ export default function BackofficeDataTools() {
               <Button
                 variant="outline"
                 className="w-full justify-start font-mono text-xs font-bold"
-                onClick={() => window.open("/api/wajib-pajak/export", "_blank")}
+                onClick={() => openCsvExport("/api/wajib-pajak/export")}
               >
                 <Download className="mr-2 h-4 w-4" />
-                Export CSV
+                Export CSV Compact
               </Button>
+              <p className="px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-gray-500">
+                Subjek tunggal mengikuti peran WP + kolom lampiran.
+              </p>
               {canMutate && (
                 <Button
                   variant="outline"
@@ -100,11 +120,44 @@ export default function BackofficeDataTools() {
               <Button
                 variant="outline"
                 className="w-full justify-start font-mono text-xs font-bold"
-                onClick={() => window.open("/api/objek-pajak/export", "_blank")}
+                onClick={() => openCsvExport("/api/objek-pajak/export")}
               >
                 <Download className="mr-2 h-4 w-4" />
-                Export CSV
+                Export Template Import
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between font-mono text-xs font-bold"
+                    data-testid="button-export-op-operational"
+                  >
+                    <span className="flex items-center">
+                      <Download className="mr-2 h-4 w-4" />
+                      Export Operasional Per Jenis
+                    </span>
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-[320px] border border-black">
+                  <DropdownMenuLabel className="font-mono text-[10px] uppercase tracking-[0.14em] text-gray-500">
+                    Pilih jenis pajak
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {opOperationalExports.map((item) => (
+                    <DropdownMenuItem
+                      key={item.label}
+                      className="font-mono text-xs"
+                      onSelect={() => openCsvExport(item.href)}
+                    >
+                      {item.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <p className="px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-gray-500">
+                Template untuk import ulang. Export operasional dipisah per jenis pajak.
+              </p>
               {canMutate && (
                 <Button
                   variant="outline"

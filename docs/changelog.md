@@ -1,5 +1,21 @@
 # Changelog
 
+## Phase 2.16e — Data Tools Export Refresh
+
+### Added
+- Mode export operasional `Objek Pajak` per jenis pajak dari halaman `Data Tools`, terpisah dari template import universal.
+- Kolom `lampiran` pada export `Wajib Pajak` dan `Objek Pajak`, dengan nilai `ADA` jika entity memiliki attachment.
+- Regression suite baru `tests/integration/wp-csv-contract.integration.ts` untuk mengunci contract CSV WP compact.
+
+### Improved
+- Export `Wajib Pajak` sekarang memakai struktur subjek tunggal yang mengikuti `peran_wp`, sehingga file operasional tidak lagi memecah pemilik vs pengelola ke dua blok kolom terpisah.
+- Export default `Objek Pajak` tetap importable sebagai template universal, sementara export operasional hanya membawa kolom detail yang relevan per jenis pajak.
+- Halaman `Data Tools` sekarang menjelaskan perbedaan `template import` vs `export operasional` agar operator tidak salah pilih file.
+
+### Fixed
+- Import `Wajib Pajak` sekarang backward-compatible terhadap header compact baru dan header legacy lama.
+- Export `Objek Pajak` tidak lagi memaksa operator membaca semua kolom `detail_*` lintas jenis pajak dalam satu file operasional.
+
 ## Phase 2.16d — Objek Pajak Table Follow-up
 
 ### Improved

@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { type Server } from "http";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { and, asc, desc, eq, gte, ilike, lte, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, lt, or, sql, type SQL } from "drizzle-orm";
 import { db, ensureDatabaseConnection, storage } from "./storage";
 import { env } from "./env";
 import {
@@ -54,19 +54,14 @@ const WP_CSV_COLUMNS = [
   "peran_wp",
   "npwpd",
   "status_aktif",
-  "nama_wp",
-  "nik_ktp_wp",
-  "alamat_wp",
-  "kecamatan_wp",
-  "kelurahan_wp",
-  "telepon_wa_wp",
-  "email_wp",
-  "nama_pengelola",
-  "nik_pengelola",
-  "alamat_pengelola",
-  "kecamatan_pengelola",
-  "kelurahan_pengelola",
-  "telepon_wa_pengelola",
+  "nama_subjek",
+  "nik_subjek",
+  "alamat_subjek",
+  "kecamatan_subjek",
+  "kelurahan_subjek",
+  "telepon_wa_subjek",
+  "email_subjek",
+  "lampiran",
   "nama_badan_usaha",
   "npwp_badan_usaha",
   "alamat_badan_usaha",
@@ -76,7 +71,7 @@ const WP_CSV_COLUMNS = [
   "email_badan_usaha",
 ] as const;
 
-const OP_CSV_COLUMNS = [
+const OP_CSV_BASE_COLUMNS = [
   "nopd",
   "wp_id",
   "rek_pajak_id",
@@ -95,6 +90,10 @@ const OP_CSV_COLUMNS = [
   "latitude",
   "longitude",
   "status",
+  "lampiran",
+] as const;
+
+const OP_CSV_DETAIL_COLUMNS = [
   "detail_jenis_usaha",
   "detail_kapasitas_tempat",
   "detail_jumlah_karyawan",
@@ -131,6 +130,66 @@ const OP_CSV_COLUMNS = [
   "detail_panen_per_tahun",
   "detail_rata2_berat_panen",
 ] as const;
+
+const OP_CSV_COLUMNS = [...OP_CSV_BASE_COLUMNS, ...OP_CSV_DETAIL_COLUMNS] as const;
+
+const OP_OPERATIONAL_DETAIL_COLUMNS_BY_JENIS: Record<JenisPajakOption, readonly string[]> = {
+  "PBJT Makanan dan Minuman": [
+    "detail_jenis_usaha",
+    "detail_kapasitas_tempat",
+    "detail_jumlah_karyawan",
+    "detail_rata2_pengunjung",
+    "detail_jam_buka",
+    "detail_jam_tutup",
+    "detail_harga_termurah",
+    "detail_harga_termahal",
+    "detail_klasifikasi",
+  ],
+  "PBJT Jasa Perhotelan": [
+    "detail_jenis_usaha",
+    "detail_jumlah_kamar",
+    "detail_klasifikasi",
+    "detail_fasilitas",
+    "detail_rata2_pengunjung_harian",
+  ],
+  "PBJT Jasa Parkir": [
+    "detail_jenis_usaha",
+    "detail_jenis_lokasi",
+    "detail_kapasitas_kendaraan",
+    "detail_tarif_parkir",
+  ],
+  "PBJT Jasa Kesenian dan Hiburan": [
+    "detail_jenis_hiburan",
+    "detail_kapasitas",
+    "detail_jam_operasional",
+  ],
+  "PBJT Tenaga Listrik": [
+    "detail_jenis_tenaga_listrik",
+    "detail_daya_listrik",
+  ],
+  "Pajak Reklame": [
+    "detail_jenis_reklame",
+    "detail_ukuran_panjang",
+    "detail_ukuran_lebar",
+    "detail_ukuran_tinggi",
+    "detail_judul_reklame",
+    "detail_masa_berlaku",
+    "detail_status_reklame",
+    "detail_nama_biro_jasa",
+  ],
+  "Pajak Air Tanah": [
+    "detail_jenis_air_tanah",
+    "detail_rata2_ukuran_pemakaian",
+    "detail_kriteria_air_tanah",
+    "detail_kelompok_usaha",
+  ],
+  "Pajak Sarang Burung Walet": [
+    "detail_jenis_burung_walet",
+    "detail_panen_per_tahun",
+    "detail_rata2_berat_panen",
+  ],
+  "Pajak MBLB": [],
+};
 
 type AuditAction =
   | "create"
@@ -1306,6 +1365,139 @@ function flattenDetailForCsv(detail: unknown) {
   };
 }
 
+type CsvAttachmentEntityType = "wajib_pajak" | "objek_pajak";
+type OpExportMode = "template" | "operational";
+type JenisPajakOption = (typeof JENIS_PAJAK_OPTIONS)[number];
+
+function readCsvValue(row: CsvImportRow, ...keys: string[]) {
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+function hasAnyCsvValue(row: CsvImportRow, keys: readonly string[]) {
+  return keys.some((key) => {
+    const value = row[key];
+    return typeof value === "string" && value.trim().length > 0;
+  });
+}
+
+function resolveWpImportPayloadFromCsvRow(row: CsvImportRow) {
+  const peranWp = typeof row.peran_wp === "string" ? row.peran_wp.trim() : undefined;
+  const hasCompactSubject = hasAnyCsvValue(row, [
+    "nama_subjek",
+    "nik_subjek",
+    "alamat_subjek",
+    "kecamatan_subjek",
+    "kelurahan_subjek",
+    "telepon_wa_subjek",
+    "email_subjek",
+  ]);
+  const useCompactSubjectForPemilik = hasCompactSubject && peranWp !== "pengelola";
+  const useCompactSubjectForPengelola = hasCompactSubject && peranWp === "pengelola";
+
+  return normalizeWpData({
+    jenisWp: row.jenis_wp,
+    peranWp: row.peran_wp,
+    npwpd: row.npwpd,
+    statusAktif: row.status_aktif,
+
+    namaWp: useCompactSubjectForPemilik ? readCsvValue(row, "nama_subjek") : row.nama_wp,
+    nikKtpWp: useCompactSubjectForPemilik ? readCsvValue(row, "nik_subjek") : row.nik_ktp_wp,
+    alamatWp: useCompactSubjectForPemilik ? readCsvValue(row, "alamat_subjek") : row.alamat_wp,
+    kecamatanWp: useCompactSubjectForPemilik ? readCsvValue(row, "kecamatan_subjek") : row.kecamatan_wp,
+    kelurahanWp: useCompactSubjectForPemilik ? readCsvValue(row, "kelurahan_subjek") : row.kelurahan_wp,
+    teleponWaWp: useCompactSubjectForPemilik ? readCsvValue(row, "telepon_wa_subjek") : row.telepon_wa_wp,
+    emailWp: useCompactSubjectForPemilik ? readCsvValue(row, "email_subjek") : row.email_wp,
+
+    namaPengelola: useCompactSubjectForPengelola ? readCsvValue(row, "nama_subjek") : row.nama_pengelola,
+    nikPengelola: useCompactSubjectForPengelola ? readCsvValue(row, "nik_subjek") : row.nik_pengelola,
+    alamatPengelola: useCompactSubjectForPengelola ? readCsvValue(row, "alamat_subjek") : row.alamat_pengelola,
+    kecamatanPengelola: useCompactSubjectForPengelola ? readCsvValue(row, "kecamatan_subjek") : row.kecamatan_pengelola,
+    kelurahanPengelola: useCompactSubjectForPengelola ? readCsvValue(row, "kelurahan_subjek") : row.kelurahan_pengelola,
+    teleponWaPengelola: useCompactSubjectForPengelola ? readCsvValue(row, "telepon_wa_subjek") : row.telepon_wa_pengelola,
+
+    badanUsaha: {
+      namaBadanUsaha: row.nama_badan_usaha,
+      npwpBadanUsaha: row.npwp_badan_usaha,
+      alamatBadanUsaha: row.alamat_badan_usaha,
+      kecamatanBadanUsaha: row.kecamatan_badan_usaha,
+      kelurahanBadanUsaha: row.kelurahan_badan_usaha,
+      teleponBadanUsaha: row.telepon_badan_usaha,
+      emailBadanUsaha: row.email_badan_usaha,
+    },
+  });
+}
+
+function selectWpSubjectForCsv(wp: WajibPajakWithBadanUsaha) {
+  const prefersPengelola = wp.peranWp === "pengelola";
+
+  return {
+    nama_subjek: prefersPengelola ? wp.namaPengelola || wp.namaWp || "" : wp.namaWp || wp.namaPengelola || "",
+    nik_subjek: prefersPengelola ? wp.nikPengelola || wp.nikKtpWp || "" : wp.nikKtpWp || wp.nikPengelola || "",
+    alamat_subjek: prefersPengelola ? wp.alamatPengelola || wp.alamatWp || "" : wp.alamatWp || wp.alamatPengelola || "",
+    kecamatan_subjek: prefersPengelola ? wp.kecamatanPengelola || wp.kecamatanWp || "" : wp.kecamatanWp || wp.kecamatanPengelola || "",
+    kelurahan_subjek: prefersPengelola ? wp.kelurahanPengelola || wp.kelurahanWp || "" : wp.kelurahanWp || wp.kelurahanPengelola || "",
+    telepon_wa_subjek: prefersPengelola ? wp.teleponWaPengelola || wp.teleponWaWp || "" : wp.teleponWaWp || wp.teleponWaPengelola || "",
+    email_subjek: prefersPengelola ? "" : wp.emailWp || "",
+  };
+}
+
+async function buildAttachmentPresenceMap(entityType: CsvAttachmentEntityType, entityIds: number[]) {
+  const uniqueIds = Array.from(new Set(entityIds.filter((value) => Number.isFinite(value))));
+  if (uniqueIds.length === 0) {
+    return new Map<number, "ADA">();
+  }
+
+  const rows = await db
+    .select({
+      entityId: entityAttachment.entityId,
+      count: sql<number>`cast(count(*) as int)`,
+    })
+    .from(entityAttachment)
+    .where(and(eq(entityAttachment.entityType, entityType), inArray(entityAttachment.entityId, uniqueIds)))
+    .groupBy(entityAttachment.entityId);
+
+  return new Map(
+    rows.filter((row) => Number(row.count) > 0).map((row) => [row.entityId, "ADA" as const]),
+  );
+}
+
+function parseObjekPajakExportMode(value: unknown): OpExportMode | null {
+  if (value === undefined || value === null || value === "") return "template";
+  if (value === "template" || value === "operational") return value;
+  return null;
+}
+
+function parseJenisPajakOption(value: unknown): JenisPajakOption | null {
+  if (typeof value !== "string" || value.trim().length === 0) return null;
+  const normalized = value.trim();
+  return JENIS_PAJAK_OPTIONS.includes(normalized as JenisPajakOption) ? (normalized as JenisPajakOption) : null;
+}
+
+function buildOperationalDetailForCsv(detail: unknown, jenisPajak: JenisPajakOption) {
+  const flattened: Record<string, unknown> = flattenDetailForCsv(detail);
+  const allowedColumns = OP_OPERATIONAL_DETAIL_COLUMNS_BY_JENIS[jenisPajak];
+  return Object.fromEntries(allowedColumns.map((column: string) => [column, flattened[column] ?? ""]));
+}
+
+function buildObjekPajakExportFileName(mode: OpExportMode, jenisPajak?: JenisPajakOption | null) {
+  if (mode === "template") {
+    return "objek_pajak_template.csv";
+  }
+
+  const safeJenis = (jenisPajak ?? "operasional")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return `objek_pajak_${safeJenis}.csv`;
+}
+
 async function buildDashboardSummaryData(params: {
   includeUnverified: boolean;
   summaryFrom?: Date;
@@ -2059,26 +2251,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
 
     const data = await storage.getAllWajibPajak();
+    const attachmentMap = await buildAttachmentPresenceMap(
+      "wajib_pajak",
+      data.map((wp) => wp.id),
+    );
     const rows = data.map((wp) => ({
       jenis_wp: wp.jenisWp,
       peran_wp: wp.peranWp,
       npwpd: wp.npwpd || "",
       status_aktif: wp.statusAktif,
-
-      nama_wp: wp.namaWp || "",
-      nik_ktp_wp: wp.nikKtpWp || "",
-      alamat_wp: wp.alamatWp || "",
-      kecamatan_wp: wp.kecamatanWp || "",
-      kelurahan_wp: wp.kelurahanWp || "",
-      telepon_wa_wp: wp.teleponWaWp || "",
-      email_wp: wp.emailWp || "",
-
-      nama_pengelola: wp.namaPengelola || "",
-      nik_pengelola: wp.nikPengelola || "",
-      alamat_pengelola: wp.alamatPengelola || "",
-      kecamatan_pengelola: wp.kecamatanPengelola || "",
-      kelurahan_pengelola: wp.kelurahanPengelola || "",
-      telepon_wa_pengelola: wp.teleponWaPengelola || "",
+      ...selectWpSubjectForCsv(wp),
+      lampiran: attachmentMap.get(wp.id) ?? "",
 
       nama_badan_usaha: wp.badanUsaha?.namaBadanUsaha || "",
       npwp_badan_usaha: wp.badanUsaha?.npwpBadanUsaha || "",
@@ -2114,37 +2297,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       for (let i = 0; i < records.length; i++) {
         const row = records[i];
 
-        const wpData = normalizeWpData({
-          jenisWp: row.jenis_wp,
-          peranWp: row.peran_wp,
-          npwpd: row.npwpd,
-          statusAktif: row.status_aktif,
-
-          namaWp: row.nama_wp,
-          nikKtpWp: row.nik_ktp_wp,
-          alamatWp: row.alamat_wp,
-          kecamatanWp: row.kecamatan_wp,
-          kelurahanWp: row.kelurahan_wp,
-          teleponWaWp: row.telepon_wa_wp,
-          emailWp: row.email_wp,
-
-          namaPengelola: row.nama_pengelola,
-          nikPengelola: row.nik_pengelola,
-          alamatPengelola: row.alamat_pengelola,
-          kecamatanPengelola: row.kecamatan_pengelola,
-          kelurahanPengelola: row.kelurahan_pengelola,
-          teleponWaPengelola: row.telepon_wa_pengelola,
-
-          badanUsaha: {
-            namaBadanUsaha: row.nama_badan_usaha,
-            npwpBadanUsaha: row.npwp_badan_usaha,
-            alamatBadanUsaha: row.alamat_badan_usaha,
-            kecamatanBadanUsaha: row.kecamatan_badan_usaha,
-            kelurahanBadanUsaha: row.kelurahan_badan_usaha,
-            teleponBadanUsaha: row.telepon_badan_usaha,
-            emailBadanUsaha: row.email_badan_usaha,
-          },
-        });
+        const wpData = resolveWpImportPayloadFromCsvRow(row);
 
         const parsed = createWajibPajakSchema.safeParse(wpData);
         if (!parsed.success) {
@@ -3047,7 +3200,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/objek-pajak/export", async (req, res) => {
     if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
 
-    const data = await storage.getAllObjekPajak();
+    const mode = parseObjekPajakExportMode(req.query.mode);
+    if (!mode) {
+      return res.status(400).json({ message: "mode export objek pajak tidak valid" });
+    }
+
+    const requestedJenis = req.query.jenisPajak;
+    const jenisPajak = mode === "operational" ? parseJenisPajakOption(requestedJenis) : null;
+    if (mode === "operational" && !jenisPajak) {
+      return res.status(400).json({ message: "jenisPajak wajib valid untuk export operasional" });
+    }
+
+    const data = await storage.getAllObjekPajak(
+      mode === "operational" && jenisPajak ? { jenisPajak } : undefined,
+    );
+    const attachmentMap = await buildAttachmentPresenceMap(
+      "objek_pajak",
+      data.map((op) => op.id),
+    );
+    const columns =
+      mode === "template" || !jenisPajak
+        ? [...OP_CSV_COLUMNS]
+        : [...OP_CSV_BASE_COLUMNS, ...OP_OPERATIONAL_DETAIL_COLUMNS_BY_JENIS[jenisPajak]];
     const rows = data.map((op) => ({
       nopd: op.nopd,
       wp_id: op.wpId,
@@ -3067,12 +3241,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       latitude: op.latitude || "",
       longitude: op.longitude || "",
       status: op.status,
-      ...flattenDetailForCsv(op.detailPajak),
+      lampiran: attachmentMap.get(op.id) ?? "",
+      ...(mode === "template" || !jenisPajak
+        ? flattenDetailForCsv(op.detailPajak)
+        : buildOperationalDetailForCsv(op.detailPajak, jenisPajak)),
     }));
 
-    const csv = stringify(rows, { header: true, columns: [...OP_CSV_COLUMNS] });
+    const csv = stringify(rows, { header: true, columns });
     res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", "attachment; filename=objek_pajak.csv");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=${buildObjekPajakExportFileName(mode, jenisPajak)}`,
+    );
     res.send(csv);
   });
 
