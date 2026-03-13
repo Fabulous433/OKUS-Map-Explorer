@@ -21,6 +21,7 @@
 - Task file ini baru berisi parent task. Siap dipecah menjadi sub-task saat eksekusi dimulai.
 - Jika workspace utama masih dirty atau branch aktif bukan baseline WFS, selesaikan dulu `tasks/tasks-map-wfs-clean-start.md` sebelum menjalankan task ini.
 - Follow-up UX city-first untuk home map, drawer desktop, dan perilaku basemap sekarang dilacak terpisah di `tasks/tasks-public-map-city-first-ux.md`.
+- Catatan koordinasi branch (2026-03-13): branch aktif `codex/map-wfs-refactor` sekarang juga memuat batch backoffice `Phase 2.16d` dan `Phase 2.16e` agar hanya ada satu cabang kerja aktif. Fokus eksekusi tetap map sampai task `7.0` staging validation selesai; review lanjutan export/import diparkir di `docs/plans/2026-03-13-post-map-data-tools-rollout-plan.md`.
 
 ## Instructions for Completing Tasks
 

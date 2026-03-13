@@ -64,6 +64,7 @@ Merefactor halaman map publik agar source data marker bisa berpindah dari endpoi
 
 - Dokumen ini adalah paket persiapan implementasi, bukan bukti bahwa integrasi WFS sudah dikerjakan.
 - Sub-task detail untuk implementasi diturunkan di `tasks/tasks-map-wfs-refactor.md`.
+- Catatan koordinasi branch (2026-03-13): commit backoffice untuk compaction tabel operator dan refactor export/import `Data Tools` sudah ikut berada di branch ini agar alur kerja tetap satu cabang aktif. Prioritas eksekusi tidak berubah: map publik harus ditutup dulu lewat smoke staging sebelum batch export/import dilanjutkan sebagai stream kerja aktif.
 
 ## Execution Notes (2026-03-12)
 
@@ -165,3 +166,16 @@ Merefactor halaman map publik agar source data marker bisa berpindah dari endpoi
 - Yang masih pending setelah follow-up ini:
   - browser smoke pada target staging nyata untuk jalur `backend-proxy`
   - evidence browser staging yang mengikuti alur drawer desktop, browse-first idle state, dan batas zoom `ESRI Satellite`
+
+## Coordination Note (2026-03-13)
+
+- Batch backoffice yang sudah ikut berada di branch ini:
+  - `Phase 2.16d — Objek Pajak Table Follow-up`
+  - `Phase 2.16e — Data Tools Export Refresh`
+- Alasan:
+  - menjaga rule satu branch aktif agar tidak ada cabang task baru yang menggantung di atas branch map
+  - menghindari merge order yang membingungkan antara task map dan task export/import
+- Status:
+  - implementasi dan test batch backoffice sudah masuk branch
+  - validasi manual dan keputusan rollout batch export/import sengaja ditunda
+  - follow-up kerja sesudah map selesai dilacak di `docs/plans/2026-03-13-post-map-data-tools-rollout-plan.md`
