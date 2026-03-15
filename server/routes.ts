@@ -823,6 +823,44 @@ function normalizeObjekPajakMutationError(error: unknown): {
     };
   }
 
+  if (message.includes("kabupaten aktif")) {
+    return {
+      status: 400,
+      message,
+      fieldErrors: [
+        { field: "latitude", message },
+        { field: "longitude", message },
+      ],
+    };
+  }
+
+  if (message.includes("kecamatan terpilih") || message.includes("kecamatan aktif")) {
+    return {
+      status: 400,
+      message,
+      fieldErrors: [{ field: "kecamatanId", message }],
+    };
+  }
+
+  if (message.includes("kelurahan terpilih")) {
+    return {
+      status: 400,
+      message,
+      fieldErrors: [{ field: "kelurahanId", message }],
+    };
+  }
+
+  if (message.includes("latitude/longitude tidak valid")) {
+    return {
+      status: 400,
+      message,
+      fieldErrors: [
+        { field: "latitude", message },
+        { field: "longitude", message },
+      ],
+    };
+  }
+
   if (message.includes("Rekening pajak tidak ditemukan")) {
     return {
       status: 400,

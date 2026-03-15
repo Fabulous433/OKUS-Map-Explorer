@@ -42,6 +42,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { env } from "./env";
 import { instrumentPoolForSlowQueryLogging } from "./observability";
+import { findContainingDesa, findContainingKecamatan, isPointInsideActiveKabupaten } from "./region-boundaries";
 
 const pool = new pg.Pool({
   connectionString: env.DATABASE_URL,
@@ -667,6 +668,83 @@ async function assertKelurahanDalamKecamatan(kelurahanId: string, kecamatanId: s
   }
 }
 
+function normalizeRegionName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function toCoordinateNumber(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error("Koordinat latitude/longitude tidak valid");
+  }
+
+  return parsed;
+}
+
+async function getKecamatanById(kecamatanId: string) {
+  const [row] = await db.select().from(masterKecamatan).where(eq(masterKecamatan.cpmKecId, kecamatanId)).limit(1);
+  if (!row) {
+    throw new Error("Kecamatan tidak ditemukan");
+  }
+
+  return row;
+}
+
+async function getKelurahanById(kelurahanId: string) {
+  const [row] = await db.select().from(masterKelurahan).where(eq(masterKelurahan.cpmKelId, kelurahanId)).limit(1);
+  if (!row) {
+    throw new Error("Kelurahan tidak ditemukan");
+  }
+
+  return row;
+}
+
+async function assertSpatialRegionSelection(input: {
+  latitude: unknown;
+  longitude: unknown;
+  kecamatanId: string;
+  kelurahanId: string;
+}) {
+  const latitude = toCoordinateNumber(input.latitude);
+  const longitude = toCoordinateNumber(input.longitude);
+  if (latitude === null || longitude === null) {
+    return;
+  }
+
+  const isInsideKabupaten = await isPointInsideActiveKabupaten(longitude, latitude);
+  if (!isInsideKabupaten) {
+    throw new Error("Koordinat berada di luar kabupaten aktif OKU Selatan");
+  }
+
+  const containingKecamatan = await findContainingKecamatan(longitude, latitude);
+  if (!containingKecamatan?.name) {
+    throw new Error("Koordinat tidak dapat dipetakan ke kecamatan aktif OKU Selatan");
+  }
+
+  const selectedKecamatan = await getKecamatanById(input.kecamatanId);
+  if (normalizeRegionName(containingKecamatan.name) !== normalizeRegionName(selectedKecamatan.cpmKecamatan)) {
+    throw new Error(
+      `Koordinat berada di kecamatan ${containingKecamatan.name}, bukan kecamatan terpilih ${selectedKecamatan.cpmKecamatan}`,
+    );
+  }
+
+  const containingDesa = await findContainingDesa(longitude, latitude);
+  if (!containingDesa?.name) {
+    return;
+  }
+
+  const selectedKelurahan = await getKelurahanById(input.kelurahanId);
+  if (normalizeRegionName(containingDesa.name) !== normalizeRegionName(selectedKelurahan.cpmKelurahan)) {
+    throw new Error(
+      `Koordinat berada di kelurahan ${containingDesa.name}, bukan kelurahan terpilih ${selectedKelurahan.cpmKelurahan}`,
+    );
+  }
+}
+
 async function getRekeningById(id: number) {
   const [rekening] = await db.select().from(masterRekeningPajak).where(eq(masterRekeningPajak.id, id));
   if (!rekening) {
@@ -1270,6 +1348,12 @@ export class DatabaseStorage implements IStorage {
     const rekening = await getRekeningById(base.rekPajakId);
     const finalNopd = await resolveNopd(rekening, nopd ?? undefined);
     await assertKelurahanDalamKecamatan(base.kelurahanId, base.kecamatanId);
+    await assertSpatialRegionSelection({
+      latitude: base.latitude,
+      longitude: base.longitude,
+      kecamatanId: base.kecamatanId,
+      kelurahanId: base.kelurahanId,
+    });
 
     const [created] = await db
       .insert(objekPajak)
@@ -1302,7 +1386,15 @@ export class DatabaseStorage implements IStorage {
 
     const nextKecamatanId = op.kecamatanId ?? current.kecamatanId;
     const nextKelurahanId = op.kelurahanId ?? current.kelurahanId;
+    const nextLatitude = op.latitude !== undefined ? op.latitude : current.latitude;
+    const nextLongitude = op.longitude !== undefined ? op.longitude : current.longitude;
     await assertKelurahanDalamKecamatan(nextKelurahanId, nextKecamatanId);
+    await assertSpatialRegionSelection({
+      latitude: nextLatitude,
+      longitude: nextLongitude,
+      kecamatanId: nextKecamatanId,
+      kelurahanId: nextKelurahanId,
+    });
 
     let nextNopd = current.nopd;
     if (op.nopd !== undefined) {
@@ -1330,8 +1422,8 @@ export class DatabaseStorage implements IStorage {
       omsetBulanan: op.omsetBulanan !== undefined ? op.omsetBulanan : current.omsetBulanan,
       tarifPersen: op.tarifPersen !== undefined ? op.tarifPersen : current.tarifPersen,
       pajakBulanan: op.pajakBulanan !== undefined ? op.pajakBulanan : current.pajakBulanan,
-      latitude: op.latitude !== undefined ? op.latitude : current.latitude,
-      longitude: op.longitude !== undefined ? op.longitude : current.longitude,
+      latitude: nextLatitude,
+      longitude: nextLongitude,
       status: op.status ?? current.status,
       updatedAt: new Date(),
     };
