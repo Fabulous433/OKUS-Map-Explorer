@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { GeoJSON, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { Filter, Loader2, MapPin, Search, Settings, Target } from "lucide-react";
 import L from "leaflet";
 import { DesktopMapFilterSheet } from "@/components/map/desktop-map-filter-sheet";
@@ -20,8 +20,10 @@ import {
   shouldShowEmptyViewportState,
   type MapViewportResult,
 } from "@/lib/map/map-viewport-query";
+import { loadActiveRegionBoundary } from "@/lib/map/region-boundary-query";
 import { getQueryFn } from "@/lib/queryClient";
 import { regionConfig } from "@/lib/region-config";
+import type { RegionBoundaryBounds } from "@shared/region-boundary";
 import type { MasterKecamatan, MasterRekeningPajak } from "@shared/schema";
 import "leaflet/dist/leaflet.css";
 
@@ -64,6 +66,13 @@ function formatCurrency(value: string | null | undefined) {
   }).format(numeric);
 }
 
+function toLeafletBounds(bounds: RegionBoundaryBounds): L.LatLngBoundsExpression {
+  return [
+    [bounds.minLat, bounds.minLng],
+    [bounds.maxLat, bounds.maxLng],
+  ];
+}
+
 function MapViewportTracker(props: { onChange: (bbox: MapViewportBbox, zoom: number) => void }) {
   const map = useMap();
 
@@ -97,7 +106,11 @@ function MapViewportTracker(props: { onChange: (bbox: MapViewportBbox, zoom: num
   return null;
 }
 
-function MapTopRightControls(props: { isFetching: boolean; isMobile: boolean }) {
+function MapTopRightControls(props: {
+  isFetching: boolean;
+  isMobile: boolean;
+  activeBounds: RegionBoundaryBounds | null;
+}) {
   const map = useMap();
   return (
     <div className={`absolute z-[1000] flex gap-2 ${props.isMobile ? "right-3 top-16" : "right-4 top-4"}`}>
@@ -105,7 +118,14 @@ function MapTopRightControls(props: { isFetching: boolean; isMobile: boolean }) 
         size="icon"
         variant="outline"
         className="rounded-lg bg-background shadow-card"
-        onClick={() => map.flyTo(regionConfig.map.center, regionConfig.map.defaultZoom, { duration: 0.7 })}
+        onClick={() => {
+          if (props.activeBounds) {
+            map.fitBounds(toLeafletBounds(props.activeBounds), { padding: [24, 24] });
+            return;
+          }
+
+          map.flyTo(regionConfig.map.center, regionConfig.map.defaultZoom, { duration: 0.7 });
+        }}
         title="Reset view"
         aria-label="Reset view"
       >
@@ -119,6 +139,25 @@ function MapTopRightControls(props: { isFetching: boolean; isMobile: boolean }) 
       )}
     </div>
   );
+}
+
+function MapActiveRegionController(props: {
+  activeBounds: RegionBoundaryBounds | null;
+  focusTarget: { lat: number; lng: number } | null;
+}) {
+  const map = useMap();
+  const hasAnchoredRef = useRef(false);
+
+  useEffect(() => {
+    if (!props.activeBounds || props.focusTarget || hasAnchoredRef.current) {
+      return;
+    }
+
+    map.fitBounds(toLeafletBounds(props.activeBounds), { padding: [24, 24] });
+    hasAnchoredRef.current = true;
+  }, [map, props.activeBounds, props.focusTarget]);
+
+  return null;
 }
 
 function MapFocusController(props: {
@@ -241,8 +280,15 @@ export default function MapPage() {
     queryKey: ["/api/master/rekening-pajak"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
+  const { data: activeKabupatenBoundary } = useQuery({
+    queryKey: ["active-region-boundary", regionConfig.identity.regionKey, "kabupaten"],
+    queryFn: ({ signal }) => loadActiveRegionBoundary({ level: "kabupaten", signal }),
+    staleTime: 5 * 60 * 1000,
+  });
   const kecamatanList = kecamatanData ?? [];
   const rekeningList = rekeningData ?? [];
+  const activeRegionBounds = activeKabupatenBoundary?.bounds ?? null;
+  const activeKabupatenGeoJson = activeKabupatenBoundary?.boundary ?? null;
 
   const mapConfig = PUBLIC_BASE_MAPS[baseMap];
 
@@ -386,6 +432,7 @@ export default function MapPage() {
         zoomControl={false}
       >
         <TileLayer attribution={mapConfig.attribution} url={mapConfig.url} maxZoom={mapConfig.maxZoom} />
+        <MapActiveRegionController activeBounds={activeRegionBounds} focusTarget={focusParams.target} />
         <MapFocusController target={focusParams.target} zoom={Math.max(regionConfig.map.defaultZoom, 18)} />
         <MapZoomBoundsController maxZoom={mapConfig.maxZoom} />
         <MapViewportTracker
@@ -394,7 +441,21 @@ export default function MapPage() {
             setZoom(nextZoom);
           }}
         />
-        <MapTopRightControls isFetching={isFetching} isMobile={isMobile} />
+        <MapTopRightControls isFetching={isFetching} isMobile={isMobile} activeBounds={activeRegionBounds} />
+
+        {activeKabupatenGeoJson ? (
+          <GeoJSON
+            data={activeKabupatenGeoJson as any}
+            interactive={false}
+            pathOptions={{
+              color: "#0f766e",
+              weight: isMobile ? 2 : 3,
+              opacity: 0.95,
+              fillColor: "#14b8a6",
+              fillOpacity: 0.05,
+            }}
+          />
+        ) : null}
 
         {markerList.map((item) => (
           <Marker

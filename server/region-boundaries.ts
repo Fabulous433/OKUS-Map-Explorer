@@ -3,22 +3,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import bbox from "@turf/bbox";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
-
-type GeoJsonGeometry = {
-  type: string;
-  coordinates: unknown;
-};
-
-type GeoJsonFeature = {
-  type: "Feature";
-  properties: Record<string, unknown>;
-  geometry: GeoJsonGeometry;
-};
-
-type GeoJsonFeatureCollection = {
-  type: "FeatureCollection";
-  features: GeoJsonFeature[];
-};
+import type {
+  GeoJsonFeature,
+  GeoJsonFeatureCollection,
+  RegionBoundaryBounds,
+  RegionBoundaryLevel,
+  RegionBoundaryPrecision,
+  RegionBoundaryResponse,
+} from "@shared/region-boundary";
 
 type ActiveRegionBundle = {
   regionKey: "okus";
@@ -34,13 +26,6 @@ type ActiveRegionBundle = {
   desa: {
     precise: GeoJsonFeatureCollection;
   };
-};
-
-type ActiveRegionBounds = {
-  minLng: number;
-  minLat: number;
-  maxLng: number;
-  maxLat: number;
 };
 
 type ContainingFeature = {
@@ -90,7 +75,9 @@ export async function getActiveRegionBundle() {
 
 export async function isPointInsideActiveKabupaten(longitude: number, latitude: number) {
   const bundle = await getActiveRegionBundle();
-  return bundle.kabupaten.precise.features.some((feature) => booleanPointInPolygon([longitude, latitude], feature));
+  return bundle.kabupaten.precise.features.some((feature) =>
+    booleanPointInPolygon([longitude, latitude], feature as any),
+  );
 }
 
 function findContainingFeature(
@@ -99,7 +86,7 @@ function findContainingFeature(
   latitude: number,
   propertyKey: string,
 ): ContainingFeature | null {
-  const feature = collection.features.find((item) => booleanPointInPolygon([longitude, latitude], item));
+  const feature = collection.features.find((item) => booleanPointInPolygon([longitude, latitude], item as any));
   if (!feature) {
     return null;
   }
@@ -121,13 +108,39 @@ export async function findContainingDesa(longitude: number, latitude: number) {
   return findContainingFeature(bundle.desa.precise, longitude, latitude, "WADMKD");
 }
 
-export async function getActiveRegionBounds(): Promise<ActiveRegionBounds> {
+export async function getActiveRegionBounds(): Promise<RegionBoundaryBounds> {
   const bundle = await getActiveRegionBundle();
-  const [minLng, minLat, maxLng, maxLat] = bbox(bundle.kabupaten.precise);
+  const [minLng, minLat, maxLng, maxLat] = bbox(bundle.kabupaten.precise as any);
   return {
     minLng,
     minLat,
     maxLng,
     maxLat,
+  };
+}
+
+export async function getActiveRegionBoundary(
+  level: RegionBoundaryLevel,
+  precision: RegionBoundaryPrecision,
+): Promise<RegionBoundaryResponse> {
+  const bundle = await getActiveRegionBundle();
+  const bounds = await getActiveRegionBounds();
+
+  const boundary =
+    level === "kabupaten"
+      ? precision === "light"
+        ? bundle.kabupaten.light
+        : bundle.kabupaten.precise
+      : precision === "light"
+        ? bundle.kecamatan.light
+        : bundle.kecamatan.precise;
+
+  return {
+    regionKey: bundle.regionKey,
+    regionName: bundle.regionName,
+    level,
+    precision,
+    bounds,
+    boundary,
   };
 }

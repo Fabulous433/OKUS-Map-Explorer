@@ -44,6 +44,7 @@ import { ZodError, type ZodIssue } from "zod";
 import { APP_ROLE_OPTIONS, hashPassword, isAppRole, PASSWORD_POLICY, validatePasswordPolicy, verifyPassword, type AppRole, type SessionUser } from "./auth";
 import { LoginSecurityService, resolveLoginClientId } from "./auth-security";
 import { buildAttachmentDownloadPath, deleteAttachmentFile, ensureAttachmentStorageRoot, saveAttachmentBuffer } from "./file-storage";
+import { getActiveRegionBoundary } from "./region-boundaries";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: ATTACHMENT_MAX_FILE_SIZE_BYTES } });
 
@@ -3091,6 +3092,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
 
     return sendJsonWithEtag(req, res, data);
+  });
+
+  app.get("/api/region-boundaries/active/kabupaten", async (req, res) => {
+    const boundary = await getActiveRegionBoundary("kabupaten", "light");
+    return sendJsonWithEtag(req, res, boundary);
+  });
+
+  app.get("/api/region-boundaries/active/kecamatan", async (req, res) => {
+    const boundary = await getActiveRegionBoundary("kecamatan", "light");
+    return sendJsonWithEtag(req, res, boundary);
   });
 
   app.get("/api/objek-pajak/map", async (req, res) => {

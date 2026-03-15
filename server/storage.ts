@@ -1276,12 +1276,31 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    const countQuery = db
-      .select({ count: sql<number>`cast(count(*) as int)` })
+    const candidateRows = await db
+      .select({
+        id: objekPajak.id,
+        latitude: sql<number>`cast(${objekPajak.latitude} as double precision)`,
+        longitude: sql<number>`cast(${objekPajak.longitude} as double precision)`,
+      })
       .from(objekPajak)
-      .leftJoin(masterRekeningPajak, eq(objekPajak.rekPajakId, masterRekeningPajak.id));
-    const countRows = await countQuery.where(and(...conditions));
-    const totalInView = Number(countRows[0]?.count ?? 0);
+      .where(and(...conditions))
+      .orderBy(desc(objekPajak.updatedAt), desc(objekPajak.id));
+
+    const allowedIds: number[] = [];
+    for (const row of candidateRows) {
+      if (await isPointInsideActiveKabupaten(row.longitude, row.latitude)) {
+        allowedIds.push(row.id);
+      }
+    }
+
+    const totalInView = allowedIds.length;
+    if (allowedIds.length === 0) {
+      return {
+        items: [],
+        totalInView,
+        isCapped: false,
+      };
+    }
 
     const rows = await db
       .select({
@@ -1298,7 +1317,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(objekPajak)
       .leftJoin(masterRekeningPajak, eq(objekPajak.rekPajakId, masterRekeningPajak.id))
-      .where(and(...conditions))
+      .where(and(...conditions, inArray(objekPajak.id, allowedIds)))
       .orderBy(desc(objekPajak.updatedAt), desc(objekPajak.id))
       .limit(filters.limit);
 

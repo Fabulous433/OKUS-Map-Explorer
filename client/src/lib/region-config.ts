@@ -2,6 +2,7 @@ import { resolveMapDataSourceConfig, type ResolvedMapDataSourceConfig } from "@/
 
 type RegionConfig = {
   identity: {
+    regionKey: string;
     regionName: string;
     regionShortName: string;
   };
@@ -27,6 +28,7 @@ type RegionEnvSource = Record<string, string | undefined>;
 
 const DEFAULT_REGION_NAME = "OKU Selatan";
 const DEFAULT_REGION_SHORT_NAME = "OKUS";
+const DEFAULT_REGION_KEY = "okus";
 const DEFAULT_MAP_CENTER: [number, number] = [-4.525, 104.027];
 const DEFAULT_MAP_ZOOM = 15;
 
@@ -49,6 +51,7 @@ function readRegionEnvSource(): RegionEnvSource {
 }
 
 export function createRegionConfig(envSource: RegionEnvSource): RegionConfig {
+  const regionKey = readString(envSource.VITE_REGION_KEY, DEFAULT_REGION_KEY).toLowerCase();
   const regionName = readString(envSource.VITE_REGION_NAME, DEFAULT_REGION_NAME);
   const regionShortName = readString(envSource.VITE_REGION_SHORT_NAME, DEFAULT_REGION_SHORT_NAME);
   const mapCenter: [number, number] = [
@@ -65,6 +68,7 @@ export function createRegionConfig(envSource: RegionEnvSource): RegionConfig {
 
   return {
     identity: {
+      regionKey,
       regionName,
       regionShortName,
     },
