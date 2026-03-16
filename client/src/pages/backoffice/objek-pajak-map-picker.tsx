@@ -1,135 +1,253 @@
-﻿import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Crosshair, MapPin } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+import {
+  createRegionBoundaryClientState,
+  isCoordinateInsideRegionBoundary,
+  type RegionBoundaryClientState,
+} from "@/lib/map/region-boundary-client";
+import { loadActiveRegionBoundary } from "@/lib/map/region-boundary-query";
+import { regionConfig } from "@/lib/region-config";
+
 const PICKER_LAYERS = {
- osm: {
- name: "OSM",
- url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
- attribution: "&copy; OSM",
- maxZoom: 19,
- },
- google: {
- name: "Google",
- url: "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
- attribution: "&copy; Google",
- maxZoom: 20,
- },
- esri: {
- name: "ESRI",
- url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
- attribution: "&copy; Esri",
- maxZoom: 18,
- },
-};
+  osm: {
+    name: "OSM",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: "&copy; OSM",
+    maxZoom: 19,
+  },
+  google: {
+    name: "Google",
+    url: "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+    attribution: "&copy; Google",
+    maxZoom: 20,
+  },
+  esri: {
+    name: "ESRI",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: "&copy; Esri",
+    maxZoom: 18,
+  },
+} as const;
 
 type PickerLayerKey = keyof typeof PICKER_LAYERS;
 
-export function MapPickerEmbed({
- lat,
- lng,
- onSelect,
-}: {
- lat: string;
- lng: string;
- onSelect: (lat: number, lng: number) => void;
+function parseCoordinate(value: string) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function MapPickerEmbed(props: {
+  lat: string;
+  lng: string;
+  onSelect: (lat: number, lng: number) => void;
+  onInvalidSelection?: (message: string | null) => void;
 }) {
- const [marker, setMarker] = useState<{ lat: number; lng: number } | null>(
- lat && lng ? { lat: parseFloat(lat), lng: parseFloat(lng) } : null,
- );
- const [activeLayer, setActiveLayer] = useState<PickerLayerKey>("osm");
- const mapInstanceRef = useRef<L.Map | null>(null);
- const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const [marker, setMarker] = useState<{ lat: number; lng: number } | null>(() => {
+    const lat = parseCoordinate(props.lat);
+    const lng = parseCoordinate(props.lng);
+    return lat !== null && lng !== null ? { lat, lng } : null;
+  });
+  const [activeLayer, setActiveLayer] = useState<PickerLayerKey>("osm");
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
+  const boundaryLayerRef = useRef<L.GeoJSON | null>(null);
+  const onSelectRef = useRef(props.onSelect);
+  const onInvalidSelectionRef = useRef(props.onInvalidSelection);
+  const boundaryStateRef = useRef<RegionBoundaryClientState | null>(null);
+  const hasAnchoredRegionRef = useRef(false);
 
- const mapRef = useCallback((node: HTMLDivElement | null) => {
- if (!node) return;
- if ((node as any)._leafletMap) return;
+  const { data: activeKabupatenBoundary } = useQuery({
+    queryKey: ["active-region-boundary", regionConfig.identity.regionKey, "kabupaten", "picker"],
+    queryFn: ({ signal }) => loadActiveRegionBoundary({ level: "kabupaten", signal }),
+    staleTime: 5 * 60 * 1000,
+  });
 
- const initLat = lat ? parseFloat(lat) : -4.5250;
- const initLng = lng ? parseFloat(lng) : 104.0270;
- const map = L.map(node, {
- center: [initLat, initLng],
- zoom: lat ? 17 : 15,
- zoomControl: true,
- });
+  const boundaryState = useMemo(() => {
+    return activeKabupatenBoundary ? createRegionBoundaryClientState(activeKabupatenBoundary.boundary) : null;
+  }, [activeKabupatenBoundary]);
 
- const layer = L.tileLayer(PICKER_LAYERS.osm.url, {
- attribution: PICKER_LAYERS.osm.attribution,
- maxZoom: PICKER_LAYERS.osm.maxZoom,
- }).addTo(map);
+  useEffect(() => {
+    onSelectRef.current = props.onSelect;
+    onInvalidSelectionRef.current = props.onInvalidSelection;
+  }, [props.onInvalidSelection, props.onSelect]);
 
- tileLayerRef.current = layer;
- mapInstanceRef.current = map;
+  useEffect(() => {
+    boundaryStateRef.current = boundaryState;
+  }, [boundaryState]);
 
- let currentMarker: L.Marker | null = null;
- if (lat && lng) {
- currentMarker = L.marker([parseFloat(lat), parseFloat(lng)]).addTo(map);
- }
+  const mapRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node || mapInstanceRef.current || (node as { _leafletMap?: L.Map })._leafletMap) {
+        return;
+      }
 
- map.on("click", (e: L.LeafletMouseEvent) => {
- const { lat: clickLat, lng: clickLng } = e.latlng;
- if (currentMarker) {
- currentMarker.setLatLng([clickLat, clickLng]);
- } else {
- currentMarker = L.marker([clickLat, clickLng]).addTo(map);
- }
- setMarker({ lat: clickLat, lng: clickLng });
- onSelect(clickLat, clickLng);
- });
+      const initialLat = parseCoordinate(props.lat) ?? -4.525;
+      const initialLng = parseCoordinate(props.lng) ?? 104.027;
+      const map = L.map(node, {
+        center: [initialLat, initialLng],
+        zoom: props.lat && props.lng ? 17 : 15,
+        zoomControl: true,
+      });
 
- (node as any)._leafletMap = map;
+      tileLayerRef.current = L.tileLayer(PICKER_LAYERS.osm.url, {
+        attribution: PICKER_LAYERS.osm.attribution,
+        maxZoom: PICKER_LAYERS.osm.maxZoom,
+      }).addTo(map);
 
- setTimeout(() => map.invalidateSize(), 100);
- }, [lat, lng, onSelect]);
+      if (props.lat && props.lng) {
+        markerRef.current = L.marker([initialLat, initialLng]).addTo(map);
+      }
 
- const switchLayer = (key: PickerLayerKey) => {
- setActiveLayer(key);
- const map = mapInstanceRef.current;
- if (!map) return;
- if (tileLayerRef.current) {
- map.removeLayer(tileLayerRef.current);
- }
- const cfg = PICKER_LAYERS[key];
- tileLayerRef.current = L.tileLayer(cfg.url, {
- attribution: cfg.attribution,
- maxZoom: cfg.maxZoom,
- }).addTo(map);
- };
+      map.on("click", (event: L.LeafletMouseEvent) => {
+        const activeBoundaryState = boundaryStateRef.current;
+        if (!activeBoundaryState) {
+          onInvalidSelectionRef.current?.("Boundary OKU Selatan masih dimuat. Coba lagi sesaat.");
+          return;
+        }
 
- return (
- <div className="space-y-2">
- <div className="flex gap-1">
- {(Object.keys(PICKER_LAYERS) as PickerLayerKey[]).map((key) => (
- <button
- key={key}
- type="button"
- className={`font-mono text-[10px] font-bold px-2 py-1 transition-colors ${
- activeLayer === key ? "bg-[#2d3436] text-white" : "bg-white text-black hover:bg-gray-100"
- }`}
- onClick={() => switchLayer(key)}
- data-testid={`picker-layer-${key}`}
- >
- {PICKER_LAYERS[key].name}
- </button>
- ))}
- </div>
- <div
- ref={mapRef}
- className="w-full h-[200px]"
- data-testid="map-picker"
- />
- {marker ? (
- <div className="font-mono text-[10px] text-gray-500 flex items-center gap-1">
- <MapPin className="w-3 h-3" />
- Klik peta untuk menandai lokasi: {marker.lat.toFixed(7)}, {marker.lng.toFixed(7)}
- </div>
- ) : (
- <div className="font-mono text-[10px] text-gray-400 flex items-center gap-1">
- <Crosshair className="w-3 h-3" />
- Klik pada peta untuk menandai lokasi objek pajak
- </div>
- )}
- </div>
- );
+        const nextPoint = {
+          lat: event.latlng.lat,
+          lng: event.latlng.lng,
+        };
+
+        if (!isCoordinateInsideRegionBoundary(activeBoundaryState.geoJson, nextPoint)) {
+          onInvalidSelectionRef.current?.("Titik harus berada di dalam Kabupaten OKU Selatan.");
+          return;
+        }
+
+        if (markerRef.current) {
+          markerRef.current.setLatLng([nextPoint.lat, nextPoint.lng]);
+        } else {
+          markerRef.current = L.marker([nextPoint.lat, nextPoint.lng]).addTo(map);
+        }
+
+        setMarker(nextPoint);
+        onInvalidSelectionRef.current?.(null);
+        onSelectRef.current(nextPoint.lat, nextPoint.lng);
+      });
+
+      mapInstanceRef.current = map;
+      (node as { _leafletMap?: L.Map })._leafletMap = map;
+
+      window.setTimeout(() => map.invalidateSize(), 100);
+    },
+    [props.lat, props.lng],
+  );
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !boundaryState) {
+      return;
+    }
+
+    if (boundaryLayerRef.current) {
+      map.removeLayer(boundaryLayerRef.current);
+    }
+
+    boundaryLayerRef.current = L.geoJSON(boundaryState.geoJson as any, {
+      style: {
+        color: "#0f766e",
+        weight: 2,
+        opacity: 0.95,
+        fillColor: "#14b8a6",
+        fillOpacity: 0.05,
+      },
+      interactive: false,
+    }).addTo(map);
+
+    map.setMaxBounds(boundaryState.maxBounds as L.LatLngBoundsExpression);
+
+    if (!hasAnchoredRegionRef.current) {
+      map.fitBounds(boundaryState.maxBounds as L.LatLngBoundsExpression, { padding: [16, 16] });
+      hasAnchoredRegionRef.current = true;
+    }
+
+    return () => {
+      if (boundaryLayerRef.current) {
+        map.removeLayer(boundaryLayerRef.current);
+        boundaryLayerRef.current = null;
+      }
+    };
+  }, [boundaryState]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) {
+      return;
+    }
+
+    const nextLat = parseCoordinate(props.lat);
+    const nextLng = parseCoordinate(props.lng);
+    if (nextLat === null || nextLng === null) {
+      if (markerRef.current) {
+        map.removeLayer(markerRef.current);
+        markerRef.current = null;
+      }
+      setMarker(null);
+      return;
+    }
+
+    if (markerRef.current) {
+      markerRef.current.setLatLng([nextLat, nextLng]);
+    } else {
+      markerRef.current = L.marker([nextLat, nextLng]).addTo(map);
+    }
+
+    setMarker({ lat: nextLat, lng: nextLng });
+  }, [props.lat, props.lng]);
+
+  const switchLayer = (key: PickerLayerKey) => {
+    setActiveLayer(key);
+    const map = mapInstanceRef.current;
+    if (!map) {
+      return;
+    }
+
+    if (tileLayerRef.current) {
+      map.removeLayer(tileLayerRef.current);
+    }
+
+    const layerConfig = PICKER_LAYERS[key];
+    tileLayerRef.current = L.tileLayer(layerConfig.url, {
+      attribution: layerConfig.attribution,
+      maxZoom: layerConfig.maxZoom,
+    }).addTo(map);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-1">
+        {(Object.keys(PICKER_LAYERS) as PickerLayerKey[]).map((key) => (
+          <button
+            key={key}
+            type="button"
+            className={`px-2 py-1 font-mono text-[10px] font-bold transition-colors ${
+              activeLayer === key ? "bg-[#2d3436] text-white" : "bg-white text-black hover:bg-gray-100"
+            }`}
+            onClick={() => switchLayer(key)}
+            data-testid={`picker-layer-${key}`}
+          >
+            {PICKER_LAYERS[key].name}
+          </button>
+        ))}
+      </div>
+      <div ref={mapRef} className="h-[200px] w-full" data-testid="map-picker" />
+      {marker ? (
+        <div className="flex items-center gap-1 font-mono text-[10px] text-gray-500">
+          <MapPin className="h-3 w-3" />
+          Klik peta untuk menandai lokasi: {marker.lat.toFixed(7)}, {marker.lng.toFixed(7)}
+        </div>
+      ) : (
+        <div className="flex items-center gap-1 font-mono text-[10px] text-gray-400">
+          <Crosshair className="h-3 w-3" />
+          Klik pada peta untuk menandai lokasi objek pajak di OKU Selatan
+        </div>
+      )}
+    </div>
+  );
 }

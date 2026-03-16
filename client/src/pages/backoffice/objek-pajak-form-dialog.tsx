@@ -102,6 +102,7 @@ export function OPFormDialog({
  const useJenisPajakSelector = isMobile;
  const draftFileInputRef = useRef<HTMLInputElement>(null);
  const [showMapPicker, setShowMapPicker] = useState(false);
+ const [mapPickerFeedback, setMapPickerFeedback] = useState<string | null>(null);
  const [qualityWarnings, setQualityWarnings] = useState<QualityWarning[]>([]);
  const [submitFieldErrors, setSubmitFieldErrors] = useState<ApiFieldError[]>([]);
  const [wizardStep, setWizardStep] = useState<CreateWizardStep>("rekening");
@@ -142,6 +143,7 @@ const [draftFile, setDraftFile] = useState<File | null>(null);
  setDraftNotes("");
  setDraftFile(null);
  setShowMapPicker(false);
+ setMapPickerFeedback(null);
  if (mode === "edit" && editOp) {
  setSelectedJenisPajak(editOp.jenisPajak);
  form.reset({
@@ -202,6 +204,7 @@ const createMutation = useMutation({
  setDraftNotes("");
  setDraftFile(null);
  setShowMapPicker(false);
+ setMapPickerFeedback(null);
  if (draftFileInputRef.current) {
  draftFileInputRef.current.value = "";
  }
@@ -240,6 +243,7 @@ const createMutation = useMutation({
  setDraftNotes("");
  setDraftFile(null);
  setShowMapPicker(false);
+ setMapPickerFeedback(null);
  toast({ title: "Berhasil", description: "Objek Pajak berhasil diperbarui" });
  },
  onError: (err: Error) => {
@@ -453,7 +457,7 @@ const reviewDetailEntries = (() => {
 })();
 
  return (
- <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { setWizardStep("rekening"); setDraftAttachments([]); setDraftDocumentType(OP_ATTACHMENT_OPTIONS[0]?.value ?? ""); setDraftNotes(""); setDraftFile(null); setWpPickerOpen(false); setWpSearch(""); resetDraftAttachmentInput(); setShowMapPicker(false); } onOpenChange(open); }}>
+ <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { setWizardStep("rekening"); setDraftAttachments([]); setDraftDocumentType(OP_ATTACHMENT_OPTIONS[0]?.value ?? ""); setDraftNotes(""); setDraftFile(null); setWpPickerOpen(false); setWpSearch(""); resetDraftAttachmentInput(); setShowMapPicker(false); setMapPickerFeedback(null); } onOpenChange(open); }}>
  <DialogContent className="shadow-floating w-[calc(100vw-12px)] sm:max-w-lg overflow-x-hidden bg-white p-0 max-h-[90vh] overflow-y-auto">
  <DialogHeader className="border-b-[3px] border-primary/30 bg-[#2d3436] p-3 md:p-4">
  <DialogTitle className="font-sans text-xl font-black text-white">
@@ -808,7 +812,7 @@ const reviewDetailEntries = (() => {
  <div className="space-y-2">
  <div className="flex items-center justify-between">
  <span className="font-mono text-xs font-bold text-black">LOKASI KOORDINAT</span>
- <Button type="button" size="sm" className="bg-primary text-black font-mono text-xs" onClick={() => setShowMapPicker(!showMapPicker)} data-testid="button-toggle-map-picker">
+ <Button type="button" size="sm" className="bg-primary text-black font-mono text-xs" onClick={() => { setMapPickerFeedback(null); setShowMapPicker(!showMapPicker); }} data-testid="button-toggle-map-picker">
  <Crosshair className="mr-1 h-3 w-3" />
  {showMapPicker ? "SEMBUNYIKAN PETA" : "PILIH DI PETA"}
  </Button>
@@ -818,11 +822,19 @@ const reviewDetailEntries = (() => {
  lat={form.getValues("latitude") || ""}
  lng={form.getValues("longitude") || ""}
  onSelect={(lat, lng) => {
+ form.clearErrors(["latitude", "longitude"]);
+ setMapPickerFeedback(null);
  form.setValue("latitude", lat.toFixed(7));
  form.setValue("longitude", lng.toFixed(7));
  }}
+ onInvalidSelection={setMapPickerFeedback}
  />
  )}
+ {mapPickerFeedback ? (
+ <div className="rounded-md border border-amber-500 bg-amber-50 p-2 font-mono text-[11px] text-amber-900">
+ {mapPickerFeedback}
+ </div>
+ ) : null}
  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <FormField
  control={form.control}
