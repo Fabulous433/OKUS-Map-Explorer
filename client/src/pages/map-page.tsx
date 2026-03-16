@@ -1,10 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { GeoJSON, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { Filter, Loader2, MapPin, Search, Settings, Target } from "lucide-react";
 import L from "leaflet";
 import { DesktopMapFilterSheet } from "@/components/map/desktop-map-filter-sheet";
+import { PublicBoundaryLayer, PublicKabupatenMask } from "@/components/map/public-boundary-layer";
+import {
+  extractBoundaryLegendFeatures,
+  createPublicBoundaryLayerQueryPlan,
+} from "@/lib/map/public-boundary-layer-model";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MobileMapDrawer } from "@/components/map/mobile-map-drawer";
@@ -20,6 +25,11 @@ import {
   shouldShowEmptyViewportState,
   type MapViewportResult,
 } from "@/lib/map/map-viewport-query";
+import {
+  createDefaultRegionBoundaryLayerState,
+  normalizeLayerOpacity,
+  type RegionBoundaryLayerId,
+} from "@/lib/map/region-boundary-layer-state";
 import { loadActiveRegionBoundary } from "@/lib/map/region-boundary-query";
 import { getQueryFn } from "@/lib/queryClient";
 import { regionConfig } from "@/lib/region-config";
@@ -198,6 +208,7 @@ export default function MapPage() {
   const [zoom, setZoom] = useState(regionConfig.map.defaultZoom);
   const [bbox, setBbox] = useState<MapViewportBbox | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [boundaryLayerState, setBoundaryLayerState] = useState(() => createDefaultRegionBoundaryLayerState());
   const focusedMarkerRef = useRef<L.Marker | null>(null);
 
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
@@ -285,12 +296,84 @@ export default function MapPage() {
     queryFn: ({ signal }) => loadActiveRegionBoundary({ level: "kabupaten", signal }),
     staleTime: 5 * 60 * 1000,
   });
+  const boundaryQueryPlan = createPublicBoundaryLayerQueryPlan({
+    layerState: boundaryLayerState,
+    kecamatanId,
+    zoom,
+  });
+  const { data: activeKecamatanBoundary } = useQuery({
+    queryKey: [
+      "active-region-boundary",
+      regionConfig.identity.regionKey,
+      "kecamatan",
+      boundaryQueryPlan.kecamatan.enabled ? "enabled" : "disabled",
+    ],
+    enabled: boundaryQueryPlan.kecamatan.enabled,
+    queryFn: ({ signal }) => loadActiveRegionBoundary({ level: "kecamatan", signal }),
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: activeDesaBoundary } = useQuery({
+    queryKey: [
+      "active-region-boundary",
+      regionConfig.identity.regionKey,
+      "desa",
+      boundaryQueryPlan.desa.kecamatanId ?? "none",
+    ],
+    enabled: boundaryQueryPlan.desa.enabled,
+    queryFn: ({ signal }) =>
+      loadActiveRegionBoundary({
+        level: "desa",
+        kecamatanId: boundaryQueryPlan.desa.kecamatanId,
+        signal,
+      }),
+    staleTime: 5 * 60 * 1000,
+  });
   const kecamatanList = kecamatanData ?? [];
   const rekeningList = rekeningData ?? [];
   const activeRegionBounds = activeKabupatenBoundary?.bounds ?? null;
   const activeKabupatenGeoJson = activeKabupatenBoundary?.boundary ?? null;
+  const activeKecamatanGeoJson = activeKecamatanBoundary?.boundary ?? null;
+  const activeDesaGeoJson = activeDesaBoundary?.boundary ?? null;
+  const boundaryLegendFeatures = [
+    ...(boundaryQueryPlan.kecamatan.enabled && activeKecamatanGeoJson
+      ? extractBoundaryLegendFeatures({
+          level: "kecamatan",
+          boundary: activeKecamatanGeoJson,
+        })
+      : []),
+    ...(boundaryQueryPlan.desa.enabled && activeDesaGeoJson
+      ? extractBoundaryLegendFeatures({
+          level: "desa",
+          boundary: activeDesaGeoJson,
+        })
+      : []),
+  ];
 
   const mapConfig = PUBLIC_BASE_MAPS[baseMap];
+
+  function updateBoundaryLayerVisibility(layerId: RegionBoundaryLayerId, visible: boolean) {
+    startTransition(() => {
+      setBoundaryLayerState((current) => ({
+        ...current,
+        [layerId]: {
+          ...current[layerId],
+          visible,
+        },
+      }));
+    });
+  }
+
+  function updateBoundaryLayerOpacity(layerId: RegionBoundaryLayerId, opacity: number) {
+    startTransition(() => {
+      setBoundaryLayerState((current) => ({
+        ...current,
+        [layerId]: {
+          ...current[layerId],
+          opacity: normalizeLayerOpacity(opacity),
+        },
+      }));
+    });
+  }
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background" data-testid="map-page">
@@ -362,6 +445,11 @@ export default function MapPage() {
             markerCount={markerList.length}
             isCapped={isCapped}
             isViewportQueryActive={isViewportQueryActive}
+            boundaryLayerState={boundaryLayerState}
+            onBoundaryLayerVisibilityChange={updateBoundaryLayerVisibility}
+            onBoundaryLayerOpacityChange={updateBoundaryLayerOpacity}
+            boundaryLegendFeatures={boundaryLegendFeatures}
+            boundaryLayerZoom={zoom}
           />
         </>
       ) : (
@@ -400,6 +488,11 @@ export default function MapPage() {
               onBaseMapChange={setBaseMap}
               kecamatanList={kecamatanList}
               rekeningList={rekeningList}
+              boundaryLayerState={boundaryLayerState}
+              onBoundaryLayerVisibilityChange={updateBoundaryLayerVisibility}
+              onBoundaryLayerOpacityChange={updateBoundaryLayerOpacity}
+              boundaryLegendFeatures={boundaryLegendFeatures}
+              boundaryLayerZoom={zoom}
             />
           </div>
 
@@ -443,17 +536,32 @@ export default function MapPage() {
         />
         <MapTopRightControls isFetching={isFetching} isMobile={isMobile} activeBounds={activeRegionBounds} />
 
-        {activeKabupatenGeoJson ? (
-          <GeoJSON
-            data={activeKabupatenGeoJson as any}
-            interactive={false}
-            pathOptions={{
-              color: "#0f766e",
-              weight: isMobile ? 2 : 3,
-              opacity: 0.95,
-              fillColor: "#14b8a6",
-              fillOpacity: 0.05,
-            }}
+        {activeKabupatenGeoJson ? <PublicKabupatenMask boundary={activeKabupatenGeoJson} /> : null}
+
+        {boundaryLayerState.kabupaten.visible && activeKabupatenGeoJson ? (
+          <PublicBoundaryLayer
+            level="kabupaten"
+            boundary={activeKabupatenGeoJson}
+            opacity={boundaryLayerState.kabupaten.opacity}
+            zoom={zoom}
+          />
+        ) : null}
+
+        {boundaryLayerState.kecamatan.visible && activeKecamatanGeoJson ? (
+          <PublicBoundaryLayer
+            level="kecamatan"
+            boundary={activeKecamatanGeoJson}
+            opacity={boundaryLayerState.kecamatan.opacity}
+            zoom={zoom}
+          />
+        ) : null}
+
+        {boundaryQueryPlan.desa.enabled && activeDesaGeoJson ? (
+          <PublicBoundaryLayer
+            level="desa"
+            boundary={activeDesaGeoJson}
+            opacity={boundaryLayerState.desa.opacity}
+            zoom={zoom}
           />
         ) : null}
 
