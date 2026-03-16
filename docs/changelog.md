@@ -1,5 +1,39 @@
 # Changelog
 
+## Phase 2.16g — Public Map Boundary Atlas Layers
+
+### Added
+- Endpoint publik baru `GET /api/region-boundaries/active/desa?kecamatanId=...` untuk memuat polygon `desa/kelurahan` secara lazy dan scoped.
+- Helper state/style boundary layer baru untuk mengelola toggle, opacity, threshold label, dan palette polygon secara deterministic.
+- Panel atlas map publik baru dengan tab:
+  - `Peta`
+  - `Informasi`
+  - `Cari`
+- Regression suites baru:
+  - `tests/integration/region-boundary-layer-api.integration.ts`
+  - `tests/integration/map-boundary-layer-state.integration.ts`
+  - `tests/integration/map-boundary-panel-config.integration.ts`
+  - `tests/integration/public-boundary-layer.integration.ts`
+- Evidence rollout lokal:
+  - `docs/uat/public-map-boundary-layer-smoke-2026-03-16.md`
+
+### Improved
+- Map publik sekarang menampilkan dimming di luar kabupaten aktif agar fokus visual tetap terkunci ke OKU Selatan.
+- Layer `kecamatan` kini bisa di-toggle, diwarnai per polygon, dan opacity-nya bisa diatur langsung dari panel atlas.
+- Layer `desa/kelurahan` kini dimuat hanya saat dibutuhkan:
+  - toggle aktif
+  - kecamatan dipilih
+  - zoom cukup
+- Tab `Informasi` sekarang menampilkan legend warna polygon yang mengikuti layer yang benar-benar sedang visible.
+
+### Fixed
+- Public map tidak lagi membutuhkan full payload `desa/kelurahan` pada initial load untuk menampilkan kontrol polygon.
+- Drawer/filter map publik tidak lagi berhenti di outline kabupaten; state panel dan rendering polygon kini terhubung sampai ke map layer.
+
+### Notes
+- Emphasis visual luar wilayah memakai mask/dimming vector di atas basemap, bukan blur raster.
+- Runtime tetap hanya mengenal asset turunan OKU Selatan; shapefile nasional tetap source offline.
+
 ## Phase 2.16f — OKU Selatan Spatial Guard
 
 ### Added

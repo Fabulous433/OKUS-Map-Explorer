@@ -356,12 +356,20 @@ Rule upload attachment WP/OP:
 - Mengembalikan boundary `light` kecamatan dalam kabupaten aktif untuk kebutuhan overlay/inspection bertahap.
 - Auth: public.
 
+### GET `/api/region-boundaries/active/desa`
+- Mengembalikan boundary `light` desa/kelurahan secara scoped di dalam kecamatan yang dipilih.
+- Query:
+  - `kecamatanId` (wajib)
+- Jika `kecamatanId` tidak dikirim -> `400 { "message": "kecamatanId wajib diisi untuk memuat batas desa/kelurahan" }`
+- Jika `kecamatanId` tidak dikenal di master wilayah aktif -> `400 { "message": "kecamatanId tidak dikenal di master wilayah aktif" }`
+- Auth: public.
+
 Contract boundary aktif:
 ```json
 {
   "regionKey": "okus",
   "regionName": "OKU Selatan",
-  "level": "kabupaten",
+  "level": "desa",
   "precision": "light",
   "bounds": {
     "minLng": 103.433,
@@ -372,9 +380,17 @@ Contract boundary aktif:
   "boundary": {
     "type": "FeatureCollection",
     "features": []
+  },
+  "scope": {
+    "kecamatanId": "1609040",
+    "kecamatanName": "Muaradua"
   }
 }
 ```
+
+Catatan contract:
+- `scope` bersifat opsional.
+- `scope` saat ini dipakai pada response `desa` untuk mengembalikan konteks kecamatan aktif yang diminta frontend.
 
 Catatan operasional:
 - Runtime hanya memuat bundle GeoJSON turunan OKU Selatan yang sudah committed di:
@@ -383,7 +399,13 @@ Catatan operasional:
   - `server/data/regions/okus/desa.precise.geojson`
   - `server/data/regions/okus/kabupaten.light.geojson`
   - `server/data/regions/okus/kecamatan.light.geojson`
+  - `server/data/regions/okus/desa.light.geojson`
 - Shapefile nasional mentah di `docs/` tetap menjadi source material offline untuk proses build saja, bukan asset runtime app.
+- Public map memakai panel atlas `Peta / Informasi / Cari` untuk mengontrol overlay polygon:
+  - `kabupaten` sebagai konteks dasar + dimming area luar kabupaten
+  - `kecamatan` dimuat lazy saat toggle aktif
+  - `desa/kelurahan` dimuat lazy dan scoped per `kecamatanId`
+- Full payload `desa/kelurahan` tidak pernah diunduh pada initial public map load.
 
 ---
 
@@ -560,4 +582,4 @@ Response:
   - Cursor: pakai `cursor + limit` (`nextCursor` dipakai untuk request berikutnya)
 - **Breaking Phase 1.9**:
   - `GET /api/wajib-pajak` dan `GET /api/objek-pajak` kini wajib baca `items/meta` (bukan array langsung).
-- Boundary desa/kelurahan tetap server-authoritative untuk validasi spatial guard; frontend hanya memakai asset ringan kabupaten/kecamatan agar payload awal tetap terkontrol.
+- Boundary desa/kelurahan tetap server-authoritative untuk validasi spatial guard; frontend hanya memakai asset ringan `kabupaten/kecamatan` dan `desa` yang sudah di-scope per kecamatan agar payload awal tetap terkontrol.
