@@ -2,8 +2,18 @@ import { regionBoundaryResponseSchema, type RegionBoundaryLevel, type RegionBoun
 
 type FetchImpl = typeof fetch;
 
-function buildBoundaryEndpoint(level: RegionBoundaryLevel) {
-  return `/api/region-boundaries/active/${level}`;
+function buildBoundaryEndpoint(params: { level: RegionBoundaryLevel; kecamatanId?: string }) {
+  const searchParams = new URLSearchParams();
+  if (params.kecamatanId) {
+    searchParams.set("kecamatanId", params.kecamatanId);
+  }
+
+  const query = searchParams.toString();
+  if (!query) {
+    return `/api/region-boundaries/active/${params.level}`;
+  }
+
+  return `/api/region-boundaries/active/${params.level}?${query}`;
 }
 
 async function readErrorMessage(response: Response) {
@@ -27,11 +37,12 @@ async function readErrorMessage(response: Response) {
 
 export async function loadActiveRegionBoundary(params: {
   level: RegionBoundaryLevel;
+  kecamatanId?: string;
   signal?: AbortSignal;
   fetchImpl?: FetchImpl;
 }): Promise<RegionBoundaryResponse> {
   const fetchImpl = params.fetchImpl ?? fetch;
-  const response = await fetchImpl(buildBoundaryEndpoint(params.level), {
+  const response = await fetchImpl(buildBoundaryEndpoint(params), {
     credentials: "include",
     signal: params.signal,
   });
