@@ -1,5 +1,39 @@
 # Changelog
 
+## Phase 2.16f — OKU Selatan Spatial Guard
+
+### Added
+- Pipeline offline `npm run region:build:okus` untuk membangun bundle GeoJSON khusus OKU Selatan dari shapefile nasional tanpa membawa source nasional ke runtime app.
+- Asset boundary runtime baru di `server/data/regions/okus`:
+  - `kabupaten.precise.geojson`
+  - `kecamatan.precise.geojson`
+  - `desa.precise.geojson`
+  - `kabupaten.light.geojson`
+  - `kecamatan.light.geojson`
+- Endpoint boundary aktif publik:
+  - `GET /api/region-boundaries/active/kabupaten`
+  - `GET /api/region-boundaries/active/kecamatan`
+- Regression suites baru:
+  - `tests/integration/region-boundary-build.integration.ts`
+  - `tests/integration/objek-pajak-spatial-guard.integration.ts`
+  - `tests/integration/public-map-region-scope.integration.ts`
+  - `tests/integration/region-boundary-client.integration.ts`
+- Evidence rollout lokal:
+  - `docs/uat/oku-selatan-spatial-guard-smoke.md`
+
+### Improved
+- Map publik sekarang otomatis focus ke boundary kabupaten aktif OKU Selatan dan menampilkan outline ringan agar operator/pengguna punya orientasi wilayah yang jelas.
+- Picker lokasi backoffice sekarang memuat boundary kabupaten aktif, membatasi klik ke area sah, dan menampilkan feedback inline saat titik ditolak.
+- Kontrak API sekarang mendokumentasikan ownership asset boundary dan rule bahwa shapefile nasional hanya dipakai sebagai source offline.
+
+### Fixed
+- Create/update `Objek Pajak` tidak lagi menerima koordinat yang berada di luar kabupaten aktif OKU Selatan.
+- Create/update `Objek Pajak` kini menolak mismatch antara titik koordinat dengan `kecamatan` atau `kelurahan` yang dipilih.
+- Endpoint marker publik dan WFS tidak lagi membocorkan record legacy yang koordinatnya berada di luar kabupaten aktif.
+
+### Notes
+- Batch ini sengaja tidak memperkenalkan engine GIS nasional generik; runtime hanya mengenal bundle region aktif `okus`.
+
 ## Phase 2.16e — Data Tools Export Refresh
 
 ### Added

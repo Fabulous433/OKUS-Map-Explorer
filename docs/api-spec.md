@@ -181,6 +181,8 @@ Perilaku default:
   - `limit` max `100` (default `25`)
   - `q` max 100 karakter
 - Tanpa `includeUnverified=true`, list hanya menampilkan OP `verified`.
+- Semua read publik/list hanya mengembalikan OP yang koordinatnya berada di dalam kabupaten aktif OKU Selatan.
+  - Record legacy di luar wilayah aktif boleh tetap ada di DB untuk kebutuhan koreksi/backoffice, tetapi tidak ikut diserve ke map/list publik.
 - Auth:
   - Public: allowed saat mode default verified.
   - `includeUnverified=true` atau status non-verified: `admin|editor|viewer`.
@@ -224,6 +226,8 @@ Perilaku:
 - default publik hanya `verified`.
 - mode internal (`includeUnverified=true` atau status non-verified) wajib login.
 - invalid `bbox` ditolak `400`.
+- Response marker dibatasi lagi oleh boundary kabupaten aktif.
+  - Jika `bbox` berada di luar OKU Selatan, endpoint tetap mengembalikan hasil kosong walaupun DB memiliki record legacy di luar wilayah aktif.
 
 ### GET `/api/objek-pajak/:id`
 - Detail OP.
@@ -236,6 +240,14 @@ Perilaku:
 - Verifikasi default: `statusVerifikasi=draft`.
 - Jika `nopd` kosong, server generate otomatis sesuai format resmi `AA.BB.CC.XXXX`.
 - Jika `nopd` diisi manual, format wajib valid dan unique.
+- Jika `latitude` dan `longitude` diisi, server menjalankan spatial guard berbasis boundary OKU Selatan:
+  - titik wajib berada di dalam kabupaten aktif
+  - titik wajib cocok dengan `kecamatanId` terpilih
+  - titik wajib cocok dengan `kelurahanId` terpilih jika polygon desa/kelurahan aktif tersedia
+- Pelanggaran spatial guard ditolak `400` dengan pesan operasional yang menyebut sumber mismatch, misalnya:
+  - `Koordinat berada di luar kabupaten aktif OKU Selatan`
+  - `Koordinat berada di kecamatan X, bukan kecamatan terpilih Y`
+  - `Koordinat berada di kelurahan X, bukan kelurahan terpilih Y`
 - Error validasi mengembalikan payload user-friendly:
 ```json
 {
@@ -254,6 +266,7 @@ Perilaku:
 - Update data OP inti/detail.
 - Field verifikasi tidak diubah lewat endpoint ini.
 - `nopd` tetap editable, tetapi wajib format resmi `AA.BB.CC.XXXX` dan tetap unique.
+- Jika koordinat tersimpan/diubah, spatial guard yang sama dengan create tetap dijalankan sebelum update disimpan.
 - Auth: `admin|editor`.
 
 ### PATCH `/api/objek-pajak/:id/verification`
@@ -330,6 +343,47 @@ Rule upload attachment WP/OP:
   - `Format file tidak didukung`
   - `Ukuran file melebihi batas 5 MB`
   - `File gagal diunggah. Silakan coba lagi.`
+
+---
+
+## Region Boundaries
+
+### GET `/api/region-boundaries/active/kabupaten`
+- Mengembalikan boundary `light` kabupaten aktif untuk orientasi peta frontend.
+- Auth: public.
+
+### GET `/api/region-boundaries/active/kecamatan`
+- Mengembalikan boundary `light` kecamatan dalam kabupaten aktif untuk kebutuhan overlay/inspection bertahap.
+- Auth: public.
+
+Contract boundary aktif:
+```json
+{
+  "regionKey": "okus",
+  "regionName": "OKU Selatan",
+  "level": "kabupaten",
+  "precision": "light",
+  "bounds": {
+    "minLng": 103.433,
+    "minLat": -4.932,
+    "maxLng": 104.307,
+    "maxLat": -4.123
+  },
+  "boundary": {
+    "type": "FeatureCollection",
+    "features": []
+  }
+}
+```
+
+Catatan operasional:
+- Runtime hanya memuat bundle GeoJSON turunan OKU Selatan yang sudah committed di:
+  - `server/data/regions/okus/kabupaten.precise.geojson`
+  - `server/data/regions/okus/kecamatan.precise.geojson`
+  - `server/data/regions/okus/desa.precise.geojson`
+  - `server/data/regions/okus/kabupaten.light.geojson`
+  - `server/data/regions/okus/kecamatan.light.geojson`
+- Shapefile nasional mentah di `docs/` tetap menjadi source material offline untuk proses build saja, bukan asset runtime app.
 
 ---
 
@@ -506,3 +560,4 @@ Response:
   - Cursor: pakai `cursor + limit` (`nextCursor` dipakai untuk request berikutnya)
 - **Breaking Phase 1.9**:
   - `GET /api/wajib-pajak` dan `GET /api/objek-pajak` kini wajib baca `items/meta` (bukan array langsung).
+- Boundary desa/kelurahan tetap server-authoritative untuk validasi spatial guard; frontend hanya memakai asset ringan kabupaten/kecamatan agar payload awal tetap terkontrol.
