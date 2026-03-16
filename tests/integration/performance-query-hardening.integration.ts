@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 
 import { createIntegrationServer, requiredNumber, requiredString, type JsonRecord } from "./_helpers";
 
+const PERFORMANCE_QUERY_POINT = {
+  latitude: "-4.5348497",
+  longitude: "104.0736724",
+};
+
 async function run() {
   const server = await createIntegrationServer();
   const { requestJson, jsonRequest, loginAs } = server;
@@ -67,12 +72,18 @@ async function run() {
     const kecResult = await requestJson("/api/master/kecamatan");
     assert.equal(kecResult.response.status, 200);
     assert.ok(Array.isArray(kecResult.body));
-    const kecamatanId = requiredString((kecResult.body[0] as JsonRecord).cpmKecId, "kecamatan id wajib ada");
+    const kecamatanItems = kecResult.body as JsonRecord[];
+    const muaraDua = kecamatanItems.find((item) => item.cpmKecamatan === "Muaradua");
+    assert.ok(muaraDua, "master kecamatan Muaradua wajib tersedia");
+    const kecamatanId = requiredString(muaraDua?.cpmKecId, "kecamatan id wajib ada");
 
     const kelResult = await requestJson(`/api/master/kelurahan?kecamatanId=${encodeURIComponent(kecamatanId)}`);
     assert.equal(kelResult.response.status, 200);
     assert.ok(Array.isArray(kelResult.body));
-    const kelurahanId = requiredString((kelResult.body[0] as JsonRecord).cpmKelId, "kelurahan id wajib ada");
+    const kelurahanItems = kelResult.body as JsonRecord[];
+    const pasarMuaradua = kelurahanItems.find((item) => item.cpmKelurahan === "Pasar Muaradua");
+    assert.ok(pasarMuaradua, "master kelurahan Pasar Muaradua wajib tersedia");
+    const kelurahanId = requiredString(pasarMuaradua?.cpmKelId, "kelurahan id wajib ada");
 
     const uniq = `IT-PH19-${Date.now()}`;
     const createOp = await jsonRequest("/api/objek-pajak", "POST", {
@@ -82,8 +93,7 @@ async function run() {
       alamatOp: "Jl. Performance Query",
       kecamatanId,
       kelurahanId,
-      latitude: "-4.5250000",
-      longitude: "104.0270000",
+      ...PERFORMANCE_QUERY_POINT,
       status: "active",
     });
     assert.equal(createOp.response.status, 201);
@@ -172,8 +182,8 @@ async function run() {
     assert.equal(((matchingFeature?.geometry as JsonRecord | undefined)?.type), "Point");
     const coordinates = ((matchingFeature?.geometry as JsonRecord | undefined)?.coordinates) as unknown[];
     assert.ok(Array.isArray(coordinates), "coordinates WFS harus array");
-    assert.equal(coordinates[0], 104.027);
-    assert.equal(coordinates[1], -4.525);
+    assert.equal(coordinates[0], 104.0736724);
+    assert.equal(coordinates[1], -4.5348497);
     const properties = (matchingFeature?.properties as JsonRecord | undefined) ?? {};
     assert.equal(properties.nama_op, uniq);
     assert.equal(properties.alamat_op, "Jl. Performance Query");

@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import bbox from "@turf/bbox";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import type {
@@ -34,7 +33,8 @@ type ContainingFeature = {
 };
 
 const regionDataDir = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
+  process.cwd(),
+  "server",
   "data",
   "regions",
   "okus",
