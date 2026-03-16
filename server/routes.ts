@@ -37,6 +37,7 @@ import {
   type WajibPajakWithBadanUsaha,
   type WpBadanUsahaInput,
 } from "@shared/schema";
+import { activeRegionDesaQuerySchema } from "@shared/region-boundary";
 import { stringify } from "csv-stringify/sync";
 import { parse } from "csv-parse/sync";
 import multer, { MulterError } from "multer";
@@ -3101,6 +3102,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/region-boundaries/active/kecamatan", async (req, res) => {
     const boundary = await getActiveRegionBoundary("kecamatan", "light");
+    return sendJsonWithEtag(req, res, boundary);
+  });
+
+  app.get("/api/region-boundaries/active/desa", async (req, res) => {
+    const queryResult = activeRegionDesaQuerySchema.safeParse({
+      kecamatanId: req.query.kecamatanId,
+    });
+    if (!queryResult.success) {
+      return res.status(400).json({
+        message: "kecamatanId wajib diisi untuk memuat batas desa/kelurahan",
+      });
+    }
+
+    const [kecamatan] = await db
+      .select({
+        cpmKecId: masterKecamatan.cpmKecId,
+        cpmKecamatan: masterKecamatan.cpmKecamatan,
+      })
+      .from(masterKecamatan)
+      .where(eq(masterKecamatan.cpmKecId, queryResult.data.kecamatanId))
+      .limit(1);
+    if (!kecamatan) {
+      return res.status(400).json({
+        message: "kecamatanId tidak dikenal di master wilayah aktif",
+      });
+    }
+
+    const boundary = await getActiveRegionBoundary("desa", "light", {
+      kecamatanId: kecamatan.cpmKecId,
+      kecamatanName: kecamatan.cpmKecamatan,
+    });
     return sendJsonWithEtag(req, res, boundary);
   });
 

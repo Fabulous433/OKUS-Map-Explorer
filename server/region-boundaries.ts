@@ -9,6 +9,7 @@ import type {
   RegionBoundaryLevel,
   RegionBoundaryPrecision,
   RegionBoundaryResponse,
+  RegionBoundaryScope,
 } from "@shared/region-boundary";
 
 type ActiveRegionBundle = {
@@ -24,6 +25,7 @@ type ActiveRegionBundle = {
   };
   desa: {
     precise: GeoJsonFeatureCollection;
+    light: GeoJsonFeatureCollection;
   };
 };
 
@@ -61,6 +63,7 @@ async function loadActiveRegionBundle(): Promise<ActiveRegionBundle> {
     },
     desa: {
       precise: await readCollection("desa.precise.geojson"),
+      light: await readCollection("desa.light.geojson"),
     },
   };
 }
@@ -110,7 +113,11 @@ export async function findContainingDesa(longitude: number, latitude: number) {
 
 export async function getActiveRegionBounds(): Promise<RegionBoundaryBounds> {
   const bundle = await getActiveRegionBundle();
-  const [minLng, minLat, maxLng, maxLat] = bbox(bundle.kabupaten.precise as any);
+  return getBoundaryBounds(bundle.kabupaten.precise);
+}
+
+function getBoundaryBounds(boundary: GeoJsonFeatureCollection): RegionBoundaryBounds {
+  const [minLng, minLat, maxLng, maxLat] = bbox(boundary as any);
   return {
     minLng,
     minLat,
@@ -119,28 +126,50 @@ export async function getActiveRegionBounds(): Promise<RegionBoundaryBounds> {
   };
 }
 
+function normalizeRegionName(value: string) {
+  return value.trim().toLocaleLowerCase("id").replace(/\s+/g, "");
+}
+
+function filterDesaBoundaryByKecamatan(
+  boundary: GeoJsonFeatureCollection,
+  kecamatanName: string,
+): GeoJsonFeatureCollection {
+  const normalizedKecamatanName = normalizeRegionName(kecamatanName);
+  return {
+    type: "FeatureCollection",
+    features: boundary.features.filter((feature) => {
+      return normalizeRegionName(String(feature.properties.WADMKC ?? "")) === normalizedKecamatanName;
+    }),
+  };
+}
+
 export async function getActiveRegionBoundary(
   level: RegionBoundaryLevel,
   precision: RegionBoundaryPrecision,
+  scope?: RegionBoundaryScope,
 ): Promise<RegionBoundaryResponse> {
   const bundle = await getActiveRegionBundle();
-  const bounds = await getActiveRegionBounds();
-
   const boundary =
     level === "kabupaten"
       ? precision === "light"
         ? bundle.kabupaten.light
         : bundle.kabupaten.precise
-      : precision === "light"
-        ? bundle.kecamatan.light
-        : bundle.kecamatan.precise;
+      : level === "kecamatan"
+        ? precision === "light"
+          ? bundle.kecamatan.light
+          : bundle.kecamatan.precise
+        : filterDesaBoundaryByKecamatan(
+            precision === "light" ? bundle.desa.light : bundle.desa.precise,
+            String(scope?.kecamatanName ?? "").trim(),
+          );
 
   return {
     regionKey: bundle.regionKey,
     regionName: bundle.regionName,
     level,
     precision,
-    bounds,
+    bounds: getBoundaryBounds(boundary),
     boundary,
+    scope,
   };
 }

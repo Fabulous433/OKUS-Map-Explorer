@@ -27,6 +27,7 @@ type RegionBoundaryBundle = {
     };
     desa: {
       precise: GeoJsonFeatureCollection;
+      light: GeoJsonFeatureCollection;
     };
   };
 };
@@ -102,10 +103,15 @@ async function run() {
     loadedBundle.assets.desa.precise.features.length >= 259,
     "desa.precise harus berisi minimal 259 feature OKU Selatan",
   );
+  assert.ok(
+    loadedBundle.assets.desa.light.features.length >= 259,
+    "desa.light harus tetap memuat seluruh feature desa/kelurahan OKU Selatan",
+  );
 
   assertAllInOkuSelatan(loadedBundle.assets.kabupaten.precise, "kabupaten.precise hanya boleh memuat OKU Selatan");
   assertAllInOkuSelatan(loadedBundle.assets.kecamatan.precise, "kecamatan.precise hanya boleh memuat OKU Selatan");
   assertAllInOkuSelatan(loadedBundle.assets.desa.precise, "desa.precise hanya boleh memuat OKU Selatan");
+  assertAllInOkuSelatan(loadedBundle.assets.desa.light, "desa.light hanya boleh memuat OKU Selatan");
 
   assert.ok(
     countFeatureCollectionCoordinates(loadedBundle.assets.kabupaten.light) <
@@ -116,6 +122,11 @@ async function run() {
     countFeatureCollectionCoordinates(loadedBundle.assets.kecamatan.light) <
       countFeatureCollectionCoordinates(loadedBundle.assets.kecamatan.precise),
     "kecamatan.light harus lebih ringan dari kecamatan.precise",
+  );
+  assert.ok(
+    countFeatureCollectionCoordinates(loadedBundle.assets.desa.light) <
+      countFeatureCollectionCoordinates(loadedBundle.assets.desa.precise),
+    "desa.light harus lebih ringan dari desa.precise",
   );
 
   assert.deepEqual(
@@ -142,6 +153,11 @@ async function run() {
     loadedBundle.assets.kecamatan.light,
     builtBundle.assets.kecamatan.light,
     "kecamatan.light di disk harus deterministik terhadap hasil builder",
+  );
+  assert.deepEqual(
+    loadedBundle.assets.desa.light,
+    builtBundle.assets.desa.light,
+    "desa.light di disk harus deterministik terhadap hasil builder",
   );
 }
 

@@ -33,6 +33,7 @@ type RegionBoundaryBundle = {
     };
     desa: {
       precise: GeoJsonFeatureCollection;
+      light: GeoJsonFeatureCollection;
     };
   };
 };
@@ -85,9 +86,10 @@ const layerConfigs: Record<
   },
 };
 
-const lightSimplificationTolerances: Record<"kabupaten" | "kecamatan", number[]> = {
+const lightSimplificationTolerances: Record<LayerKey, number[]> = {
   kabupaten: [0.00005, 0.0001, 0.0002, 0.0005, 0.001],
   kecamatan: [0.00003, 0.00005, 0.0001, 0.0002, 0.0005],
+  desa: [0.00001, 0.00002, 0.00003, 0.00005, 0.0001],
 };
 
 function parseCliArgs(argv: string[]) {
@@ -242,10 +244,7 @@ function countCollectionCoordinates(collection: GeoJsonFeatureCollection) {
   }, 0);
 }
 
-function simplifyCollection(
-  layerKey: "kabupaten" | "kecamatan",
-  collection: GeoJsonFeatureCollection,
-): GeoJsonFeatureCollection {
+function simplifyCollection(layerKey: LayerKey, collection: GeoJsonFeatureCollection): GeoJsonFeatureCollection {
   const originalCoordinateCount = countCollectionCoordinates(collection);
   const tolerances = lightSimplificationTolerances[layerKey];
 
@@ -297,6 +296,7 @@ async function writeCollections(
     ["desa.precise.geojson", assets.desa.precise],
     ["kabupaten.light.geojson", assets.kabupaten.light],
     ["kecamatan.light.geojson", assets.kecamatan.light],
+    ["desa.light.geojson", assets.desa.light],
   ];
 
   await Promise.all(
@@ -326,6 +326,7 @@ export async function loadRegionBoundaryBundle(regionKey: string, outputRoot = d
       },
       desa: {
         precise: await readCollection("desa.precise.geojson"),
+        light: await readCollection("desa.light.geojson"),
       },
     },
   };
@@ -356,6 +357,7 @@ export async function buildRegionBoundaryBundle({
     },
     desa: {
       precise: desaPrecise,
+      light: simplifyCollection("desa", desaPrecise),
     },
   };
   const bundle: RegionBoundaryBundle = {
