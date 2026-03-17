@@ -1,5 +1,19 @@
 # Changelog
 
+## Phase 2.16h — Public Map Smoke Hardening
+
+### Added
+- Regression baru [tests/integration/map-viewport-tracker.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/map-viewport-tracker.integration.ts) untuk mengunci bootstrap bbox awal map publik.
+- Evidence smoke Playwright lokal baru:
+  - [docs/uat/public-map-playwright-local-smoke-2026-03-17.md](/D:/Code/OKUS-Map-Explorer/docs/uat/public-map-playwright-local-smoke-2026-03-17.md)
+
+### Fixed
+- Map publik tidak lagi menunggu `moveend/zoomend` kebetulan sebelum search/filter pertama bisa memicu query viewport.
+- Loop render `Maximum update depth exceeded` pada tracker viewport awal ditutup dengan callback ref stabil di composition root map.
+
+### Notes
+- Smoke lokal 2026-03-17 mengamati mode runtime map saat ini masih `internal-api`; konfirmasi staging/fallback tetap harus dilakukan terpisah.
+
 ## Phase 2.16g — Public Map Boundary Atlas Layers
 
 ### Added

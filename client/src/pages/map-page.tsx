@@ -1,7 +1,7 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import { Filter, Loader2, MapPin, Search, Settings, Target } from "lucide-react";
 import L from "leaflet";
 import { DesktopMapFilterSheet } from "@/components/map/desktop-map-filter-sheet";
@@ -22,6 +22,7 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { PUBLIC_BASE_MAPS, type BaseMapKey } from "@/lib/map/map-basemap-config";
 import { parseMapFocusParams } from "@/lib/map/map-focus-params";
 import { buildMapDataRequest, type MapViewportBbox } from "@/lib/map/map-data-source";
+import { bindMapViewportTracking } from "@/lib/map/map-viewport-tracker";
 import {
   loadMapViewportData,
   shouldActivateViewportData,
@@ -88,33 +89,20 @@ function toLeafletBounds(bounds: RegionBoundaryBounds): L.LatLngBoundsExpression
 
 function MapViewportTracker(props: { onChange: (bbox: MapViewportBbox, zoom: number) => void }) {
   const map = useMap();
+  const onChangeRef = useRef(props.onChange);
 
-  useMapEvents({
-    moveend: () => {
-      const bounds = map.getBounds();
-      props.onChange(
-        {
-          minLng: bounds.getWest(),
-          minLat: bounds.getSouth(),
-          maxLng: bounds.getEast(),
-          maxLat: bounds.getNorth(),
-        },
-        map.getZoom(),
-      );
-    },
-    zoomend: () => {
-      const bounds = map.getBounds();
-      props.onChange(
-        {
-          minLng: bounds.getWest(),
-          minLat: bounds.getSouth(),
-          maxLng: bounds.getEast(),
-          maxLat: bounds.getNorth(),
-        },
-        map.getZoom(),
-      );
-    },
-  });
+  useEffect(() => {
+    onChangeRef.current = props.onChange;
+  }, [props.onChange]);
+
+  useEffect(
+    () =>
+      bindMapViewportTracking({
+        map,
+        onChange: (bbox, zoom) => onChangeRef.current(bbox, zoom),
+      }),
+    [map],
+  );
 
   return null;
 }

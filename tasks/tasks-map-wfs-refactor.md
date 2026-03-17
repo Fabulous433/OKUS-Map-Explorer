@@ -129,7 +129,7 @@
     - Output: `docs/uat/public-map-wfs-staging-handoff.md`
 
 - [ ] 7.0 Execute manual staging validation
-  - Catatan: local pre-staging smoke sudah direkam di `docs/uat/public-map-wfs-local-smoke-2026-03-12.md`, lalu dilengkapi evidence frontend baru di `docs/uat/public-map-browse-first-static-smoke-2026-03-13.md` dan `docs/uat/public-map-city-first-local-smoke-2026-03-13.md`. Batch ini tetap terbuka karena target staging nyata belum dijalankan.
+  - Catatan: local pre-staging smoke sudah direkam di `docs/uat/public-map-wfs-local-smoke-2026-03-12.md`, lalu dilengkapi evidence frontend baru di `docs/uat/public-map-browse-first-static-smoke-2026-03-13.md`, `docs/uat/public-map-city-first-local-smoke-2026-03-13.md`, dan smoke Playwright lokal terbaru di `docs/uat/public-map-playwright-local-smoke-2026-03-17.md`. Batch ini tetap terbuka karena target staging nyata belum dijalankan.
   - [ ] 7.1 Jalankan browser smoke berdasarkan `docs/uat/public-map-wfs-staging-handoff.md`
   - [ ] 7.2 Simpan evidence PASS/FAIL untuk desktop, mobile, idle browse-first state, empty state, dan error state
   - [ ] 7.3 Konfirmasi apakah staging tetap memakai `backend-proxy` atau rollback sementara ke `internal-api`
