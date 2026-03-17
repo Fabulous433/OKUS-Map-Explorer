@@ -143,7 +143,11 @@ export function createBoundaryFeatureSelection(params: {
 }
 
 function normalizeRegionName(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
+  return value.trim().toLocaleLowerCase("id").replace(/\s+/g, " ");
+}
+
+function compactRegionName(value: string) {
+  return normalizeRegionName(value).replace(/[^a-z0-9]+/g, "");
 }
 
 export function resolveBoundarySelectionKecamatanId(params: {
@@ -154,8 +158,11 @@ export function resolveBoundarySelectionKecamatanId(params: {
   }>;
 }) {
   const targetName = normalizeRegionName(params.selection.kecamatanName);
+  const compactTargetName = compactRegionName(params.selection.kecamatanName);
   const matchingKecamatan = params.kecamatanList.find(
-    (item) => normalizeRegionName(item.cpmKecamatan) === targetName,
+    (item) =>
+      normalizeRegionName(item.cpmKecamatan) === targetName ||
+      compactRegionName(item.cpmKecamatan) === compactTargetName,
   );
 
   return matchingKecamatan?.cpmKecId ?? null;

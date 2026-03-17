@@ -268,6 +268,25 @@ async function run() {
     "1609011",
     "klik kecamatan harus bisa dipetakan ke kecamatanId filter map",
   );
+  const muaraDuaFeature = kecamatanLightBoundary.features.find(
+    (feature) => String(feature.properties.WADMKC ?? "").trim() === "Muara Dua",
+  );
+  assert.ok(muaraDuaFeature, "fixture kecamatan Muara Dua harus tersedia untuk regression normalisasi nama");
+  const muaraDuaSelection = createBoundaryFeatureSelection!({
+    level: "kecamatan",
+    feature: muaraDuaFeature,
+  });
+  assert.equal(
+    resolveBoundarySelectionKecamatanId!({
+      selection: muaraDuaSelection,
+      kecamatanList: [
+        { cpmKecId: "1609040", cpmKecamatan: "Muaradua" },
+        { cpmKecId: "1609030", cpmKecamatan: "Muaradua Kisam" },
+      ],
+    }),
+    "1609040",
+    "klik kecamatan harus tahan terhadap variasi penulisan spasi seperti Muara Dua vs Muaradua",
+  );
 
   const rawDesaLight = await readFile(
     new URL("../../server/data/regions/okus/desa.light.geojson", import.meta.url),

@@ -33,6 +33,14 @@
   - regression baru [map-viewport-tracker.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/map-viewport-tracker.integration.ts)
   - `MapViewportTracker` sekarang emit snapshot awal viewport sekali saat bind, lalu subscribe `moveend/zoomend`
   - loop render akibat callback inline juga diperbaiki dengan `ref` callback stabil di [map-page.tsx](/D:/Code/OKUS-Map-Explorer/client/src/pages/map-page.tsx)
+- Klik polygon boundary `kecamatan/desa` sekarang tahan terhadap mismatch nama master vs asset boundary:
+  - `Muara Dua` (GeoJSON) kini resolve benar ke `Muaradua` (`cpmKecId=1609040`)
+  - regression ditutup di [public-boundary-layer.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/public-boundary-layer.integration.ts)
+
+### Ops Note
+
+- False negative awal untuk layer `desa` ternyata berasal dari proses dev server stale yang sudah hidup sejak `2026-03-16 14:07`.
+- Setelah restart `npm run dev` fresh pada `2026-03-17`, endpoint `GET /api/region-boundaries/active/desa?kecamatanId=1609040` kembali mengirim `application/json` dan layer `desa` tampil normal.
 
 ## API Spot Checks
 
@@ -89,6 +97,9 @@
 
 ### Boundary Layer Smoke
 
+- PASS negative: toggle `Polygon Desa / Kelurahan` tanpa memilih `kecamatan` tidak memuat boundary desa.
+  - helper text panel tetap jujur: `Pilih kecamatan untuk memuat batas desa`
+  - tidak ada request `GET /api/region-boundaries/active/desa`
 - PASS: toggle `Polygon Kecamatan` memuat layer boundary kecamatan:
   - `GET /api/region-boundaries/active/kecamatan` -> `200`
 - PASS: setelah zoom in, label kecamatan tampil di map:
@@ -97,10 +108,16 @@
   - `Muara Dua`
   - `Sungai Are`
   - dan label lain sesuai 19 kecamatan
-- NEEDS FOLLOW-UP: klik polygon kecamatan belum bisa dibuktikan end-to-end lewat Playwright headless.
-  - Saya mencoba klik label, klik pusat path SVG, dan brute-force klik semua `19` polygon visible.
-  - Tidak ada request viewport baru yang terpicu dari automation headless itu.
-  - Karena feature selection untuk boundary sudah punya regression helper di [public-boundary-layer.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/public-boundary-layer.integration.ts), hasil ini saya catat sebagai follow-up UAT manual/headed, bukan saya tandai PASS palsu.
+- PASS: klik polygon `Muara Dua` dari layer `kecamatan` memicu drill-down viewport.
+  - badge berubah menjadi `1 dalam kecamatan Muara Dua`
+  - request viewport baru teramati: `GET /api/objek-pajak/map?...&kecamatanId=1609040` -> `200`
+- PASS: setelah zoom ke `13`, layer `desa` scoped Muaradua termuat normal.
+  - `GET /api/region-boundaries/active/desa?kecamatanId=1609040` -> `200`
+  - path interactive naik dari `19` menjadi `33`
+  - label desa tampil, termasuk `Batu Belang Jaya`
+- PASS: klik polygon `Batu Belang Jaya` memicu drill-down desa dan marker OP scoped.
+  - badge berubah menjadi `1 dalam desa Batu Belang Jaya`
+  - marker visible `1`
 
 ## Drift Notes
 
@@ -138,8 +155,13 @@
   - [smoke-2026-03-17-boundary-kecamatan-layer.png](/D:/Code/OKUS-Map-Explorer/output/playwright/smoke-2026-03-17-boundary-kecamatan-layer.png)
   - [smoke-2026-03-17-boundary-kecamatan-zoomed.png](/D:/Code/OKUS-Map-Explorer/output/playwright/smoke-2026-03-17-boundary-kecamatan-zoomed.png)
   - [smoke-2026-03-17-boundary-bruteforce.png](/D:/Code/OKUS-Map-Explorer/output/playwright/smoke-2026-03-17-boundary-bruteforce.png)
+  - [smoke-2026-03-17-boundary-kecamatan-drill.png](/D:/Code/OKUS-Map-Explorer/output/playwright/smoke-2026-03-17-boundary-kecamatan-drill.png)
+  - [smoke-2026-03-17-boundary-desa-drill.png](/D:/Code/OKUS-Map-Explorer/output/playwright/smoke-2026-03-17-boundary-desa-drill.png)
 
 ## Verification
 
+- `npx tsx tests/integration/public-boundary-layer.integration.ts` -> PASS
+- `npx tsx tests/integration/region-boundary-layer-api.integration.ts` -> PASS
 - `npx tsx tests/integration/map-viewport-tracker.integration.ts` -> PASS
 - `npm run check` -> PASS
+- `npm run build` -> PASS

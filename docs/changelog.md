@@ -1,5 +1,20 @@
 # Changelog
 
+## Phase 2.16i — Boundary Drill-Down Closure
+
+### Added
+- Regression baru di [tests/integration/public-boundary-layer.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/public-boundary-layer.integration.ts) untuk mengunci normalisasi nama boundary `Muara Dua` -> master `Muaradua`.
+- Evidence smoke boundary drill-down diperbarui di [docs/uat/public-map-playwright-local-smoke-2026-03-17.md](/D:/Code/OKUS-Map-Explorer/docs/uat/public-map-playwright-local-smoke-2026-03-17.md).
+
+### Fixed
+- Klik polygon `kecamatan` kini resolve konsisten ke filter `kecamatanId` meski penulisan nama pada asset boundary dan master wilayah berbeda format spasi.
+- Drill-down `kecamatan -> desa` kini lolos smoke Playwright lokal sampai badge viewport dan marker scoped:
+  - `1 dalam kecamatan Muara Dua`
+  - `1 dalam desa Batu Belang Jaya`
+
+### Notes
+- False negative awal pada layer `desa` berasal dari proses dev server lama yang stale; setelah restart `npm run dev` fresh, endpoint scoped desa kembali menyajikan JSON yang benar.
+
 ## Phase 2.16h — Public Map Smoke Hardening
 
 ### Added
