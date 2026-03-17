@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
+import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { geoJsonFeatureCollectionSchema } from "@shared/region-boundary";
 import { loadActiveRegionBoundary } from "../../client/src/lib/map/region-boundary-query";
 import { createDefaultRegionBoundaryLayerState } from "../../client/src/lib/map/region-boundary-layer-state";
+import type { MapViewportMarker } from "../../client/src/lib/map/wfs-types";
 
 async function loadPublicBoundaryLayerModule() {
   try {
@@ -49,6 +51,9 @@ async function run() {
     shouldShowBoundaryLabels,
     createKabupatenMaskBoundary,
     extractBoundaryLegendFeatures,
+    createBoundaryFeatureSelection,
+    resolveBoundarySelectionKecamatanId,
+    filterViewportMarkersByBoundarySelection,
   } = publicBoundaryLayerModule as {
     createPublicBoundaryLayerQueryPlan?: (params: {
       layerState: ReturnType<typeof createDefaultRegionBoundaryLayerState>;
@@ -65,12 +70,59 @@ async function run() {
       level: "kecamatan" | "desa";
       boundary: unknown;
     }) => Array<{ level: "kecamatan" | "desa"; featureName: string }>;
+    createBoundaryFeatureSelection?: (params: {
+      level: "kecamatan" | "desa";
+      feature: unknown;
+    }) => {
+      level: "kecamatan" | "desa";
+      featureName: string;
+      kecamatanName: string;
+      bounds: {
+        minLng: number;
+        minLat: number;
+        maxLng: number;
+        maxLat: number;
+      };
+    };
+    resolveBoundarySelectionKecamatanId?: (params: {
+      selection: {
+        level: "kecamatan" | "desa";
+        featureName: string;
+        kecamatanName: string;
+      };
+      kecamatanList: Array<{
+        cpmKecId: string;
+        cpmKecamatan: string;
+      }>;
+    }) => string | null;
+    filterViewportMarkersByBoundarySelection?: (params: {
+      selection: {
+        level: "kecamatan" | "desa";
+        featureName: string;
+        kecamatanName: string;
+        bounds: {
+          minLng: number;
+          minLat: number;
+          maxLng: number;
+          maxLat: number;
+        };
+        feature: unknown;
+      };
+      markers: MapViewportMarker[];
+    }) => MapViewportMarker[];
   };
 
   assert.equal(typeof createPublicBoundaryLayerQueryPlan, "function", "query-plan boundary layer wajib diexport");
   assert.equal(typeof shouldShowBoundaryLabels, "function", "helper threshold label boundary wajib diexport");
   assert.equal(typeof createKabupatenMaskBoundary, "function", "helper mask kabupaten wajib diexport");
   assert.equal(typeof extractBoundaryLegendFeatures, "function", "helper legend boundary wajib diexport");
+  assert.equal(typeof createBoundaryFeatureSelection, "function", "helper selection polygon wajib diexport");
+  assert.equal(typeof resolveBoundarySelectionKecamatanId, "function", "helper resolve kecamatanId polygon wajib diexport");
+  assert.equal(
+    typeof filterViewportMarkersByBoundarySelection,
+    "function",
+    "helper filter marker berdasarkan polygon selection wajib diexport",
+  );
 
   const defaultLayerState = createDefaultRegionBoundaryLayerState();
   const defaultPlan = createPublicBoundaryLayerQueryPlan!({
@@ -191,6 +243,128 @@ async function run() {
   assert.ok(legendFeatures.length >= 19, "legend feature extraction harus memetakan polygon visible");
   assert.equal(legendFeatures[0]?.level, "kecamatan");
   assert.ok(typeof legendFeatures[0]?.featureName === "string" && legendFeatures[0].featureName.length > 0);
+
+  const kecamatanFeature = kecamatanLightBoundary.features.find((feature) => String(feature.properties.WADMKC ?? "").trim() === "Kisam Ilir");
+  assert.ok(kecamatanFeature, "fixture kecamatan Kisam Ilir harus tersedia untuk regression klik polygon");
+  const kecamatanSelection = createBoundaryFeatureSelection!({
+    level: "kecamatan",
+    feature: kecamatanFeature,
+  });
+  assert.equal(kecamatanSelection.featureName, "Kisam Ilir", "klik kecamatan harus membawa nama feature yang benar");
+  assert.equal(kecamatanSelection.kecamatanName, "Kisam Ilir", "klik kecamatan harus resolve konteks kecamatan sendiri");
+  assert.ok(
+    kecamatanSelection.bounds.minLng < kecamatanSelection.bounds.maxLng &&
+      kecamatanSelection.bounds.minLat < kecamatanSelection.bounds.maxLat,
+    "klik kecamatan harus menghasilkan bounds focus yang valid",
+  );
+  assert.equal(
+    resolveBoundarySelectionKecamatanId!({
+      selection: kecamatanSelection,
+      kecamatanList: [
+        { cpmKecId: "1609011", cpmKecamatan: "Kisam Ilir" },
+        { cpmKecId: "1609012", cpmKecamatan: "Sungai Are" },
+      ],
+    }),
+    "1609011",
+    "klik kecamatan harus bisa dipetakan ke kecamatanId filter map",
+  );
+
+  const rawDesaLight = await readFile(
+    new URL("../../server/data/regions/okus/desa.light.geojson", import.meta.url),
+    "utf-8",
+  );
+  const desaLightBoundary = geoJsonFeatureCollectionSchema.parse(JSON.parse(rawDesaLight));
+  const desaFeature = desaLightBoundary.features.find((feature) => String(feature.properties.WADMKD ?? "").trim() === "Campang Jaya");
+  assert.ok(desaFeature, "fixture desa Campang Jaya harus tersedia untuk regression klik polygon");
+  const desaSelection = createBoundaryFeatureSelection!({
+    level: "desa",
+    feature: desaFeature,
+  });
+  assert.equal(desaSelection.featureName, "Campang Jaya", "klik desa harus membawa nama desa yang benar");
+  assert.equal(desaSelection.kecamatanName, "Kisam Ilir", "klik desa harus tetap membawa konteks kecamatan induk");
+  assert.equal(
+    resolveBoundarySelectionKecamatanId!({
+      selection: desaSelection,
+      kecamatanList: [
+        { cpmKecId: "1609011", cpmKecamatan: "Kisam Ilir" },
+        { cpmKecId: "1609012", cpmKecamatan: "Sungai Are" },
+      ],
+    }),
+    "1609011",
+    "klik desa harus tetap bisa mengaktifkan filter kecamatan pada viewport query",
+  );
+  const insideDesaPoint = findPointInsideFeature(desaSelection);
+
+  const markers: MapViewportMarker[] = [
+    {
+      id: 1,
+      focusKey: "1",
+      namaOp: "OP Campang Jaya",
+      nopd: "11.11.11.0001",
+      jenisPajak: "Pajak Air Tanah",
+      alamatOp: "Campang Jaya",
+      latitude: insideDesaPoint.latitude,
+      longitude: insideDesaPoint.longitude,
+    },
+    {
+      id: 2,
+      focusKey: "2",
+      namaOp: "OP Tetangga",
+      nopd: "11.11.11.0002",
+      jenisPajak: "Pajak Air Tanah",
+      alamatOp: "Tetangga desa lain",
+      latitude: -4.475,
+      longitude: 103.79,
+    },
+  ];
+
+  const filteredDesaMarkers = filterViewportMarkersByBoundarySelection!({
+    selection: desaSelection,
+    markers,
+  });
+  assert.deepEqual(
+    filteredDesaMarkers.map((item) => item.id),
+    [1],
+    "klik desa harus membatasi marker ke polygon desa yang dipilih",
+  );
+
+  const filteredKecamatanMarkers = filterViewportMarkersByBoundarySelection!({
+    selection: kecamatanSelection,
+    markers,
+  });
+  assert.ok(
+    filteredKecamatanMarkers.some((item) => item.id === 1),
+    "klik kecamatan harus tetap mempertahankan marker yang berada di dalam polygon kecamatan",
+  );
+}
+
+function findPointInsideFeature(selection: {
+  bounds: {
+    minLng: number;
+    minLat: number;
+    maxLng: number;
+    maxLat: number;
+  };
+  feature: unknown;
+}) {
+  const gridSize = 32;
+
+  for (let lngStep = 0; lngStep <= gridSize; lngStep += 1) {
+    for (let latStep = 0; latStep <= gridSize; latStep += 1) {
+      const lng =
+        selection.bounds.minLng +
+        ((selection.bounds.maxLng - selection.bounds.minLng) * lngStep) / gridSize;
+      const lat =
+        selection.bounds.minLat +
+        ((selection.bounds.maxLat - selection.bounds.minLat) * latStep) / gridSize;
+
+      if (booleanPointInPolygon([lng, lat], selection.feature as never)) {
+        return { longitude: lng, latitude: lat };
+      }
+    }
+  }
+
+  throw new Error("Fixture polygon tidak memiliki titik interior yang bisa dipakai regression.");
 }
 
 run()

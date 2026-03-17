@@ -2,7 +2,9 @@ import { GeoJSON } from "react-leaflet";
 import type { GeoJsonFeature, GeoJsonFeatureCollection, RegionBoundaryLevel } from "@shared/region-boundary";
 import { getRegionBoundaryLayerStyle } from "@/lib/map/region-boundary-layer-style";
 import {
+  createBoundaryFeatureSelection,
   createKabupatenMaskBoundary,
+  type BoundaryFeatureSelection,
   getBoundaryFeatureName,
   shouldShowBoundaryLabels,
 } from "@/lib/map/public-boundary-layer-model";
@@ -12,16 +14,18 @@ type PublicBoundaryLayerProps = {
   boundary: GeoJsonFeatureCollection;
   opacity: number;
   zoom: number;
+  onFeatureSelect?: (selection: BoundaryFeatureSelection) => void;
 };
 
 export function PublicBoundaryLayer(props: PublicBoundaryLayerProps) {
   const showLabels = shouldShowBoundaryLabels(props.level, props.zoom);
+  const clickableLevel = props.level === "kecamatan" || props.level === "desa" ? props.level : null;
 
   return (
     <GeoJSON
       key={`${props.level}-${props.opacity}-${showLabels ? "labels" : "plain"}`}
       data={props.boundary as any}
-      interactive={false}
+      interactive={clickableLevel !== null && typeof props.onFeatureSelect === "function"}
       style={(feature) => {
         const featureName = getBoundaryFeatureName(props.level, feature as GeoJsonFeature);
         return getRegionBoundaryLayerStyle({
@@ -31,6 +35,17 @@ export function PublicBoundaryLayer(props: PublicBoundaryLayerProps) {
         });
       }}
       onEachFeature={(feature, layer) => {
+        if (clickableLevel && props.onFeatureSelect) {
+          layer.on("click", () => {
+            props.onFeatureSelect?.(
+              createBoundaryFeatureSelection({
+                level: clickableLevel,
+                feature: feature as GeoJsonFeature,
+              }),
+            );
+          });
+        }
+
         if (!showLabels) {
           return;
         }

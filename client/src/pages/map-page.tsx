@@ -7,8 +7,11 @@ import L from "leaflet";
 import { DesktopMapFilterSheet } from "@/components/map/desktop-map-filter-sheet";
 import { PublicBoundaryLayer, PublicKabupatenMask } from "@/components/map/public-boundary-layer";
 import {
+  type BoundaryFeatureSelection,
   extractBoundaryLegendFeatures,
   createPublicBoundaryLayerQueryPlan,
+  filterViewportMarkersByBoundarySelection,
+  resolveBoundarySelectionKecamatanId,
 } from "@/lib/map/public-boundary-layer-model";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -185,6 +188,25 @@ function MapFocusController(props: {
   return null;
 }
 
+function MapBoundarySelectionController(props: {
+  selection: BoundaryFeatureSelection | null;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!props.selection) {
+      return;
+    }
+
+    map.fitBounds(toLeafletBounds(props.selection.bounds), {
+      padding: [28, 28],
+      maxZoom: props.selection.level === "desa" ? 15 : 12,
+    });
+  }, [map, props.selection]);
+
+  return null;
+}
+
 function MapZoomBoundsController(props: { maxZoom: number }) {
   const map = useMap();
 
@@ -209,6 +231,7 @@ export default function MapPage() {
   const [bbox, setBbox] = useState<MapViewportBbox | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [boundaryLayerState, setBoundaryLayerState] = useState(() => createDefaultRegionBoundaryLayerState());
+  const [selectedBoundary, setSelectedBoundary] = useState<BoundaryFeatureSelection | null>(null);
   const focusedMarkerRef = useRef<L.Marker | null>(null);
 
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
@@ -258,22 +281,30 @@ export default function MapPage() {
   });
 
   const markerList = mapData?.items ?? [];
-  const totalInView = mapData?.meta.totalInView ?? 0;
+  const visibleMarkerList = selectedBoundary
+    ? filterViewportMarkersByBoundarySelection({
+        selection: selectedBoundary,
+        markers: markerList,
+      })
+    : markerList;
+  const totalInView = selectedBoundary ? visibleMarkerList.length : mapData?.meta.totalInView ?? 0;
   const isCapped = mapData?.meta.isCapped ?? false;
-  const viewportLabel = mapData?.meta.primaryLabel ?? "dalam viewport";
+  const viewportLabel = selectedBoundary
+    ? `dalam ${selectedBoundary.level} ${selectedBoundary.featureName}`
+    : mapData?.meta.primaryLabel ?? "dalam viewport";
   const showEmptyViewportState = shouldShowEmptyViewportState({
     isQueryActive: isViewportQueryActive,
     bbox: debouncedBbox,
     isFetching,
     error,
-    markerCount: markerList.length,
+    markerCount: visibleMarkerList.length,
   });
   const showIdleViewportHint = !isViewportQueryActive && !error;
 
   useEffect(() => {
-    if (!focusParams.id || markerList.length === 0 || !focusedMarkerRef.current) return;
+    if (!focusParams.id || visibleMarkerList.length === 0 || !focusedMarkerRef.current) return;
 
-    const markerExists = markerList.some((item) => String(item.id) === String(focusParams.id));
+    const markerExists = visibleMarkerList.some((item) => String(item.id) === String(focusParams.id));
     if (!markerExists) return;
 
     const timer = window.setTimeout(() => {
@@ -281,7 +312,7 @@ export default function MapPage() {
     }, 250);
 
     return () => window.clearTimeout(timer);
-  }, [focusParams.id, markerList]);
+  }, [focusParams.id, visibleMarkerList]);
 
   const { data: kecamatanData } = useQuery<MasterKecamatan[] | null>({
     queryKey: ["/api/master/kecamatan"],
@@ -360,6 +391,10 @@ export default function MapPage() {
           visible,
         },
       }));
+
+      if (!visible && selectedBoundary?.level === layerId) {
+        setSelectedBoundary(null);
+      }
     });
   }
 
@@ -372,6 +407,28 @@ export default function MapPage() {
           opacity: normalizeLayerOpacity(opacity),
         },
       }));
+    });
+  }
+
+  function handleBoundaryFeatureSelect(selection: BoundaryFeatureSelection) {
+    startTransition(() => {
+      const nextKecamatanId = resolveBoundarySelectionKecamatanId({
+        selection,
+        kecamatanList,
+      });
+
+      if (nextKecamatanId) {
+        setKecamatanId(nextKecamatanId);
+      }
+
+      setSelectedBoundary(selection);
+    });
+  }
+
+  function handleKecamatanIdChange(value: string) {
+    startTransition(() => {
+      setKecamatanId(value);
+      setSelectedBoundary(null);
     });
   }
 
@@ -403,9 +460,7 @@ export default function MapPage() {
                 <Badge className="bg-[#2d3436] text-white">
                   {totalInView} {viewportLabel}
                 </Badge>
-                <Badge variant="secondary">
-                  {markerList.length} marker
-                </Badge>
+                <Badge variant="secondary">{visibleMarkerList.length} marker</Badge>
                 {isCapped ? (
                   <Badge className="bg-primary text-primary-foreground">
                     capped
@@ -433,7 +488,7 @@ export default function MapPage() {
             searchQuery={searchQuery}
             onSearchQueryChange={setSearchQuery}
             kecamatanId={kecamatanId}
-            onKecamatanIdChange={setKecamatanId}
+            onKecamatanIdChange={handleKecamatanIdChange}
             rekPajakId={rekPajakId}
             onRekPajakIdChange={setRekPajakId}
             baseMap={baseMap}
@@ -442,7 +497,7 @@ export default function MapPage() {
             rekeningList={rekeningList}
             totalInView={totalInView}
             viewportLabel={viewportLabel}
-            markerCount={markerList.length}
+            markerCount={visibleMarkerList.length}
             isCapped={isCapped}
             isViewportQueryActive={isViewportQueryActive}
             boundaryLayerState={boundaryLayerState}
@@ -481,7 +536,7 @@ export default function MapPage() {
               searchQuery={searchQuery}
               onSearchQueryChange={setSearchQuery}
               kecamatanId={kecamatanId}
-              onKecamatanIdChange={setKecamatanId}
+              onKecamatanIdChange={handleKecamatanIdChange}
               rekPajakId={rekPajakId}
               onRekPajakIdChange={setRekPajakId}
               baseMap={baseMap}
@@ -502,9 +557,7 @@ export default function MapPage() {
                 <Badge className="bg-[#2d3436] text-white">
                   {totalInView} {viewportLabel}
                 </Badge>
-                <Badge variant="secondary">
-                  {markerList.length} marker
-                </Badge>
+                <Badge variant="secondary">{visibleMarkerList.length} marker</Badge>
                 {isCapped && (
                   <Badge className="bg-primary text-primary-foreground">
                     capped
@@ -527,6 +580,7 @@ export default function MapPage() {
         <TileLayer attribution={mapConfig.attribution} url={mapConfig.url} maxZoom={mapConfig.maxZoom} />
         <MapActiveRegionController activeBounds={activeRegionBounds} focusTarget={focusParams.target} />
         <MapFocusController target={focusParams.target} zoom={Math.max(regionConfig.map.defaultZoom, 18)} />
+        <MapBoundarySelectionController selection={selectedBoundary} />
         <MapZoomBoundsController maxZoom={mapConfig.maxZoom} />
         <MapViewportTracker
           onChange={(nextBbox, nextZoom) => {
@@ -553,6 +607,7 @@ export default function MapPage() {
             boundary={activeKecamatanGeoJson}
             opacity={boundaryLayerState.kecamatan.opacity}
             zoom={zoom}
+            onFeatureSelect={handleBoundaryFeatureSelect}
           />
         ) : null}
 
@@ -562,10 +617,11 @@ export default function MapPage() {
             boundary={activeDesaGeoJson}
             opacity={boundaryLayerState.desa.opacity}
             zoom={zoom}
+            onFeatureSelect={handleBoundaryFeatureSelect}
           />
         ) : null}
 
-        {markerList.map((item) => (
+        {visibleMarkerList.map((item) => (
           <Marker
             key={item.focusKey}
             position={[item.latitude, item.longitude]}
