@@ -58,11 +58,13 @@ async function run() {
     drillIntoDesaStage,
     stepBackPublicMapStage,
     createPublicMapStageHeaderModel,
+    createPublicMapVisibleMarkers,
     shouldActivatePublicMapMarkers,
     extractPublicMapTaxTypeOptions,
     filterPublicMapMarkersByTaxType,
     createSingleFeatureCollection,
     getPublicMapBoundaryPresentation,
+    getPublicMapStageViewportPadding,
   } = stageModelModule as {
     createDefaultPublicMapStageState?: () => {
       stage: "kabupaten" | "kecamatan" | "desa";
@@ -92,6 +94,11 @@ async function run() {
       helperText: string;
       backVisible: boolean;
     };
+    createPublicMapVisibleMarkers?: (params: {
+      stageState: ReturnType<NonNullable<typeof createDefaultPublicMapStageState>>;
+      hasFocusOverride: boolean;
+      markers: MapViewportMarker[];
+    }) => MapViewportMarker[];
     shouldActivatePublicMapMarkers?: (params: {
       stageState: ReturnType<NonNullable<typeof createDefaultPublicMapStageState>>;
       hasFocusOverride: boolean;
@@ -116,6 +123,13 @@ async function run() {
       showDesa: boolean;
       desaMode: "none" | "scoped" | "selected-only";
     };
+    getPublicMapStageViewportPadding?: (
+      stage: "kabupaten" | "kecamatan" | "desa",
+      compactViewport: boolean,
+    ) => {
+      paddingTopLeft: [number, number];
+      paddingBottomRight: [number, number];
+    };
   };
 
   assert.equal(typeof createDefaultPublicMapStageState, "function", "factory state stage public map wajib diexport");
@@ -123,11 +137,13 @@ async function run() {
   assert.equal(typeof drillIntoDesaStage, "function", "helper drill desa wajib diexport");
   assert.equal(typeof stepBackPublicMapStage, "function", "helper tombol kembali wajib diexport");
   assert.equal(typeof createPublicMapStageHeaderModel, "function", "helper header stage wajib diexport");
+  assert.equal(typeof createPublicMapVisibleMarkers, "function", "helper visible marker per stage wajib diexport");
   assert.equal(typeof shouldActivatePublicMapMarkers, "function", "helper gating marker wajib diexport");
   assert.equal(typeof extractPublicMapTaxTypeOptions, "function", "helper opsi jenis pajak wajib diexport");
   assert.equal(typeof filterPublicMapMarkersByTaxType, "function", "helper filter jenis pajak wajib diexport");
   assert.equal(typeof createSingleFeatureCollection, "function", "helper selected feature collection wajib diexport");
   assert.equal(typeof getPublicMapBoundaryPresentation, "function", "helper presentasi boundary per stage wajib diexport");
+  assert.equal(typeof getPublicMapStageViewportPadding, "function", "helper padding viewport per stage wajib diexport");
 
   const initialState = createDefaultPublicMapStageState!();
   assert.deepEqual(initialState, {
@@ -299,6 +315,45 @@ async function run() {
     3,
     "chip all tidak boleh membuang marker",
   );
+  assert.equal(
+    createPublicMapVisibleMarkers!({
+      stageState: initialState,
+      hasFocusOverride: false,
+      markers: markerList,
+    }).length,
+    0,
+    "marker stale tidak boleh bocor pada tahap kabupaten saat query marker off",
+  );
+  assert.equal(
+    createPublicMapVisibleMarkers!({
+      stageState: afterKecamatan,
+      hasFocusOverride: false,
+      markers: markerList,
+    }).length,
+    0,
+    "marker stale tidak boleh bocor pada tahap kecamatan saat query marker off",
+  );
+  assert.deepEqual(
+    createPublicMapVisibleMarkers!({
+      stageState: {
+        ...afterDesa,
+        selectedTaxType: "Pajak Sarang Burung Walet",
+      },
+      hasFocusOverride: false,
+      markers: markerList,
+    }).map((item) => item.id),
+    [1, 3],
+    "marker visible pada tahap desa harus tetap mematuhi filter jenis pajak aktif",
+  );
+  assert.equal(
+    createPublicMapVisibleMarkers!({
+      stageState: initialState,
+      hasFocusOverride: true,
+      markers: markerList,
+    }).length,
+    3,
+    "deep-link fokus tetap boleh menampilkan marker meski user belum masuk tahap desa",
+  );
 
   const singleFeatureCollection = createSingleFeatureCollection!(desaSelection);
   assert.equal(singleFeatureCollection.features.length, 1, "stage desa harus bisa merender hanya feature desa aktif");
@@ -347,6 +402,30 @@ async function run() {
       desaMode: "selected-only",
     },
     "tahap desa harus merender desa aktif saja sebagai fokus utama",
+  );
+  assert.deepEqual(
+    getPublicMapStageViewportPadding!("kabupaten", true),
+    {
+      paddingTopLeft: [20, 120],
+      paddingBottomRight: [20, 56],
+    },
+    "viewport mobile root harus memberi ruang untuk header tanpa mendorong user ke peta dunia",
+  );
+  assert.deepEqual(
+    getPublicMapStageViewportPadding!("desa", true),
+    {
+      paddingTopLeft: [24, 320],
+      paddingBottomRight: [24, 96],
+    },
+    "viewport mobile desa harus memberi ruang lebih besar agar marker tidak tertutup overlay atas",
+  );
+  assert.deepEqual(
+    getPublicMapStageViewportPadding!("desa", false),
+    {
+      paddingTopLeft: [44, 148],
+      paddingBottomRight: [44, 52],
+    },
+    "viewport desktop desa tetap perlu offset top agar popup dan marker tidak mentok shell",
   );
 }
 

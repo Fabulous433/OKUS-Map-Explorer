@@ -17,23 +17,23 @@ import { loadMapViewportData, shouldShowEmptyViewportState, type MapViewportResu
 import { bindMapViewportTracking } from "@/lib/map/map-viewport-tracker";
 import {
   type BoundaryFeatureSelection,
-  filterViewportMarkersByBoundarySelection,
   resolveBoundarySelectionKecamatanId,
 } from "@/lib/map/public-boundary-layer-model";
 import {
   createDefaultPublicMapStageState,
   createPublicMapStageHeaderModel,
+  createPublicMapVisibleMarkers,
   createSingleFeatureCollection,
   drillIntoDesaStage,
   drillIntoKecamatanStage,
   expandStageBounds,
   extractPublicMapTaxTypeOptions,
-  filterPublicMapMarkersByTaxType,
   getPublicMapBoundaryPresentation,
   getPublicMapStageAnimationDuration,
   getPublicMapStageBounds,
   getPublicMapStageMaxZoom,
   getPublicMapStagePaddingRatio,
+  getPublicMapStageViewportPadding,
   shouldActivatePublicMapMarkers,
   stepBackPublicMapStage,
   type MapStage,
@@ -210,9 +210,12 @@ function MapStageViewportController(props: {
     }
 
     lastSignatureRef.current = signature;
+    const compactViewport = map.getSize().x < 640;
+    const viewportPadding = getPublicMapStageViewportPadding(props.stageState.stage, compactViewport);
 
     const fitOptions = {
-      padding: [28, 28] as L.PointExpression,
+      paddingTopLeft: viewportPadding.paddingTopLeft,
+      paddingBottomRight: viewportPadding.paddingBottomRight,
       maxZoom: getPublicMapStageMaxZoom(props.stageState.stage),
     };
 
@@ -243,6 +246,7 @@ export default function MapPage() {
   const [viewportResetToken, setViewportResetToken] = useState(0);
   const focusedMarkerRef = useRef<L.Marker | null>(null);
   const hasMountedStageRef = useRef(false);
+  const kecamatanListRef = useRef<MasterKecamatan[]>([]);
   const hasFocusOverride = focusParams.id !== null || focusParams.target !== null;
 
   useEffect(() => {
@@ -328,23 +332,28 @@ export default function MapPage() {
   });
 
   const markerList = mapData?.items ?? [];
-  const stageBoundaryFilteredMarkers =
-    stageState.stage === "desa" && stageState.selectedDesa
-      ? filterViewportMarkersByBoundarySelection({
-          selection: {
-            feature: stageState.selectedDesa.feature,
-          },
-          markers: markerList,
-        })
-      : markerList;
-  const taxTypeOptions = useMemo(
-    () => extractPublicMapTaxTypeOptions(stageBoundaryFilteredMarkers),
-    [stageBoundaryFilteredMarkers],
+  const stageScopedMarkerList = useMemo(
+    () =>
+      createPublicMapVisibleMarkers({
+        stageState: {
+          ...stageState,
+          selectedTaxType: "all",
+        },
+        hasFocusOverride,
+        markers: markerList,
+      }),
+    [hasFocusOverride, markerList, stageState],
   );
-  const visibleMarkerList = filterPublicMapMarkersByTaxType({
-    markers: stageBoundaryFilteredMarkers,
-    selectedTaxType: stageState.selectedTaxType,
-  });
+  const taxTypeOptions = useMemo(() => extractPublicMapTaxTypeOptions(stageScopedMarkerList), [stageScopedMarkerList]);
+  const visibleMarkerList = useMemo(
+    () =>
+      createPublicMapVisibleMarkers({
+        stageState,
+        hasFocusOverride,
+        markers: markerList,
+      }),
+    [hasFocusOverride, markerList, stageState],
+  );
   const stageHeaderModel = createPublicMapStageHeaderModel({
     stageState,
     regionName: regionConfig.identity.regionName,
@@ -419,6 +428,10 @@ export default function MapPage() {
 
   const kecamatanList = kecamatanData ?? [];
 
+  useEffect(() => {
+    kecamatanListRef.current = kecamatanList;
+  }, [kecamatanList]);
+
   function clearFocusOverride() {
     if (!hasFocusOverride) {
       return;
@@ -444,7 +457,7 @@ export default function MapPage() {
       if (selection.level === "kecamatan") {
         const nextKecamatanId = resolveBoundarySelectionKecamatanId({
           selection,
-          kecamatanList,
+          kecamatanList: kecamatanListRef.current,
         });
         if (!nextKecamatanId) {
           return;
@@ -539,7 +552,7 @@ export default function MapPage() {
       </div>
 
       {stageState.stage === "desa" ? (
-        <div className="absolute left-3 right-3 top-[7.8rem] z-[1000] sm:left-4 sm:right-auto sm:top-[8.8rem]">
+        <div className="absolute bottom-20 left-3 right-3 z-[1000] sm:bottom-auto sm:left-4 sm:right-auto sm:top-[8.8rem]">
           <PublicMapTaxFilterChips
             options={taxTypeOptions}
             selectedTaxType={stageState.selectedTaxType}
@@ -643,7 +656,7 @@ export default function MapPage() {
               }
             }}
           >
-            <Popup>
+            <Popup autoPan={false}>
               <div className="min-w-[180px] space-y-1 font-mono text-xs">
                 <p className="font-bold">{item.namaOp}</p>
                 <p className="text-[11px] text-gray-600">{item.jenisPajak}</p>

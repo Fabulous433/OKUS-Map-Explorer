@@ -1,5 +1,5 @@
 import type { GeoJsonFeatureCollection, RegionBoundaryBounds } from "@shared/region-boundary";
-import type { BoundaryFeatureSelection } from "@/lib/map/public-boundary-layer-model";
+import { filterViewportMarkersByBoundarySelection, type BoundaryFeatureSelection } from "@/lib/map/public-boundary-layer-model";
 import type { MapViewportMarker } from "@/lib/map/wfs-types";
 
 export type MapStage = "kabupaten" | "kecamatan" | "desa";
@@ -161,6 +161,36 @@ export function filterPublicMapMarkersByTaxType(params: {
   return params.markers.filter((marker) => marker.jenisPajak === params.selectedTaxType);
 }
 
+export function createPublicMapVisibleMarkers(params: {
+  stageState: PublicMapStageState;
+  hasFocusOverride: boolean;
+  markers: MapViewportMarker[];
+}) {
+  if (
+    !shouldActivatePublicMapMarkers({
+      stageState: params.stageState,
+      hasFocusOverride: params.hasFocusOverride,
+    })
+  ) {
+    return [];
+  }
+
+  const stageBoundaryFilteredMarkers =
+    params.stageState.stage === "desa" && params.stageState.selectedDesa
+      ? filterViewportMarkersByBoundarySelection({
+          selection: {
+            feature: params.stageState.selectedDesa.feature,
+          },
+          markers: params.markers,
+        })
+      : params.markers;
+
+  return filterPublicMapMarkersByTaxType({
+    markers: stageBoundaryFilteredMarkers,
+    selectedTaxType: params.stageState.selectedTaxType,
+  });
+}
+
 export function createSingleFeatureCollection(selection: Pick<BoundaryFeatureSelection, "feature">): GeoJsonFeatureCollection {
   return {
     type: "FeatureCollection",
@@ -265,4 +295,39 @@ export function getPublicMapStageAnimationDuration(stage: MapStage, reducedMotio
   }
 
   return 0.65;
+}
+
+export function getPublicMapStageViewportPadding(stage: MapStage, compactViewport: boolean) {
+  if (!compactViewport) {
+    if (stage === "desa") {
+      return {
+        paddingTopLeft: [44, 148] as [number, number],
+        paddingBottomRight: [44, 52] as [number, number],
+      };
+    }
+
+    return {
+      paddingTopLeft: [32, 32] as [number, number],
+      paddingBottomRight: [32, 32] as [number, number],
+    };
+  }
+
+  if (stage === "desa") {
+    return {
+      paddingTopLeft: [24, 320] as [number, number],
+      paddingBottomRight: [24, 96] as [number, number],
+    };
+  }
+
+  if (stage === "kecamatan") {
+    return {
+      paddingTopLeft: [24, 144] as [number, number],
+      paddingBottomRight: [24, 64] as [number, number],
+    };
+  }
+
+  return {
+    paddingTopLeft: [20, 120] as [number, number],
+    paddingBottomRight: [20, 56] as [number, number],
+  };
 }

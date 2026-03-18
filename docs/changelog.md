@@ -1,5 +1,25 @@
 # Changelog
 
+## Phase 2.16k — Stage Drill-Down Smoke Closure
+
+### Added
+- Evidence smoke browser lokal baru:
+  - [docs/uat/public-map-stage-drilldown-local-smoke-2026-03-18.md](/D:/Code/OKUS-Map-Explorer/docs/uat/public-map-stage-drilldown-local-smoke-2026-03-18.md)
+
+### Fixed
+- Klik polygon `kecamatan` kini tetap berfungsi walau `master/kecamatan` selesai load setelah layer boundary terpasang; callback boundary sekarang membaca daftar kecamatan live, bukan closure render awal.
+- Marker desa tidak lagi bocor saat user kembali dari stage `desa` ke `kecamatan`, sehingga loop `Maximum update depth exceeded` akibat overlay stale tertutup.
+- Chip filter desa di mobile dipindah ke bawah map agar marker aktif tetap bisa disentuh.
+- Popup marker mobile tidak lagi memicu loop overlay karena `autoPan` Leaflet dimatikan untuk marker popup stage desa.
+
+### Notes
+- Smoke lokal 2026-03-18 PASS untuk desktop dan mobile pada baseline stage baru:
+  - root `kabupaten`
+  - drill ke `kecamatan`
+  - drill ke `desa`
+  - popup marker `Walet Budi`
+  - back `desa -> kecamatan`
+
 ## Phase 2.16j — Public Map Stage Drill-Down
 
 ### Added
