@@ -1,5 +1,26 @@
 # Changelog
 
+## Phase 2.16l — Desktop Desa Focus Tuning
+
+### Added
+- Evidence smoke desktop tambahan untuk tuning desa fokus:
+  - [docs/uat/public-map-stage-drilldown-local-smoke-2026-03-18.md](/D:/Code/OKUS-Map-Explorer/docs/uat/public-map-stage-drilldown-local-smoke-2026-03-18.md)
+
+### Improved
+- Stage desa sekarang tetap menampilkan seluruh desa scoped dalam kecamatan aktif, tetapi desa yang dipilih dibuat transparan agar citra dasar tidak lagi tertutup fill warna.
+- Query marker tahap desa sekarang memakai bounds desa aktif, bukan bbox viewport sempit, sehingga marker OP desa tetap bisa muncul walau stage dibuka pada zoom paling dekat.
+- Auto-focus marker desa sekarang menunggu zoom stage desa selesai lalu melakukan pan ringan ke marker awal, sehingga konteks desa dan marker OP sama-sama tetap terlihat.
+
+### Fixed
+- Basemap `ESRI Satellite` sekarang dibatasi di zoom `16`, tidak lagi memancing tile `Map data not yet available`.
+- Masuk ke stage desa pada desktop sekarang berhenti di zoom aman tertinggi dengan tombol `Zoom in` langsung nonaktif setelah viewport settle.
+
+### Notes
+- Smoke desktop final memakai flow `Muara Dua -> Batu Belang Jaya` dan mengunci tiga bukti sekaligus:
+  - tile ESRI berhenti di `/16/...`
+  - `fillOpacity=0` hanya pada desa aktif
+  - marker `WLT` tetap visible
+
 ## Phase 2.16k — Stage Drill-Down Smoke Closure
 
 ### Added

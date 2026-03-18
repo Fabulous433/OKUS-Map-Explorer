@@ -63,8 +63,12 @@ async function run() {
     extractPublicMapTaxTypeOptions,
     filterPublicMapMarkersByTaxType,
     createSingleFeatureCollection,
+    getPublicMapMarkerQueryBounds,
     getPublicMapBoundaryPresentation,
+    getPublicMapDesaMarkerFocusTarget,
+    getPublicMapStageConstraintBounds,
     getPublicMapStageViewportPadding,
+    getPublicMapStageViewportPlan,
   } = stageModelModule as {
     createDefaultPublicMapStageState?: () => {
       stage: "kabupaten" | "kecamatan" | "desa";
@@ -112,6 +116,20 @@ async function run() {
       type: "FeatureCollection";
       features: unknown[];
     };
+    getPublicMapMarkerQueryBounds?: (params: {
+      stageState: ReturnType<NonNullable<typeof createDefaultPublicMapStageState>>;
+      viewportBbox: {
+        minLng: number;
+        minLat: number;
+        maxLng: number;
+        maxLat: number;
+      } | null;
+    }) => {
+      minLng: number;
+      minLat: number;
+      maxLng: number;
+      maxLat: number;
+    } | null;
     getPublicMapBoundaryPresentation?: (params: {
       stageState: ReturnType<NonNullable<typeof createDefaultPublicMapStageState>>;
       hasKabupatenBoundary: boolean;
@@ -121,8 +139,22 @@ async function run() {
       showKabupaten: boolean;
       showKecamatan: boolean;
       showDesa: boolean;
-      desaMode: "none" | "scoped" | "selected-only";
+      desaMode: "none" | "scoped" | "focused-scoped";
     };
+    getPublicMapStageConstraintBounds?: (params: {
+      stageState: ReturnType<NonNullable<typeof createDefaultPublicMapStageState>>;
+      kabupatenBounds: {
+        minLng: number;
+        minLat: number;
+        maxLng: number;
+        maxLat: number;
+      } | null;
+    }) => {
+      minLng: number;
+      minLat: number;
+      maxLng: number;
+      maxLat: number;
+    } | null;
     getPublicMapStageViewportPadding?: (
       stage: "kabupaten" | "kecamatan" | "desa",
       compactViewport: boolean,
@@ -130,6 +162,17 @@ async function run() {
       paddingTopLeft: [number, number];
       paddingBottomRight: [number, number];
     };
+    getPublicMapStageViewportPlan?: (params: {
+      stage: "kabupaten" | "kecamatan" | "desa";
+      baseMapMaxZoom: number;
+    }) => {
+      mode: "bounds" | "center";
+      maxZoom: number;
+    };
+    getPublicMapDesaMarkerFocusTarget?: (params: {
+      stageState: ReturnType<NonNullable<typeof createDefaultPublicMapStageState>>;
+      markers: MapViewportMarker[];
+    }) => { lat: number; lng: number } | null;
   };
 
   assert.equal(typeof createDefaultPublicMapStageState, "function", "factory state stage public map wajib diexport");
@@ -142,8 +185,12 @@ async function run() {
   assert.equal(typeof extractPublicMapTaxTypeOptions, "function", "helper opsi jenis pajak wajib diexport");
   assert.equal(typeof filterPublicMapMarkersByTaxType, "function", "helper filter jenis pajak wajib diexport");
   assert.equal(typeof createSingleFeatureCollection, "function", "helper selected feature collection wajib diexport");
+  assert.equal(typeof getPublicMapMarkerQueryBounds, "function", "helper bbox query marker per stage wajib diexport");
   assert.equal(typeof getPublicMapBoundaryPresentation, "function", "helper presentasi boundary per stage wajib diexport");
+  assert.equal(typeof getPublicMapDesaMarkerFocusTarget, "function", "helper fokus marker desa wajib diexport");
+  assert.equal(typeof getPublicMapStageConstraintBounds, "function", "helper bounds constraint per stage wajib diexport");
   assert.equal(typeof getPublicMapStageViewportPadding, "function", "helper padding viewport per stage wajib diexport");
+  assert.equal(typeof getPublicMapStageViewportPlan, "function", "helper plan viewport per stage wajib diexport");
 
   const initialState = createDefaultPublicMapStageState!();
   assert.deepEqual(initialState, {
@@ -354,9 +401,64 @@ async function run() {
     3,
     "deep-link fokus tetap boleh menampilkan marker meski user belum masuk tahap desa",
   );
+  assert.deepEqual(
+    getPublicMapMarkerQueryBounds!({
+      stageState: afterDesa,
+      viewportBbox: {
+        minLng: 104.5,
+        minLat: -4.3,
+        maxLng: 104.6,
+        maxLat: -4.2,
+      },
+    }),
+    afterDesa.selectedDesa?.bounds ?? null,
+    "query marker tahap desa harus memakai bounds desa aktif, bukan viewport sempit saat zoom paling dekat",
+  );
+  assert.deepEqual(
+    getPublicMapMarkerQueryBounds!({
+      stageState: afterKecamatan,
+      viewportBbox: {
+        minLng: 104.5,
+        minLat: -4.3,
+        maxLng: 104.6,
+        maxLat: -4.2,
+      },
+    }),
+    {
+      minLng: 104.5,
+      minLat: -4.3,
+      maxLng: 104.6,
+      maxLat: -4.2,
+    },
+    "tahap selain desa harus tetap memakai viewport bbox biasa",
+  );
+  assert.deepEqual(
+    getPublicMapDesaMarkerFocusTarget!({
+      stageState: afterDesa,
+      markers: markerList,
+    }),
+    {
+      lat: markerList[0]!.latitude,
+      lng: markerList[0]!.longitude,
+    },
+    "fokus tahap desa harus boleh snap ke marker pertama agar OP tetap terlihat setelah zoom maksimal",
+  );
 
   const singleFeatureCollection = createSingleFeatureCollection!(desaSelection);
   assert.equal(singleFeatureCollection.features.length, 1, "stage desa harus bisa merender hanya feature desa aktif");
+  assert.deepEqual(
+    getPublicMapStageConstraintBounds!({
+      stageState: afterDesa,
+      kabupatenBounds: {
+        minLng: 103.8,
+        minLat: -4.8,
+        maxLng: 104.4,
+        maxLat: -4.2,
+      },
+    }),
+    afterKecamatan.selectedKecamatan?.bounds ?? null,
+    "constraint tahap desa harus memakai bounds kecamatan induk agar zoom fokus desa tidak dipaksa melebar",
+  );
 
   assert.deepEqual(
     getPublicMapBoundaryPresentation!({
@@ -399,9 +501,31 @@ async function run() {
       showKabupaten: true,
       showKecamatan: false,
       showDesa: true,
-      desaMode: "selected-only",
+      desaMode: "focused-scoped",
     },
-    "tahap desa harus merender desa aktif saja sebagai fokus utama",
+    "tahap desa harus tetap merender desa scoped dengan desa aktif transparan",
+  );
+  assert.deepEqual(
+    getPublicMapStageViewportPlan!({
+      stage: "kabupaten",
+      baseMapMaxZoom: 19,
+    }),
+    {
+      mode: "bounds",
+      maxZoom: 11,
+    },
+    "tahap kabupaten harus tetap memakai fit bounds biasa",
+  );
+  assert.deepEqual(
+    getPublicMapStageViewportPlan!({
+      stage: "desa",
+      baseMapMaxZoom: 16,
+    }),
+    {
+      mode: "center",
+      maxZoom: 16,
+    },
+    "tahap desa harus masuk langsung ke zoom paling dekat yang diizinkan basemap",
   );
   assert.deepEqual(
     getPublicMapStageViewportPadding!("kabupaten", true),

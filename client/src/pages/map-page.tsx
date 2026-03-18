@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PUBLIC_BASE_MAPS, type BaseMapKey } from "@/lib/map/map-basemap-config";
 import { buildMapDataRequest, type MapViewportBbox } from "@/lib/map/map-data-source";
+import { getFocusedDesaBoundaryLayerStyle } from "@/lib/map/region-boundary-layer-style";
 import { parseMapFocusParams } from "@/lib/map/map-focus-params";
 import { loadMapViewportData, shouldShowEmptyViewportState, type MapViewportResult } from "@/lib/map/map-viewport-query";
 import { bindMapViewportTracking } from "@/lib/map/map-viewport-tracker";
@@ -23,16 +24,18 @@ import {
   createDefaultPublicMapStageState,
   createPublicMapStageHeaderModel,
   createPublicMapVisibleMarkers,
-  createSingleFeatureCollection,
   drillIntoDesaStage,
   drillIntoKecamatanStage,
   expandStageBounds,
   extractPublicMapTaxTypeOptions,
+  getPublicMapDesaMarkerFocusTarget,
   getPublicMapBoundaryPresentation,
+  getPublicMapMarkerQueryBounds,
+  getPublicMapStageConstraintBounds,
   getPublicMapStageAnimationDuration,
   getPublicMapStageBounds,
-  getPublicMapStageMaxZoom,
   getPublicMapStagePaddingRatio,
+  getPublicMapStageViewportPlan,
   getPublicMapStageViewportPadding,
   shouldActivatePublicMapMarkers,
   stepBackPublicMapStage,
@@ -88,6 +91,10 @@ function toLeafletBounds(bounds: RegionBoundaryBounds): [[number, number], [numb
     [bounds.minLat, bounds.minLng],
     [bounds.maxLat, bounds.maxLng],
   ];
+}
+
+function getBoundsCenter(bounds: RegionBoundaryBounds): [number, number] {
+  return [(bounds.minLat + bounds.maxLat) / 2, (bounds.minLng + bounds.maxLng) / 2];
 }
 
 function cycleBaseMap(current: BaseMapKey): BaseMapKey {
@@ -167,6 +174,7 @@ function MapStageConstraintController(props: {
 function MapStageViewportController(props: {
   stageState: PublicMapStageState;
   kabupatenBounds: RegionBoundaryBounds | null;
+  baseMapMaxZoom: number;
   focusTarget: { lat: number; lng: number } | null;
   reducedMotion: boolean;
   resetToken: number;
@@ -212,12 +220,32 @@ function MapStageViewportController(props: {
     lastSignatureRef.current = signature;
     const compactViewport = map.getSize().x < 640;
     const viewportPadding = getPublicMapStageViewportPadding(props.stageState.stage, compactViewport);
+    const viewportPlan = getPublicMapStageViewportPlan({
+      stage: props.stageState.stage,
+      baseMapMaxZoom: props.baseMapMaxZoom,
+    });
 
     const fitOptions = {
       paddingTopLeft: viewportPadding.paddingTopLeft,
       paddingBottomRight: viewportPadding.paddingBottomRight,
-      maxZoom: getPublicMapStageMaxZoom(props.stageState.stage),
+      maxZoom: viewportPlan.maxZoom,
     };
+
+    if (viewportPlan.mode === "center") {
+      const targetCenter = getBoundsCenter(targetBounds);
+
+      if (!hasInitializedRef.current || props.reducedMotion) {
+        map.setView(targetCenter, viewportPlan.maxZoom);
+        hasInitializedRef.current = true;
+        return;
+      }
+
+      map.flyTo(targetCenter, viewportPlan.maxZoom, {
+        duration: getPublicMapStageAnimationDuration(props.stageState.stage, props.reducedMotion),
+      });
+      hasInitializedRef.current = true;
+      return;
+    }
 
     if (!hasInitializedRef.current || props.reducedMotion || props.stageState.stage === "kabupaten") {
       map.fitBounds(toLeafletBounds(targetBounds), fitOptions);
@@ -230,7 +258,64 @@ function MapStageViewportController(props: {
       duration: getPublicMapStageAnimationDuration(props.stageState.stage, props.reducedMotion),
     });
     hasInitializedRef.current = true;
-  }, [map, props.focusTarget, props.reducedMotion, props.stageState, signature, targetBounds]);
+  }, [map, props.baseMapMaxZoom, props.focusTarget, props.reducedMotion, props.stageState, signature, targetBounds]);
+
+  return null;
+}
+
+function MapBaseMapZoomController(props: { maxZoom: number }) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.setMaxZoom(props.maxZoom);
+
+    if (map.getZoom() > props.maxZoom) {
+      map.setZoom(props.maxZoom);
+    }
+  }, [map, props.maxZoom]);
+
+  return null;
+}
+
+function MapDesaMarkerFocusController(props: {
+  stageState: PublicMapStageState;
+  markers: MapViewportResult["items"];
+  requiredZoom: number;
+  reducedMotion: boolean;
+  zoom: number;
+}) {
+  const map = useMap();
+  const lastFocusedSignatureRef = useRef("");
+
+  useEffect(() => {
+    if (props.stageState.stage !== "desa" || props.stageState.selectedDesa === null) {
+      lastFocusedSignatureRef.current = "";
+      return;
+    }
+
+    const focusTarget = getPublicMapDesaMarkerFocusTarget({
+      stageState: props.stageState,
+      markers: props.markers,
+    });
+    if (!focusTarget) {
+      return;
+    }
+
+    if (props.zoom + 0.01 < props.requiredZoom) {
+      return;
+    }
+
+    const signature = `${props.stageState.selectedDesa.name}:${props.markers.map((marker) => marker.id).join(",")}`;
+    if (lastFocusedSignatureRef.current === signature) {
+      return;
+    }
+
+    lastFocusedSignatureRef.current = signature;
+    map.panTo([focusTarget.lat, focusTarget.lng], {
+      animate: !props.reducedMotion,
+      duration: props.reducedMotion ? 0 : 0.7,
+    });
+  }, [map, props.markers, props.reducedMotion, props.requiredZoom, props.stageState, props.zoom]);
 
   return null;
 }
@@ -299,17 +384,22 @@ export default function MapPage() {
   );
 
   const mapDataRequest = useMemo(() => {
-    if (!bbox || !isMarkerQueryActive) {
+    const markerQueryBounds = getPublicMapMarkerQueryBounds({
+      stageState,
+      viewportBbox: bbox,
+    });
+
+    if (!markerQueryBounds || !isMarkerQueryActive) {
       return null;
     }
 
     return buildMapDataRequest(regionConfig.map.dataSource, {
-      bbox,
+      bbox: markerQueryBounds,
       zoom,
       limit: 500,
       kecamatanId: stageState.selectedKecamatan?.id ?? undefined,
     });
-  }, [bbox, isMarkerQueryActive, stageState.selectedKecamatan?.id, zoom]);
+  }, [bbox, isMarkerQueryActive, stageState, zoom]);
 
   const { data: mapData, isFetching, error } = useQuery<MapViewportResult>({
     queryKey: [
@@ -363,15 +453,13 @@ export default function MapPage() {
     stageState,
     kabupatenBounds: activeKabupatenBoundary?.bounds ?? null,
   });
+  const activeStageConstraintBounds = getPublicMapStageConstraintBounds({
+    stageState,
+    kabupatenBounds: activeKabupatenBoundary?.bounds ?? null,
+  });
   const activeKabupatenGeoJson = activeKabupatenBoundary?.boundary ?? null;
   const activeKecamatanGeoJson = activeKecamatanBoundary?.boundary ?? null;
   const activeDesaGeoJson = activeDesaBoundary?.boundary ?? null;
-  const selectedDesaGeoJson =
-    stageState.selectedDesa !== null
-      ? createSingleFeatureCollection({
-          feature: stageState.selectedDesa.feature,
-        })
-      : null;
   const boundaryPresentation = getPublicMapBoundaryPresentation({
     stageState,
     hasKabupatenBoundary: activeKabupatenGeoJson !== null,
@@ -393,6 +481,10 @@ export default function MapPage() {
     markerCount: visibleMarkerList.length,
   });
   const mapConfig = PUBLIC_BASE_MAPS[baseMap];
+  const activeViewportPlan = getPublicMapStageViewportPlan({
+    stage: stageState.stage,
+    baseMapMaxZoom: mapConfig.maxZoom,
+  });
 
   useEffect(() => {
     if (!stageState.selectedKecamatan || stageState.stage !== "desa") {
@@ -580,17 +672,19 @@ export default function MapPage() {
         zoomControl={false}
       >
         <TileLayer attribution={mapConfig.attribution} url={mapConfig.url} maxZoom={mapConfig.maxZoom} />
+        <MapBaseMapZoomController maxZoom={mapConfig.maxZoom} />
+        <MapStageConstraintController
+          kabupatenBounds={activeKabupatenBoundary?.bounds ?? null}
+          stageBounds={activeStageConstraintBounds}
+          stage={stageState.stage}
+        />
         <MapStageViewportController
           stageState={stageState}
           kabupatenBounds={activeKabupatenBoundary?.bounds ?? null}
+          baseMapMaxZoom={mapConfig.maxZoom}
           focusTarget={focusParams.target}
           reducedMotion={reducedMotion}
           resetToken={viewportResetToken}
-        />
-        <MapStageConstraintController
-          kabupatenBounds={activeKabupatenBoundary?.bounds ?? null}
-          stageBounds={activeStageBounds}
-          stage={stageState.stage}
         />
         <MapFocusController target={focusParams.target} zoom={Math.max(regionConfig.map.defaultZoom, 18)} reducedMotion={reducedMotion} />
         <ZoomControl position="bottomright" />
@@ -599,6 +693,13 @@ export default function MapPage() {
             setBbox(nextBbox);
             setZoom(nextZoom);
           }}
+        />
+        <MapDesaMarkerFocusController
+          stageState={stageState}
+          markers={visibleMarkerList}
+          reducedMotion={reducedMotion}
+          requiredZoom={activeViewportPlan.maxZoom}
+          zoom={zoom}
         />
 
         {activeKabupatenGeoJson ? <PublicKabupatenMask boundary={activeKabupatenGeoJson} /> : null}
@@ -635,13 +736,22 @@ export default function MapPage() {
           />
         ) : null}
 
-        {boundaryPresentation.showDesa && boundaryPresentation.desaMode === "selected-only" && selectedDesaGeoJson ? (
+        {boundaryPresentation.showDesa && boundaryPresentation.desaMode === "focused-scoped" && activeDesaGeoJson ? (
           <PublicBoundaryLayer
             level="desa"
-            boundary={selectedDesaGeoJson}
+            boundary={activeDesaGeoJson}
             opacity={72}
             zoom={zoom}
             forceShowLabels
+            styleKey={stageState.selectedDesa?.name ?? "none"}
+            styleOverride={({ featureName }) =>
+              getFocusedDesaBoundaryLayerStyle({
+                featureName,
+                selectedFeatureName: stageState.selectedDesa?.name ?? "",
+                opacity: 72,
+              })
+            }
+            onFeatureSelect={handleBoundaryFeatureSelect}
           />
         ) : null}
 

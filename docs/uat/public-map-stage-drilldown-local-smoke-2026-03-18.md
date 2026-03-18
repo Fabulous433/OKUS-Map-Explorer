@@ -105,3 +105,47 @@
 - `npx tsx tests/integration/map-focus-params.integration.ts` -> PASS
 - `npx tsx tests/integration/map-city-first-config.integration.ts` -> PASS
 - `npm run build` -> PASS
+
+## Addendum — Desktop Boundary Tuning
+
+### Scope
+
+- Evidence tambahan ini merekam penyesuaian desktop setelah baseline stage drill-down PASS:
+  - desa aktif harus transparan agar citra dasar dan OP tetap mudah dipilih
+  - desa lain di kecamatan tetap berwarna sebagai konteks
+  - basemap `ESRI Satellite` tidak boleh lagi masuk ke tile kosong
+  - saat masuk stage desa, viewport harus berhenti di zoom aman tertinggi dan marker OP desa tetap terlihat
+
+### Bugs Found During Addendum
+
+- Desa aktif sempat tetap diberi fill warna penuh, sehingga citra dasar di wilayah yang sedang dipilih terasa tertutup.
+  - Fix: layer desa fokus sekarang merender seluruh desa scoped, tetapi desa aktif memakai `fillOpacity=0` dengan outline tegas.
+- `ESRI Satellite` sempat masih bisa didorong ke level zoom yang menampilkan `Map data not yet available`.
+  - Fix: batas zoom ESRI diturunkan ke `16`, stage desa memakai viewport plan berbasis basemap aktif, dan constraint desa tidak lagi memaksa zoom melebar.
+- Setelah desa dibuka di zoom maksimal, marker OP sempat hilang dari layar karena query masih memakai viewport sempit dan auto-focus marker bisa memotong animasi zoom desa.
+  - Fix:
+    - query marker tahap desa sekarang memakai bounds desa aktif
+    - focus marker desa hanya berjalan setelah zoom stage desa benar-benar mencapai target
+    - auto-focus marker memakai pan-only agar status tombol zoom tetap sinkron
+
+### Desktop Result
+
+- PASS: klik `Muara Dua -> Batu Belang Jaya` di desktop dengan basemap `ESRI Satellite` membuka stage desa pada tile zoom `16`.
+- PASS: tombol `Zoom in` langsung disabled setelah viewport desa settle, tanpa perlu user memancing satu klik lagi.
+- PASS: text `Map data not yet available` tidak muncul.
+- PASS: overlay desa fokus menunjukkan `1` polygon transparan (`fillOpacity=0`) untuk desa aktif, sementara desa lain tetap berada di `fillOpacity=0.72`.
+- PASS: marker `WLT` tetap muncul di desa `Batu Belang Jaya`, sehingga user masih bisa lanjut memilih OP pada citra dasar yang tidak tertutup fill.
+
+### Desktop Artifacts
+
+- Desktop desa, selected-clear, ESRI, marker visible:
+  - [smoke-2026-03-18-desa-selected-clear-esri-marker-final2.png](/D:/Code/OKUS-Map-Explorer/output/playwright/smoke-2026-03-18-desa-selected-clear-esri-marker-final2.png)
+
+### Addendum Verification
+
+- `npx tsx tests/integration/map-boundary-layer-state.integration.ts` -> PASS
+- `npx tsx tests/integration/map-city-first-config.integration.ts` -> PASS
+- `npx tsx tests/integration/public-map-stage-model.integration.ts` -> PASS
+- `npx tsx tests/integration/public-boundary-layer.integration.ts` -> PASS
+- `npm run check` -> PASS
+- `npm run build` -> PASS

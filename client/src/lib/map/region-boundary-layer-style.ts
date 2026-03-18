@@ -60,3 +60,27 @@ export function getRegionBoundaryLayerStyle(params: {
     weight: params.level === "kecamatan" ? 1.8 : 1.1,
   };
 }
+
+export function getFocusedDesaBoundaryLayerStyle(params: {
+  featureName: string;
+  selectedFeatureName: string;
+  opacity: number;
+}): RegionBoundaryLayerStyle {
+  const baseStyle = getRegionBoundaryLayerStyle({
+    level: "desa",
+    featureName: params.featureName,
+    opacity: params.opacity,
+  });
+
+  if (params.featureName.trim().localeCompare(params.selectedFeatureName.trim(), "id", { sensitivity: "accent" }) !== 0) {
+    return baseStyle;
+  }
+
+  return {
+    ...baseStyle,
+    color: "#243447",
+    fillOpacity: 0,
+    opacity: 0.96,
+    weight: 2.3,
+  };
+}

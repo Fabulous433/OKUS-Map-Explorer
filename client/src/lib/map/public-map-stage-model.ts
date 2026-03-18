@@ -1,5 +1,6 @@
 import type { GeoJsonFeatureCollection, RegionBoundaryBounds } from "@shared/region-boundary";
 import { filterViewportMarkersByBoundarySelection, type BoundaryFeatureSelection } from "@/lib/map/public-boundary-layer-model";
+import type { MapViewportBbox } from "@/lib/map/map-data-source";
 import type { MapViewportMarker } from "@/lib/map/wfs-types";
 
 export type MapStage = "kabupaten" | "kecamatan" | "desa";
@@ -35,7 +36,7 @@ export type PublicMapBoundaryPresentation = {
   showKabupaten: boolean;
   showKecamatan: boolean;
   showDesa: boolean;
-  desaMode: "none" | "scoped" | "selected-only";
+  desaMode: "none" | "scoped" | "focused-scoped";
 };
 
 const ROOT_STAGE_HELPER = "Pilih satu kecamatan untuk masuk ke wilayahnya";
@@ -191,10 +192,35 @@ export function createPublicMapVisibleMarkers(params: {
   });
 }
 
+export function getPublicMapMarkerQueryBounds(params: {
+  stageState: PublicMapStageState;
+  viewportBbox: MapViewportBbox | null;
+}) {
+  if (params.stageState.stage === "desa" && params.stageState.selectedDesa) {
+    return params.stageState.selectedDesa.bounds;
+  }
+
+  return params.viewportBbox;
+}
+
 export function createSingleFeatureCollection(selection: Pick<BoundaryFeatureSelection, "feature">): GeoJsonFeatureCollection {
   return {
     type: "FeatureCollection",
     features: [selection.feature],
+  };
+}
+
+export function getPublicMapDesaMarkerFocusTarget(params: {
+  stageState: PublicMapStageState;
+  markers: MapViewportMarker[];
+}) {
+  if (params.stageState.stage !== "desa" || params.stageState.selectedDesa === null || params.markers.length === 0) {
+    return null;
+  }
+
+  return {
+    lat: params.markers[0]!.latitude,
+    lng: params.markers[0]!.longitude,
   };
 }
 
@@ -209,7 +235,7 @@ export function getPublicMapBoundaryPresentation(params: {
       showKabupaten: params.hasKabupatenBoundary,
       showKecamatan: false,
       showDesa: params.hasDesaBoundary && params.stageState.selectedDesa !== null,
-      desaMode: "selected-only",
+      desaMode: "focused-scoped",
     };
   }
 
@@ -257,6 +283,17 @@ export function getPublicMapStageBounds(params: {
   return params.kabupatenBounds;
 }
 
+export function getPublicMapStageConstraintBounds(params: {
+  stageState: PublicMapStageState;
+  kabupatenBounds: RegionBoundaryBounds | null;
+}) {
+  if (params.stageState.stage === "desa" && params.stageState.selectedKecamatan) {
+    return params.stageState.selectedKecamatan.bounds;
+  }
+
+  return getPublicMapStageBounds(params);
+}
+
 export function getPublicMapStagePaddingRatio(stage: MapStage) {
   if (stage === "desa") {
     return 0.02;
@@ -279,6 +316,22 @@ export function getPublicMapStageMaxZoom(stage: MapStage) {
   }
 
   return 11;
+}
+
+export function getPublicMapStageViewportPlan(params: { stage: MapStage; baseMapMaxZoom: number }) {
+  const maxZoom = Math.min(getPublicMapStageMaxZoom(params.stage), params.baseMapMaxZoom);
+
+  if (params.stage === "desa") {
+    return {
+      mode: "center" as const,
+      maxZoom,
+    };
+  }
+
+  return {
+    mode: "bounds" as const,
+    maxZoom,
+  };
 }
 
 export function getPublicMapStageAnimationDuration(stage: MapStage, reducedMotion: boolean) {

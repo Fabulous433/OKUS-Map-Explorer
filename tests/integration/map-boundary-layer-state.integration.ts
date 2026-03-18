@@ -54,11 +54,17 @@ async function run() {
   const {
     REGION_BOUNDARY_LABEL_MIN_ZOOM,
     getRegionBoundaryLayerStyle,
+    getFocusedDesaBoundaryLayerStyle,
   } = styleModule as {
     REGION_BOUNDARY_LABEL_MIN_ZOOM?: Record<string, number>;
     getRegionBoundaryLayerStyle?: (params: {
       level: "kabupaten" | "kecamatan" | "desa";
       featureName: string;
+      opacity: number;
+    }) => Record<string, unknown>;
+    getFocusedDesaBoundaryLayerStyle?: (params: {
+      featureName: string;
+      selectedFeatureName: string;
       opacity: number;
     }) => Record<string, unknown>;
   };
@@ -164,6 +170,7 @@ async function run() {
   assert.equal(REGION_BOUNDARY_LABEL_MIN_ZOOM?.kabupaten, 9);
   assert.equal(REGION_BOUNDARY_LABEL_MIN_ZOOM?.kecamatan, 11);
   assert.equal(REGION_BOUNDARY_LABEL_MIN_ZOOM?.desa, 13);
+  assert.equal(typeof getFocusedDesaBoundaryLayerStyle, "function", "helper style fokus desa wajib diexport");
 
   const kecamatanStyle = getRegionBoundaryLayerStyle!({
     level: "kecamatan",
@@ -188,6 +195,27 @@ async function run() {
     }).fillColor,
     "palette desa harus dibedakan dari palette kecamatan",
   );
+  assert.deepEqual(
+    getFocusedDesaBoundaryLayerStyle!({
+      featureName: "Batu Belang Jaya",
+      selectedFeatureName: "Suka Nanti",
+      opacity: 68,
+    }),
+    getRegionBoundaryLayerStyle!({
+      level: "desa",
+      featureName: "Batu Belang Jaya",
+      opacity: 68,
+    }),
+    "desa non-aktif harus tetap memakai warna polygon normal",
+  );
+  const selectedFocusedDesaStyle = getFocusedDesaBoundaryLayerStyle!({
+    featureName: "Batu Belang Jaya",
+    selectedFeatureName: "Batu Belang Jaya",
+    opacity: 68,
+  });
+  assert.equal(selectedFocusedDesaStyle.fillOpacity, 0, "desa aktif harus transparan agar citra dasar tetap terlihat");
+  assert.equal(selectedFocusedDesaStyle.opacity, 0.96, "desa aktif harus tetap punya outline tegas");
+  assert.equal(selectedFocusedDesaStyle.weight, 2.3, "desa aktif harus mempertahankan outline yang mudah dikenali");
 
   let requestedUrl = "";
   const response = await loadActiveRegionBoundary({

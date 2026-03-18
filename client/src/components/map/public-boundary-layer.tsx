@@ -1,6 +1,6 @@
 import { GeoJSON } from "react-leaflet";
 import type { GeoJsonFeature, GeoJsonFeatureCollection, RegionBoundaryLevel } from "@shared/region-boundary";
-import { getRegionBoundaryLayerStyle } from "@/lib/map/region-boundary-layer-style";
+import { getRegionBoundaryLayerStyle, type RegionBoundaryLayerStyle } from "@/lib/map/region-boundary-layer-style";
 import {
   createBoundaryFeatureSelection,
   createKabupatenMaskBoundary,
@@ -16,6 +16,13 @@ type PublicBoundaryLayerProps = {
   zoom: number;
   forceShowLabels?: boolean;
   onFeatureSelect?: (selection: BoundaryFeatureSelection) => void;
+  styleKey?: string;
+  styleOverride?: (params: {
+    feature: GeoJsonFeature;
+    featureName: string;
+    level: RegionBoundaryLevel;
+    baseStyle: RegionBoundaryLayerStyle;
+  }) => RegionBoundaryLayerStyle;
 };
 
 export function PublicBoundaryLayer(props: PublicBoundaryLayerProps) {
@@ -24,15 +31,25 @@ export function PublicBoundaryLayer(props: PublicBoundaryLayerProps) {
 
   return (
     <GeoJSON
-      key={`${props.level}-${props.opacity}-${showLabels ? "labels" : "plain"}`}
+      key={`${props.level}-${props.opacity}-${showLabels ? "labels" : "plain"}-${props.styleKey ?? "default"}`}
       data={props.boundary as any}
       interactive={clickableLevel !== null && typeof props.onFeatureSelect === "function"}
       style={(feature) => {
-        const featureName = getBoundaryFeatureName(props.level, feature as GeoJsonFeature);
-        return getRegionBoundaryLayerStyle({
+        const typedFeature = feature as GeoJsonFeature;
+        const featureName = getBoundaryFeatureName(props.level, typedFeature);
+        const baseStyle = getRegionBoundaryLayerStyle({
           level: props.level,
           featureName,
           opacity: props.opacity,
+        });
+        if (!props.styleOverride) {
+          return baseStyle;
+        }
+        return props.styleOverride({
+          feature: typedFeature,
+          featureName,
+          level: props.level,
+          baseStyle,
         });
       }}
       onEachFeature={(feature, layer) => {

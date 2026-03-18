@@ -43,7 +43,7 @@ async function run() {
 
   assert.equal(PUBLIC_BASE_MAPS.osm.maxZoom, 19, "OSM harus tetap mendukung zoom 19");
   assert.equal(PUBLIC_BASE_MAPS.carto.maxZoom, 20, "Carto harus tetap mendukung zoom 20");
-  assert.equal(PUBLIC_BASE_MAPS.esri.maxZoom, 17, "ESRI Satellite harus dibatasi ke zoom yang lebih aman");
+  assert.equal(PUBLIC_BASE_MAPS.esri.maxZoom, 16, "ESRI Satellite harus dibatasi satu level lebih aman agar tile kosong tidak muncul");
   assert.equal(PUBLIC_BASE_MAPS.esri.name, "ESRI Satellite", "label basemap ESRI harus tetap stabil");
 }
 
