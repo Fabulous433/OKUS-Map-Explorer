@@ -30,7 +30,7 @@ const DEFAULT_REGION_NAME = "OKU Selatan";
 const DEFAULT_REGION_SHORT_NAME = "OKUS";
 const DEFAULT_REGION_KEY = "okus";
 const DEFAULT_MAP_CENTER: [number, number] = [-4.525, 104.027];
-const DEFAULT_MAP_ZOOM = 15;
+const DEFAULT_MAP_ZOOM = 10;
 
 function readString(value: string | undefined, fallback: string) {
   const normalized = value?.trim();

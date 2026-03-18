@@ -1,5 +1,41 @@
 # Changelog
 
+## Phase 2.16j — Public Map Stage Drill-Down
+
+### Added
+- State machine baru di map publik untuk tahap navigasi:
+  - `kabupaten`
+  - `kecamatan`
+  - `desa`
+- Shell map-first baru di [client/src/pages/map-page.tsx](/D:/Code/OKUS-Map-Explorer/client/src/pages/map-page.tsx) dengan header kiri atas, tombol kembali bertingkat, dan chip filter jenis pajak inline yang hanya tampil pada tahap desa.
+- Helper stage model baru:
+  - [client/src/lib/map/public-map-stage-model.ts](/D:/Code/OKUS-Map-Explorer/client/src/lib/map/public-map-stage-model.ts)
+- Regression suite baru:
+  - [tests/integration/public-map-stage-model.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/public-map-stage-model.integration.ts)
+
+### Improved
+- Map publik sekarang mulai dari konteks OKU Selatan, bukan city-first Muaradua; zoom default region diturunkan agar load awal langsung terasa seperti overview kabupaten.
+- Klik polygon `kecamatan` sekarang masuk ke mode fokus kecamatan:
+  - viewport terkunci ke bounds kecamatan
+  - polygon kecamatan lain tidak lagi jadi layer aktif
+  - polygon desa scoped untuk kecamatan tersebut langsung dimuat
+- Klik polygon `desa/kelurahan` sekarang masuk ke mode fokus desa:
+  - viewport terkunci ke bounds desa
+  - marker `Objek Pajak` baru aktif pada tahap ini
+  - filter jenis pajak tampil sebagai chip inline di atas peta
+- Tombol kembali sekarang bekerja sesuai hirarki wilayah:
+  - `desa -> kecamatan`
+  - `kecamatan -> kabupaten`
+- Deep-link marker tetap dipertahankan sebagai jalur exception, tetapi interaksi drill-down manual sekarang dapat mengambil alih flow dan mengembalikan pengguna ke mode spasial utama.
+
+### Fixed
+- Reset peta publik kini benar-benar mengembalikan viewport ke root OKU Selatan, bukan hanya mereset state internal.
+- Kontrol map publik tidak lagi bertumpu pada panel atlas besar untuk membuka boundary; baseline navigasi kini berpindah ke interaksi polygon langsung di atas peta.
+
+### Notes
+- Verifikasi batch ini saat ini mencakup `npm run check`, `npm run build`, dan regression integration terkait stage model, boundary interaction, region scope, dan focus params.
+- Smoke browser visual khusus stage drill-down masih perlu direkam terpisah bila ingin dijadikan evidence UAT.
+
 ## Phase 2.16i — Boundary Drill-Down Closure
 
 ### Added

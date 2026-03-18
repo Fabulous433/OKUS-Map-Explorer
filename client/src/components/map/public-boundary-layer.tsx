@@ -14,11 +14,12 @@ type PublicBoundaryLayerProps = {
   boundary: GeoJsonFeatureCollection;
   opacity: number;
   zoom: number;
+  forceShowLabels?: boolean;
   onFeatureSelect?: (selection: BoundaryFeatureSelection) => void;
 };
 
 export function PublicBoundaryLayer(props: PublicBoundaryLayerProps) {
-  const showLabels = shouldShowBoundaryLabels(props.level, props.zoom);
+  const showLabels = props.forceShowLabels || shouldShowBoundaryLabels(props.level, props.zoom);
   const clickableLevel = props.level === "kecamatan" || props.level === "desa" ? props.level : null;
 
   return (

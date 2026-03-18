@@ -1,47 +1,50 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { motion, useReducedMotion } from "framer-motion";
 import { Link } from "wouter";
-import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
-import { Filter, Loader2, MapPin, Search, Settings, Target } from "lucide-react";
+import { MapContainer, Marker, Popup, TileLayer, useMap, ZoomControl } from "react-leaflet";
+import { Layers3, Loader2, MapPin, Settings, Target } from "lucide-react";
 import L from "leaflet";
-import { DesktopMapFilterSheet } from "@/components/map/desktop-map-filter-sheet";
 import { PublicBoundaryLayer, PublicKabupatenMask } from "@/components/map/public-boundary-layer";
+import { PublicMapStageHeader } from "@/components/map/public-map-stage-header";
+import { PublicMapTaxFilterChips } from "@/components/map/public-map-tax-filter-chips";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { PUBLIC_BASE_MAPS, type BaseMapKey } from "@/lib/map/map-basemap-config";
+import { buildMapDataRequest, type MapViewportBbox } from "@/lib/map/map-data-source";
+import { parseMapFocusParams } from "@/lib/map/map-focus-params";
+import { loadMapViewportData, shouldShowEmptyViewportState, type MapViewportResult } from "@/lib/map/map-viewport-query";
+import { bindMapViewportTracking } from "@/lib/map/map-viewport-tracker";
 import {
   type BoundaryFeatureSelection,
-  extractBoundaryLegendFeatures,
-  createPublicBoundaryLayerQueryPlan,
   filterViewportMarkersByBoundarySelection,
   resolveBoundarySelectionKecamatanId,
 } from "@/lib/map/public-boundary-layer-model";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { MobileMapDrawer } from "@/components/map/mobile-map-drawer";
-import { MobileBottomNav } from "@/components/backoffice/mobile-bottom-nav";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { PUBLIC_BASE_MAPS, type BaseMapKey } from "@/lib/map/map-basemap-config";
-import { parseMapFocusParams } from "@/lib/map/map-focus-params";
-import { buildMapDataRequest, type MapViewportBbox } from "@/lib/map/map-data-source";
-import { bindMapViewportTracking } from "@/lib/map/map-viewport-tracker";
 import {
-  loadMapViewportData,
-  shouldActivateViewportData,
-  shouldShowEmptyViewportState,
-  type MapViewportResult,
-} from "@/lib/map/map-viewport-query";
-import {
-  createDefaultRegionBoundaryLayerState,
-  normalizeLayerOpacity,
-  type RegionBoundaryLayerId,
-} from "@/lib/map/region-boundary-layer-state";
+  createDefaultPublicMapStageState,
+  createPublicMapStageHeaderModel,
+  createSingleFeatureCollection,
+  drillIntoDesaStage,
+  drillIntoKecamatanStage,
+  expandStageBounds,
+  extractPublicMapTaxTypeOptions,
+  filterPublicMapMarkersByTaxType,
+  getPublicMapBoundaryPresentation,
+  getPublicMapStageAnimationDuration,
+  getPublicMapStageBounds,
+  getPublicMapStageMaxZoom,
+  getPublicMapStagePaddingRatio,
+  shouldActivatePublicMapMarkers,
+  stepBackPublicMapStage,
+  type MapStage,
+  type PublicMapStageState,
+} from "@/lib/map/public-map-stage-model";
 import { loadActiveRegionBoundary } from "@/lib/map/region-boundary-query";
 import { getQueryFn } from "@/lib/queryClient";
 import { regionConfig } from "@/lib/region-config";
 import type { RegionBoundaryBounds } from "@shared/region-boundary";
-import type { MasterKecamatan, MasterRekeningPajak } from "@shared/schema";
+import type { MasterKecamatan } from "@shared/schema";
 import "leaflet/dist/leaflet.css";
-
-const IDLE_MAP_HINT = "Peta wilayah aktif. Cari OP / NOPD / alamat atau pilih filter untuk menampilkan marker.";
 
 function buildMarkerIcon(jenisPajak: string) {
   const palette = [
@@ -80,11 +83,18 @@ function formatCurrency(value: string | null | undefined) {
   }).format(numeric);
 }
 
-function toLeafletBounds(bounds: RegionBoundaryBounds): L.LatLngBoundsExpression {
+function toLeafletBounds(bounds: RegionBoundaryBounds): [[number, number], [number, number]] {
   return [
     [bounds.minLat, bounds.minLng],
     [bounds.maxLat, bounds.maxLng],
   ];
+}
+
+function cycleBaseMap(current: BaseMapKey): BaseMapKey {
+  const mapKeys = Object.keys(PUBLIC_BASE_MAPS) as BaseMapKey[];
+  const currentIndex = mapKeys.indexOf(current);
+  const nextIndex = (currentIndex + 1) % mapKeys.length;
+  return mapKeys[nextIndex] ?? "osm";
 }
 
 function MapViewportTracker(props: { onChange: (bbox: MapViewportBbox, zoom: number) => void }) {
@@ -107,155 +117,204 @@ function MapViewportTracker(props: { onChange: (bbox: MapViewportBbox, zoom: num
   return null;
 }
 
-function MapTopRightControls(props: {
-  isFetching: boolean;
-  isMobile: boolean;
-  activeBounds: RegionBoundaryBounds | null;
-}) {
-  const map = useMap();
-  return (
-    <div className={`absolute z-[1000] flex gap-2 ${props.isMobile ? "right-3 top-16" : "right-4 top-4"}`}>
-      <Button
-        size="icon"
-        variant="outline"
-        className="rounded-lg bg-background shadow-card"
-        onClick={() => {
-          if (props.activeBounds) {
-            map.fitBounds(toLeafletBounds(props.activeBounds), { padding: [24, 24] });
-            return;
-          }
-
-          map.flyTo(regionConfig.map.center, regionConfig.map.defaultZoom, { duration: 0.7 });
-        }}
-        title="Reset view"
-        aria-label="Reset view"
-      >
-        <Target className="w-4 h-4" />
-      </Button>
-      {props.isFetching && (
-        <div className="flex items-center gap-2 rounded-lg bg-background px-3 py-2 font-mono text-xs shadow-card">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          memuat viewport
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MapActiveRegionController(props: {
-  activeBounds: RegionBoundaryBounds | null;
-  focusTarget: { lat: number; lng: number } | null;
-}) {
-  const map = useMap();
-  const hasAnchoredRef = useRef(false);
-
-  useEffect(() => {
-    if (!props.activeBounds || props.focusTarget || hasAnchoredRef.current) {
-      return;
-    }
-
-    map.fitBounds(toLeafletBounds(props.activeBounds), { padding: [24, 24] });
-    hasAnchoredRef.current = true;
-  }, [map, props.activeBounds, props.focusTarget]);
-
-  return null;
-}
-
 function MapFocusController(props: {
   target: { lat: number; lng: number } | null;
   zoom: number;
+  reducedMotion: boolean;
 }) {
   const map = useMap();
 
   useEffect(() => {
     if (!props.target) return;
 
-    map.flyTo([props.target.lat, props.target.lng], props.zoom, { duration: 0.85 });
-  }, [map, props.target, props.zoom]);
+    map.flyTo([props.target.lat, props.target.lng], props.zoom, {
+      duration: props.reducedMotion ? 0 : 0.85,
+    });
+  }, [map, props.reducedMotion, props.target, props.zoom]);
 
   return null;
 }
 
-function MapBoundarySelectionController(props: {
-  selection: BoundaryFeatureSelection | null;
+function MapStageConstraintController(props: {
+  kabupatenBounds: RegionBoundaryBounds | null;
+  stageBounds: RegionBoundaryBounds | null;
+  stage: MapStage;
 }) {
   const map = useMap();
 
   useEffect(() => {
-    if (!props.selection) {
+    const activeBounds = props.stageBounds ?? props.kabupatenBounds;
+    if (!activeBounds) {
       return;
     }
 
-    map.fitBounds(toLeafletBounds(props.selection.bounds), {
-      padding: [28, 28],
-      maxZoom: props.selection.level === "desa" ? 15 : 12,
-    });
-  }, [map, props.selection]);
+    const constrainedBounds = expandStageBounds(activeBounds, getPublicMapStagePaddingRatio(props.stage));
+    const leafletBounds = L.latLngBounds(toLeafletBounds(constrainedBounds));
+    const minZoom = map.getBoundsZoom(leafletBounds, false, L.point(24, 24));
+
+    map.setMaxBounds(leafletBounds);
+    map.options.maxBoundsViscosity = 1;
+    map.setMinZoom(minZoom);
+
+    if (map.getZoom() < minZoom) {
+      map.setZoom(minZoom);
+    }
+  }, [map, props.kabupatenBounds, props.stage, props.stageBounds]);
 
   return null;
 }
 
-function MapZoomBoundsController(props: { maxZoom: number }) {
+function MapStageViewportController(props: {
+  stageState: PublicMapStageState;
+  kabupatenBounds: RegionBoundaryBounds | null;
+  focusTarget: { lat: number; lng: number } | null;
+  reducedMotion: boolean;
+  resetToken: number;
+}) {
   const map = useMap();
+  const hasInitializedRef = useRef(false);
+  const skippedInitialFocusRef = useRef(false);
+  const lastSignatureRef = useRef("");
+
+  const targetBounds = useMemo(
+    () =>
+      getPublicMapStageBounds({
+        stageState: props.stageState,
+        kabupatenBounds: props.kabupatenBounds,
+      }),
+    [props.kabupatenBounds, props.stageState],
+  );
+
+  const signature = `${props.stageState.stage}:${props.stageState.selectedKecamatan?.id ?? "none"}:${props.stageState.selectedDesa?.name ?? "none"}:${props.resetToken}`;
 
   useEffect(() => {
-    map.setMaxZoom(props.maxZoom);
-
-    if (map.getZoom() > props.maxZoom) {
-      map.setZoom(props.maxZoom);
+    if (!targetBounds) {
+      return;
     }
-  }, [map, props.maxZoom]);
+
+    if (
+      props.focusTarget &&
+      !skippedInitialFocusRef.current &&
+      props.stageState.stage === "kabupaten" &&
+      props.stageState.selectedKecamatan === null &&
+      props.stageState.selectedDesa === null
+    ) {
+      skippedInitialFocusRef.current = true;
+      hasInitializedRef.current = true;
+      lastSignatureRef.current = signature;
+      return;
+    }
+
+    if (lastSignatureRef.current === signature) {
+      return;
+    }
+
+    lastSignatureRef.current = signature;
+
+    const fitOptions = {
+      padding: [28, 28] as L.PointExpression,
+      maxZoom: getPublicMapStageMaxZoom(props.stageState.stage),
+    };
+
+    if (!hasInitializedRef.current || props.reducedMotion || props.stageState.stage === "kabupaten") {
+      map.fitBounds(toLeafletBounds(targetBounds), fitOptions);
+      hasInitializedRef.current = true;
+      return;
+    }
+
+    map.flyToBounds(toLeafletBounds(targetBounds), {
+      ...fitOptions,
+      duration: getPublicMapStageAnimationDuration(props.stageState.stage, props.reducedMotion),
+    });
+    hasInitializedRef.current = true;
+  }, [map, props.focusTarget, props.reducedMotion, props.stageState, signature, targetBounds]);
 
   return null;
 }
 
 export default function MapPage() {
-  const isMobile = useIsMobile();
+  const reducedMotion = useReducedMotion() ?? false;
   const [baseMap, setBaseMap] = useState<BaseMapKey>("osm");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [kecamatanId, setKecamatanId] = useState("all");
-  const [rekPajakId, setRekPajakId] = useState("all");
   const [zoom, setZoom] = useState(regionConfig.map.defaultZoom);
   const [bbox, setBbox] = useState<MapViewportBbox | null>(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [boundaryLayerState, setBoundaryLayerState] = useState(() => createDefaultRegionBoundaryLayerState());
-  const [selectedBoundary, setSelectedBoundary] = useState<BoundaryFeatureSelection | null>(null);
+  const [stageState, setStageState] = useState<PublicMapStageState>(() => createDefaultPublicMapStageState());
+  const [focusParams, setFocusParams] = useState(() => parseMapFocusParams(window.location.search));
+  const [transitionPulseKey, setTransitionPulseKey] = useState(0);
+  const [viewportResetToken, setViewportResetToken] = useState(0);
   const focusedMarkerRef = useRef<L.Marker | null>(null);
+  const hasMountedStageRef = useRef(false);
+  const hasFocusOverride = focusParams.id !== null || focusParams.target !== null;
 
-  const debouncedSearch = useDebouncedValue(searchQuery, 300);
-  const debouncedBbox = useDebouncedValue(bbox, 250);
-  const focusParams = useMemo(() => parseMapFocusParams(window.location.search), []);
+  useEffect(() => {
+    if (!hasMountedStageRef.current) {
+      hasMountedStageRef.current = true;
+      return;
+    }
 
-  const isViewportQueryActive = useMemo(
-    () =>
-      shouldActivateViewportData({
-        bbox: debouncedBbox,
-        searchQuery: debouncedSearch,
-        kecamatanId,
-        rekPajakId,
-        focusId: focusParams.id,
-        focusTarget: focusParams.target,
+    setTransitionPulseKey((current) => current + 1);
+  }, [stageState.stage, stageState.selectedKecamatan?.id, stageState.selectedDesa?.name]);
+
+  const { data: kecamatanData } = useQuery<MasterKecamatan[] | null>({
+    queryKey: ["/api/master/kecamatan"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
+  });
+  const { data: activeKabupatenBoundary } = useQuery({
+    queryKey: ["active-region-boundary", regionConfig.identity.regionKey, "kabupaten"],
+    queryFn: ({ signal }) => loadActiveRegionBoundary({ level: "kabupaten", signal }),
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: activeKecamatanBoundary } = useQuery({
+    queryKey: ["active-region-boundary", regionConfig.identity.regionKey, "kecamatan", "stage-root"],
+    queryFn: ({ signal }) => loadActiveRegionBoundary({ level: "kecamatan", signal }),
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: activeDesaBoundary } = useQuery({
+    queryKey: [
+      "active-region-boundary",
+      regionConfig.identity.regionKey,
+      "desa",
+      stageState.selectedKecamatan?.id ?? "none",
+    ],
+    enabled: stageState.selectedKecamatan !== null,
+    queryFn: ({ signal }) =>
+      loadActiveRegionBoundary({
+        level: "desa",
+        kecamatanId: stageState.selectedKecamatan?.id,
+        signal,
       }),
-    [debouncedBbox, debouncedSearch, focusParams.id, focusParams.target, kecamatanId, rekPajakId],
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const isMarkerQueryActive = useMemo(
+    () =>
+      shouldActivatePublicMapMarkers({
+        stageState,
+        hasFocusOverride,
+      }),
+    [hasFocusOverride, stageState],
   );
 
   const mapDataRequest = useMemo(() => {
-    if (!debouncedBbox || !isViewportQueryActive) return null;
+    if (!bbox || !isMarkerQueryActive) {
+      return null;
+    }
+
     return buildMapDataRequest(regionConfig.map.dataSource, {
-      bbox: debouncedBbox,
+      bbox,
       zoom,
       limit: 500,
-      searchQuery: debouncedSearch || undefined,
-      kecamatanId: kecamatanId !== "all" ? kecamatanId : undefined,
-      rekPajakId: rekPajakId !== "all" ? rekPajakId : undefined,
+      kecamatanId: stageState.selectedKecamatan?.id ?? undefined,
     });
-  }, [debouncedBbox, debouncedSearch, isViewportQueryActive, kecamatanId, rekPajakId, zoom]);
+  }, [bbox, isMarkerQueryActive, stageState.selectedKecamatan?.id, zoom]);
 
   const { data: mapData, isFetching, error } = useQuery<MapViewportResult>({
     queryKey: [
       "public-map-data",
       mapDataRequest?.mode ?? "empty",
       mapDataRequest?.url ?? mapDataRequest?.errorMessage ?? "empty",
+      stageState.stage,
+      stageState.selectedKecamatan?.id ?? "none",
+      stageState.selectedDesa?.name ?? "none",
     ],
     enabled: mapDataRequest !== null,
     placeholderData: keepPreviousData,
@@ -269,25 +328,81 @@ export default function MapPage() {
   });
 
   const markerList = mapData?.items ?? [];
-  const visibleMarkerList = selectedBoundary
-    ? filterViewportMarkersByBoundarySelection({
-        selection: selectedBoundary,
-        markers: markerList,
-      })
-    : markerList;
-  const totalInView = selectedBoundary ? visibleMarkerList.length : mapData?.meta.totalInView ?? 0;
-  const isCapped = mapData?.meta.isCapped ?? false;
-  const viewportLabel = selectedBoundary
-    ? `dalam ${selectedBoundary.level} ${selectedBoundary.featureName}`
-    : mapData?.meta.primaryLabel ?? "dalam viewport";
+  const stageBoundaryFilteredMarkers =
+    stageState.stage === "desa" && stageState.selectedDesa
+      ? filterViewportMarkersByBoundarySelection({
+          selection: {
+            feature: stageState.selectedDesa.feature,
+          },
+          markers: markerList,
+        })
+      : markerList;
+  const taxTypeOptions = useMemo(
+    () => extractPublicMapTaxTypeOptions(stageBoundaryFilteredMarkers),
+    [stageBoundaryFilteredMarkers],
+  );
+  const visibleMarkerList = filterPublicMapMarkersByTaxType({
+    markers: stageBoundaryFilteredMarkers,
+    selectedTaxType: stageState.selectedTaxType,
+  });
+  const stageHeaderModel = createPublicMapStageHeaderModel({
+    stageState,
+    regionName: regionConfig.identity.regionName,
+    markerCount: visibleMarkerList.length,
+  });
+  const activeStageBounds = getPublicMapStageBounds({
+    stageState,
+    kabupatenBounds: activeKabupatenBoundary?.bounds ?? null,
+  });
+  const activeKabupatenGeoJson = activeKabupatenBoundary?.boundary ?? null;
+  const activeKecamatanGeoJson = activeKecamatanBoundary?.boundary ?? null;
+  const activeDesaGeoJson = activeDesaBoundary?.boundary ?? null;
+  const selectedDesaGeoJson =
+    stageState.selectedDesa !== null
+      ? createSingleFeatureCollection({
+          feature: stageState.selectedDesa.feature,
+        })
+      : null;
+  const boundaryPresentation = getPublicMapBoundaryPresentation({
+    stageState,
+    hasKabupatenBoundary: activeKabupatenGeoJson !== null,
+    hasKecamatanBoundary: activeKecamatanGeoJson !== null,
+    hasDesaBoundary: activeDesaGeoJson !== null,
+  });
+  const showMarkerBadges = isMarkerQueryActive && (stageState.stage === "desa" || hasFocusOverride);
+  const viewportLabel =
+    stageState.stage === "desa" && stageState.selectedDesa
+      ? `dalam desa ${stageState.selectedDesa.name}`
+      : stageState.stage === "kecamatan" && stageState.selectedKecamatan
+        ? `dalam kecamatan ${stageState.selectedKecamatan.name}`
+        : mapData?.meta.primaryLabel ?? "marker loaded";
   const showEmptyViewportState = shouldShowEmptyViewportState({
-    isQueryActive: isViewportQueryActive,
-    bbox: debouncedBbox,
+    isQueryActive: isMarkerQueryActive,
+    bbox,
     isFetching,
     error,
     markerCount: visibleMarkerList.length,
   });
-  const showIdleViewportHint = !isViewportQueryActive && !error;
+  const mapConfig = PUBLIC_BASE_MAPS[baseMap];
+
+  useEffect(() => {
+    if (!stageState.selectedKecamatan || stageState.stage !== "desa") {
+      return;
+    }
+
+    if (stageState.selectedTaxType === "all") {
+      return;
+    }
+
+    if (taxTypeOptions.includes(stageState.selectedTaxType)) {
+      return;
+    }
+
+    setStageState((current) => ({
+      ...current,
+      selectedTaxType: "all",
+    }));
+  }, [stageState.selectedKecamatan, stageState.selectedTaxType, stageState.stage, taxTypeOptions]);
 
   useEffect(() => {
     if (!focusParams.id || visibleMarkerList.length === 0 || !focusedMarkerRef.current) return;
@@ -302,262 +417,148 @@ export default function MapPage() {
     return () => window.clearTimeout(timer);
   }, [focusParams.id, visibleMarkerList]);
 
-  const { data: kecamatanData } = useQuery<MasterKecamatan[] | null>({
-    queryKey: ["/api/master/kecamatan"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
-  });
-  const { data: rekeningData } = useQuery<MasterRekeningPajak[] | null>({
-    queryKey: ["/api/master/rekening-pajak"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
-  });
-  const { data: activeKabupatenBoundary } = useQuery({
-    queryKey: ["active-region-boundary", regionConfig.identity.regionKey, "kabupaten"],
-    queryFn: ({ signal }) => loadActiveRegionBoundary({ level: "kabupaten", signal }),
-    staleTime: 5 * 60 * 1000,
-  });
-  const boundaryQueryPlan = createPublicBoundaryLayerQueryPlan({
-    layerState: boundaryLayerState,
-    kecamatanId,
-    zoom,
-  });
-  const { data: activeKecamatanBoundary } = useQuery({
-    queryKey: [
-      "active-region-boundary",
-      regionConfig.identity.regionKey,
-      "kecamatan",
-      boundaryQueryPlan.kecamatan.enabled ? "enabled" : "disabled",
-    ],
-    enabled: boundaryQueryPlan.kecamatan.enabled,
-    queryFn: ({ signal }) => loadActiveRegionBoundary({ level: "kecamatan", signal }),
-    staleTime: 5 * 60 * 1000,
-  });
-  const { data: activeDesaBoundary } = useQuery({
-    queryKey: [
-      "active-region-boundary",
-      regionConfig.identity.regionKey,
-      "desa",
-      boundaryQueryPlan.desa.kecamatanId ?? "none",
-    ],
-    enabled: boundaryQueryPlan.desa.enabled,
-    queryFn: ({ signal }) =>
-      loadActiveRegionBoundary({
-        level: "desa",
-        kecamatanId: boundaryQueryPlan.desa.kecamatanId,
-        signal,
-      }),
-    staleTime: 5 * 60 * 1000,
-  });
   const kecamatanList = kecamatanData ?? [];
-  const rekeningList = rekeningData ?? [];
-  const activeRegionBounds = activeKabupatenBoundary?.bounds ?? null;
-  const activeKabupatenGeoJson = activeKabupatenBoundary?.boundary ?? null;
-  const activeKecamatanGeoJson = activeKecamatanBoundary?.boundary ?? null;
-  const activeDesaGeoJson = activeDesaBoundary?.boundary ?? null;
-  const boundaryLegendFeatures = [
-    ...(boundaryQueryPlan.kecamatan.enabled && activeKecamatanGeoJson
-      ? extractBoundaryLegendFeatures({
-          level: "kecamatan",
-          boundary: activeKecamatanGeoJson,
-        })
-      : []),
-    ...(boundaryQueryPlan.desa.enabled && activeDesaGeoJson
-      ? extractBoundaryLegendFeatures({
-          level: "desa",
-          boundary: activeDesaGeoJson,
-        })
-      : []),
-  ];
 
-  const mapConfig = PUBLIC_BASE_MAPS[baseMap];
+  function clearFocusOverride() {
+    if (!hasFocusOverride) {
+      return;
+    }
 
-  function updateBoundaryLayerVisibility(layerId: RegionBoundaryLayerId, visible: boolean) {
-    startTransition(() => {
-      setBoundaryLayerState((current) => ({
-        ...current,
-        [layerId]: {
-          ...current[layerId],
-          visible,
-        },
-      }));
-
-      if (!visible && selectedBoundary?.level === layerId) {
-        setSelectedBoundary(null);
-      }
+    setFocusParams({
+      id: null,
+      target: null,
     });
-  }
 
-  function updateBoundaryLayerOpacity(layerId: RegionBoundaryLayerId, opacity: number) {
-    startTransition(() => {
-      setBoundaryLayerState((current) => ({
-        ...current,
-        [layerId]: {
-          ...current[layerId],
-          opacity: normalizeLayerOpacity(opacity),
-        },
-      }));
-    });
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete("focusLat");
+    nextUrl.searchParams.delete("focusLng");
+    nextUrl.searchParams.delete("focusOpId");
+    const nextSearch = nextUrl.searchParams.toString();
+    window.history.replaceState({}, "", `${nextUrl.pathname}${nextSearch ? `?${nextSearch}` : ""}${nextUrl.hash}`);
   }
 
   function handleBoundaryFeatureSelect(selection: BoundaryFeatureSelection) {
     startTransition(() => {
-      const nextKecamatanId = resolveBoundarySelectionKecamatanId({
-        selection,
-        kecamatanList,
-      });
+      clearFocusOverride();
 
-      if (nextKecamatanId) {
-        setKecamatanId(nextKecamatanId);
+      if (selection.level === "kecamatan") {
+        const nextKecamatanId = resolveBoundarySelectionKecamatanId({
+          selection,
+          kecamatanList,
+        });
+        if (!nextKecamatanId) {
+          return;
+        }
+
+        setStageState((current) =>
+          drillIntoKecamatanStage({
+            current,
+            selection,
+            kecamatanId: nextKecamatanId,
+          }),
+        );
+        return;
       }
 
-      setSelectedBoundary(selection);
+      setStageState((current) =>
+        drillIntoDesaStage({
+          current,
+          selection,
+        }),
+      );
     });
   }
 
-  function handleKecamatanIdChange(value: string) {
+  function handleBackStage() {
     startTransition(() => {
-      setKecamatanId(value);
-      setSelectedBoundary(null);
+      clearFocusOverride();
+      setStageState((current) => stepBackPublicMapStage(current));
+    });
+  }
+
+  function handleResetStage() {
+    startTransition(() => {
+      clearFocusOverride();
+      setStageState(createDefaultPublicMapStageState());
+      setViewportResetToken((current) => current + 1);
+    });
+  }
+
+  function handleTaxTypeChange(selectedTaxType: string) {
+    startTransition(() => {
+      setStageState((current) => ({
+        ...current,
+        selectedTaxType,
+      }));
     });
   }
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background" data-testid="map-page">
-      {isMobile ? (
-        <>
-          <div className="absolute left-3 right-3 top-3 z-[1000] flex items-start justify-between gap-3">
-            <div className="rounded-xl bg-background px-4 py-3 shadow-floating">
-              <h1 className="font-sans text-lg font-bold leading-none">{regionConfig.brand.publicMapMobileTitle}</h1>
-              <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                {regionConfig.brand.publicMapSubtitleMobile}
-              </p>
-            </div>
-            <Link href="/backoffice">
-              <Button
-                size="icon"
-                aria-label="Buka backoffice"
-                className="h-14 w-14 rounded-xl bg-primary text-primary-foreground shadow-floating"
-              >
-                <Settings className="h-5 w-5" aria-hidden="true" />
-              </Button>
-            </Link>
-          </div>
+      <div className="absolute left-3 top-3 z-[1000] sm:left-4 sm:top-4">
+        <PublicMapStageHeader model={stageHeaderModel} onBack={handleBackStage} reducedMotion={reducedMotion} />
+      </div>
 
-          <div className="absolute bottom-24 left-3 z-[1000] flex max-w-[70vw] flex-wrap gap-2">
-            {isViewportQueryActive ? (
-              <>
-                <Badge className="bg-[#2d3436] text-white">
-                  {totalInView} {viewportLabel}
-                </Badge>
-                <Badge variant="secondary">{visibleMarkerList.length} marker</Badge>
-                {isCapped ? (
-                  <Badge className="bg-primary text-primary-foreground">
-                    capped
-                  </Badge>
-                ) : null}
-              </>
-            ) : (
-              <Badge variant="secondary">mode jelajah wilayah</Badge>
-            )}
-          </div>
+      <div className="absolute right-3 top-3 z-[1000] flex items-center gap-2 sm:right-4 sm:top-4">
+        <Button
+          type="button"
+          variant="outline"
+          className="h-11 rounded-2xl border-white/75 bg-white/90 px-3 shadow-card"
+          onClick={() => setBaseMap((current) => cycleBaseMap(current))}
+          aria-label={`Ganti basemap, saat ini ${mapConfig.name}`}
+          title={`Basemap: ${mapConfig.name}`}
+        >
+          <Layers3 className="h-4 w-4" aria-hidden="true" />
+          <span className="font-mono text-[11px] uppercase tracking-[0.18em]">{mapConfig.buttonLabel}</span>
+        </Button>
 
+        <Button
+          type="button"
+          size="icon"
+          variant="outline"
+          className="h-11 w-11 rounded-2xl border-white/75 bg-white/90 shadow-card"
+          onClick={handleResetStage}
+          aria-label="Kembali ke peta OKU Selatan"
+          title="Kembali ke peta OKU Selatan"
+        >
+          <Target className="h-4 w-4" aria-hidden="true" />
+        </Button>
+
+        <Link href="/backoffice">
           <Button
             type="button"
-            aria-label="Buka filter peta"
-            className="absolute bottom-24 right-3 z-[1000] h-14 w-14 rounded-xl p-0 shadow-floating"
+            size="icon"
             variant="outline"
-            onClick={() => setIsDrawerOpen(true)}
+            className="h-11 w-11 rounded-2xl border-white/75 bg-white/90 shadow-card"
+            aria-label="Buka backoffice"
+            title="Buka backoffice"
           >
-            <Filter className="h-5 w-5" aria-hidden="true" />
+            <Settings className="h-4 w-4" aria-hidden="true" />
           </Button>
+        </Link>
+      </div>
 
-          <MobileMapDrawer
-            open={isDrawerOpen}
-            onOpenChange={setIsDrawerOpen}
-            searchQuery={searchQuery}
-            onSearchQueryChange={setSearchQuery}
-            kecamatanId={kecamatanId}
-            onKecamatanIdChange={handleKecamatanIdChange}
-            rekPajakId={rekPajakId}
-            onRekPajakIdChange={setRekPajakId}
-            baseMap={baseMap}
-            onBaseMapChange={setBaseMap}
-            kecamatanList={kecamatanList}
-            rekeningList={rekeningList}
-            totalInView={totalInView}
-            viewportLabel={viewportLabel}
-            markerCount={visibleMarkerList.length}
-            isCapped={isCapped}
-            isViewportQueryActive={isViewportQueryActive}
-            boundaryLayerState={boundaryLayerState}
-            onBoundaryLayerVisibilityChange={updateBoundaryLayerVisibility}
-            onBoundaryLayerOpacityChange={updateBoundaryLayerOpacity}
-            boundaryLegendFeatures={boundaryLegendFeatures}
-            boundaryLayerZoom={zoom}
+      {stageState.stage === "desa" ? (
+        <div className="absolute left-3 right-3 top-[7.8rem] z-[1000] sm:left-4 sm:right-auto sm:top-[8.8rem]">
+          <PublicMapTaxFilterChips
+            options={taxTypeOptions}
+            selectedTaxType={stageState.selectedTaxType}
+            onSelect={handleTaxTypeChange}
+            reducedMotion={reducedMotion}
           />
-        </>
-      ) : (
-        <>
-          <div className="absolute left-4 top-4 z-[1000] flex max-w-[calc(100vw-2rem)] flex-col gap-3">
-            <div className="rounded-xl bg-background p-4 shadow-floating">
-              <h1 className="font-sans text-xl font-bold leading-none">{regionConfig.brand.publicMapDesktopTitle}</h1>
-              <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                {regionConfig.brand.publicMapSubtitleDesktop}
-              </p>
-            </div>
+        </div>
+      ) : null}
 
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setIsDrawerOpen(true)}>
-                <Filter className="h-3.5 w-3.5" aria-hidden="true" />
-                Filter Peta
-              </Button>
-              <Link href="/backoffice">
-                <Button size="sm" className="font-mono text-xs">
-                  <Settings className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-                  Backoffice
-                </Button>
-              </Link>
-            </div>
-
-            <DesktopMapFilterSheet
-              open={isDrawerOpen}
-              onOpenChange={setIsDrawerOpen}
-              searchQuery={searchQuery}
-              onSearchQueryChange={setSearchQuery}
-              kecamatanId={kecamatanId}
-              onKecamatanIdChange={handleKecamatanIdChange}
-              rekPajakId={rekPajakId}
-              onRekPajakIdChange={setRekPajakId}
-              baseMap={baseMap}
-              onBaseMapChange={setBaseMap}
-              kecamatanList={kecamatanList}
-              rekeningList={rekeningList}
-              boundaryLayerState={boundaryLayerState}
-              onBoundaryLayerVisibilityChange={updateBoundaryLayerVisibility}
-              onBoundaryLayerOpacityChange={updateBoundaryLayerOpacity}
-              boundaryLegendFeatures={boundaryLegendFeatures}
-              boundaryLayerZoom={zoom}
-            />
-          </div>
-
-          <div className="absolute bottom-4 right-4 z-[1000] flex gap-2">
-            {isViewportQueryActive ? (
-              <>
-                <Badge className="bg-[#2d3436] text-white">
-                  {totalInView} {viewportLabel}
-                </Badge>
-                <Badge variant="secondary">{visibleMarkerList.length} marker</Badge>
-                {isCapped && (
-                  <Badge className="bg-primary text-primary-foreground">
-                    capped
-                  </Badge>
-                )}
-              </>
-            ) : (
-              <Badge variant="secondary">mode jelajah wilayah</Badge>
-            )}
-          </div>
-        </>
-      )}
+      {transitionPulseKey > 0 ? (
+        <motion.div
+          key={transitionPulseKey}
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-[920] bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.28)_0%,rgba(219,228,239,0.16)_38%,rgba(219,228,239,0)_72%)]"
+          initial={reducedMotion ? false : { opacity: 0 }}
+          animate={reducedMotion ? undefined : { opacity: [0, 0.18, 0] }}
+          transition={reducedMotion ? { duration: 0 } : { duration: 0.5, ease: "easeInOut" }}
+        />
+      ) : null}
 
       <MapContainer
         center={regionConfig.map.center}
@@ -566,46 +567,68 @@ export default function MapPage() {
         zoomControl={false}
       >
         <TileLayer attribution={mapConfig.attribution} url={mapConfig.url} maxZoom={mapConfig.maxZoom} />
-        <MapActiveRegionController activeBounds={activeRegionBounds} focusTarget={focusParams.target} />
-        <MapFocusController target={focusParams.target} zoom={Math.max(regionConfig.map.defaultZoom, 18)} />
-        <MapBoundarySelectionController selection={selectedBoundary} />
-        <MapZoomBoundsController maxZoom={mapConfig.maxZoom} />
+        <MapStageViewportController
+          stageState={stageState}
+          kabupatenBounds={activeKabupatenBoundary?.bounds ?? null}
+          focusTarget={focusParams.target}
+          reducedMotion={reducedMotion}
+          resetToken={viewportResetToken}
+        />
+        <MapStageConstraintController
+          kabupatenBounds={activeKabupatenBoundary?.bounds ?? null}
+          stageBounds={activeStageBounds}
+          stage={stageState.stage}
+        />
+        <MapFocusController target={focusParams.target} zoom={Math.max(regionConfig.map.defaultZoom, 18)} reducedMotion={reducedMotion} />
+        <ZoomControl position="bottomright" />
         <MapViewportTracker
           onChange={(nextBbox, nextZoom) => {
             setBbox(nextBbox);
             setZoom(nextZoom);
           }}
         />
-        <MapTopRightControls isFetching={isFetching} isMobile={isMobile} activeBounds={activeRegionBounds} />
 
         {activeKabupatenGeoJson ? <PublicKabupatenMask boundary={activeKabupatenGeoJson} /> : null}
 
-        {boundaryLayerState.kabupaten.visible && activeKabupatenGeoJson ? (
+        {boundaryPresentation.showKabupaten && activeKabupatenGeoJson ? (
           <PublicBoundaryLayer
             level="kabupaten"
             boundary={activeKabupatenGeoJson}
-            opacity={boundaryLayerState.kabupaten.opacity}
+            opacity={24}
             zoom={zoom}
+            forceShowLabels
           />
         ) : null}
 
-        {boundaryLayerState.kecamatan.visible && activeKecamatanGeoJson ? (
+        {boundaryPresentation.showKecamatan && activeKecamatanGeoJson ? (
           <PublicBoundaryLayer
             level="kecamatan"
             boundary={activeKecamatanGeoJson}
-            opacity={boundaryLayerState.kecamatan.opacity}
+            opacity={76}
             zoom={zoom}
+            forceShowLabels
             onFeatureSelect={handleBoundaryFeatureSelect}
           />
         ) : null}
 
-        {boundaryQueryPlan.desa.enabled && activeDesaGeoJson ? (
+        {boundaryPresentation.showDesa && boundaryPresentation.desaMode === "scoped" && activeDesaGeoJson ? (
           <PublicBoundaryLayer
             level="desa"
             boundary={activeDesaGeoJson}
-            opacity={boundaryLayerState.desa.opacity}
+            opacity={68}
             zoom={zoom}
+            forceShowLabels
             onFeatureSelect={handleBoundaryFeatureSelect}
+          />
+        ) : null}
+
+        {boundaryPresentation.showDesa && boundaryPresentation.desaMode === "selected-only" && selectedDesaGeoJson ? (
+          <PublicBoundaryLayer
+            level="desa"
+            boundary={selectedDesaGeoJson}
+            opacity={72}
+            zoom={zoom}
+            forceShowLabels
           />
         ) : null}
 
@@ -633,31 +656,34 @@ export default function MapPage() {
         ))}
       </MapContainer>
 
-      {error && (
-        <div className="absolute bottom-4 left-4 z-[1000] max-w-[440px] rounded-lg bg-red-100 p-3 font-mono text-xs text-red-800 shadow-card">
+      {isFetching ? (
+        <div className="absolute bottom-4 left-3 z-[1000] flex items-center gap-2 rounded-2xl bg-white/92 px-3 py-2 font-mono text-xs shadow-card sm:left-4">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          memuat wilayah
+        </div>
+      ) : null}
+
+      {showMarkerBadges ? (
+        <div className="absolute bottom-4 right-3 z-[1000] flex flex-wrap justify-end gap-2 sm:right-4">
+          <Badge className="bg-[#2d3436] text-white">{visibleMarkerList.length} {viewportLabel}</Badge>
+          {stageState.selectedTaxType !== "all" ? <Badge variant="secondary">{stageState.selectedTaxType}</Badge> : null}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="absolute bottom-4 left-3 z-[1000] max-w-[440px] rounded-2xl bg-red-100 p-3 font-mono text-xs text-red-800 shadow-card sm:left-4">
           {error instanceof Error ? error.message : "Terjadi kesalahan saat memuat peta"}
         </div>
-      )}
+      ) : null}
 
-      {showEmptyViewportState && (
-        <div className="absolute bottom-4 left-4 z-[1000] rounded-lg bg-background p-3 font-mono text-xs shadow-card">
+      {showEmptyViewportState ? (
+        <div className="absolute bottom-4 left-3 z-[1000] rounded-2xl bg-white/92 p-3 font-mono text-xs shadow-card sm:left-4">
           <div className="flex items-center gap-2">
             <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-            Tidak ada objek pajak pada viewport ini.
+            Tidak ada objek pajak di desa ini untuk filter yang aktif.
           </div>
         </div>
-      )}
-
-      {showIdleViewportHint && (
-        <div className="absolute bottom-4 left-4 z-[1000] max-w-[440px] rounded-lg bg-background p-3 font-mono text-xs shadow-card">
-          <div className="flex items-center gap-2">
-            <Search className="h-3.5 w-3.5" aria-hidden="true" />
-            {IDLE_MAP_HINT}
-          </div>
-        </div>
-      )}
-
-      {isMobile ? <MobileBottomNav /> : null}
+      ) : null}
     </div>
   );
 }

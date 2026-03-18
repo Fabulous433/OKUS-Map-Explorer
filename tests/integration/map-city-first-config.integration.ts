@@ -35,7 +35,11 @@ async function run() {
     [-4.525, 104.027],
     "center default harus tetap di sekitar pusat Muaradua",
   );
-  assert.equal(defaultRegionConfig.map.defaultZoom, 15, "zoom default harus city-first dan lebih dekat dari baseline 13");
+  assert.equal(
+    defaultRegionConfig.map.defaultZoom,
+    10,
+    "zoom default publik harus mulai dari konteks OKU Selatan, bukan city-first",
+  );
 
   assert.equal(PUBLIC_BASE_MAPS.osm.maxZoom, 19, "OSM harus tetap mendukung zoom 19");
   assert.equal(PUBLIC_BASE_MAPS.carto.maxZoom, 20, "Carto harus tetap mendukung zoom 20");
@@ -45,10 +49,10 @@ async function run() {
 
 run()
   .then(() => {
-    console.log("[integration] map-city-first-config: PASS");
+    console.log("[integration] map-region-root-config: PASS");
   })
   .catch((error) => {
-    console.error("[integration] map-city-first-config: FAIL");
+    console.error("[integration] map-region-root-config: FAIL");
     console.error(error);
     process.exitCode = 1;
   });
