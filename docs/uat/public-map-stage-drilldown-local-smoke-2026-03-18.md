@@ -149,3 +149,100 @@
 - `npx tsx tests/integration/public-boundary-layer.integration.ts` -> PASS
 - `npm run check` -> PASS
 - `npm run build` -> PASS
+
+## Addendum — Mobile Shell Compaction
+
+### Scope
+
+- Evidence tambahan ini merekam penyesuaian visual mobile untuk stage drill-down:
+  - header mobile hanya menampilkan judul stage
+  - subtitle dan helper text disembunyikan pada viewport mobile
+  - ukuran judul stage mobile diturunkan ke `text-lg` (`18px`)
+  - chip filter jenis pajak tahap desa memakai label ringkas khusus mobile
+
+### Mobile Result
+
+- PASS: root mobile `OKU Selatan` sekarang hanya menampilkan judul stage tanpa subtitle/helper.
+- PASS: ukuran judul stage mobile terverifikasi `18px`.
+- PASS: flow `OKU Selatan -> Muara Dua -> Batu Belang Jaya` tetap bekerja setelah kompaksi header.
+- PASS: stage desa mobile tetap hanya menampilkan judul `Batu Belang Jaya`; subtitle/helper tetap hidden.
+- PASS: chip filter mobile pada stage desa sekarang tampil ringkas:
+  - `Semua`
+  - `WLT`
+- PASS: label desktop tetap tersedia untuk viewport besar tetapi hidden pada viewport mobile:
+  - `Semua OP`
+  - `Pajak Sarang Burung Walet`
+
+### Mobile Artifacts
+
+- Mobile root compact header:
+  - [smoke-2026-03-19-mobile-root-compact-header-final.png](/D:/Code/OKUS-Map-Explorer/output/playwright/smoke-2026-03-19-mobile-root-compact-header-final.png)
+- Mobile desa compact chips:
+  - [smoke-2026-03-19-mobile-desa-compact-chips-final.png](/D:/Code/OKUS-Map-Explorer/output/playwright/smoke-2026-03-19-mobile-desa-compact-chips-final.png)
+
+### Mobile Verification
+
+- `npx tsx tests/integration/public-map-stage-model.integration.ts` -> PASS
+- `npx tsx tests/integration/public-map-mobile-shell.integration.ts` -> PASS
+- Inline Playwright smoke local (`OKU Selatan -> Muara Dua -> Batu Belang Jaya`) -> PASS
+
+## Addendum — UX Polish Batch
+
+### Scope
+
+- Evidence tambahan ini merekam batch polish flow eksplorasi wilayah publik:
+  - quick-jump `kecamatan/desa`
+  - route state shareable untuk `stage`, `desaKey`, dan `taxType`
+  - desktop OP rail pada tahap desa
+  - mobile OP bottom sheet pada tahap desa
+  - basemap memory dan status kontekstual header
+
+### Bugs Found During Addendum
+
+- Quick-jump root sempat gagal menemukan `Muara Dua` walau `master/kecamatan` sudah `200`.
+  - Root cause: master wilayah menyimpan `Muaradua` tanpa spasi, sementara user secara alami mencari `Muara Dua`.
+  - Fix: matcher quick-jump sekarang whitespace-insensitive dan juga membandingkan bentuk compact tanpa spasi/tanda baca di [public-map-region-search.ts](/D:/Code/OKUS-Map-Explorer/client/src/lib/map/public-map-region-search.ts).
+- Refresh pada stage desa sempat menjatuhkan `taxType` kembali ke `all`.
+  - Root cause: effect reset filter di composition root menganggap daftar opsi pajak kosong sebagai sinyal invalid, padahal marker scoped belum selesai dipulihkan dari route-state.
+  - Fix: helper baru `shouldResetPublicMapTaxType(...)` di [public-map-stage-model.ts](/D:/Code/OKUS-Map-Explorer/client/src/lib/map/public-map-stage-model.ts) menahan reset sampai marker scoped benar-benar tersedia.
+
+### Desktop Result
+
+- PASS: quick-jump desktop membuka `kecamatan` target tanpa klik polygon manual:
+  - query `Muara Dua`
+  - hasil master `Muaradua`
+  - stage heading berubah menjadi `Muara Dua`
+- PASS: quick-jump desktop scoped desa membuka `Batu Belang Jaya`.
+- PASS: rail `Objek Pajak di Desa Ini` hanya tampil pada tahap desa.
+- PASS: klik row OP pada rail membuka popup marker yang sinkron dengan row yang dipilih.
+- PASS: filter `Pajak Sarang Burung Walet` tersimpan di URL dan tetap ada setelah refresh.
+- PASS: pilihan basemap `Carto` bertahan setelah refresh.
+
+### Mobile Result
+
+- PASS: quick-jump mobile terbuka sebagai surface dialog/sheet `Cari wilayah`.
+- PASS: flow `OKU Selatan -> Muara Dua -> Batu Belang Jaya` memunculkan bottom sheet OP mobile.
+- PASS: tap marker `WLT` memindahkan bottom sheet ke mode `detail`.
+- PASS: tombol `Kembali ke daftar OP` mengembalikan sheet dari `detail -> list`, tanpa keluar dari tahap desa.
+
+### UX Polish Artifacts
+
+- Desktop desa rail:
+  - [smoke-2026-03-19-desktop-desa-rail.png](/D:/Code/OKUS-Map-Explorer/output/playwright/2026-03-19-ux-polish-smoke/smoke-2026-03-19-desktop-desa-rail.png)
+- Desktop reload restored:
+  - [smoke-2026-03-19-desktop-reload-restored.png](/D:/Code/OKUS-Map-Explorer/output/playwright/2026-03-19-ux-polish-smoke/smoke-2026-03-19-desktop-reload-restored.png)
+- Mobile bottom sheet detail:
+  - [smoke-2026-03-19-mobile-bottom-sheet-detail.png](/D:/Code/OKUS-Map-Explorer/output/playwright/2026-03-19-ux-polish-smoke/smoke-2026-03-19-mobile-bottom-sheet-detail.png)
+
+### UX Polish Verification
+
+- `npx tsx tests/integration/public-map-route-state.integration.ts` -> PASS
+- `npx tsx tests/integration/public-map-region-search.integration.ts` -> PASS
+- `npx tsx tests/integration/public-map-op-list-model.integration.ts` -> PASS
+- `npx tsx tests/integration/public-map-mobile-op-sheet.integration.ts` -> PASS
+- `npx tsx tests/integration/public-map-mobile-shell.integration.ts` -> PASS
+- `npx tsx tests/integration/public-map-stage-model.integration.ts` -> PASS
+- `npx tsx tests/integration/public-map-preferences.integration.ts` -> PASS
+- `npm.cmd run check` -> PASS
+- `npm.cmd run build` -> PASS
+- Playwright smoke desktop/mobile local -> PASS

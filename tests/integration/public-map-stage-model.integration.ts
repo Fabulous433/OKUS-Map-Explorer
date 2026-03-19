@@ -61,6 +61,8 @@ async function run() {
     createPublicMapVisibleMarkers,
     shouldActivatePublicMapMarkers,
     extractPublicMapTaxTypeOptions,
+    createPublicMapTaxFilterLabelModel,
+    shouldResetPublicMapTaxType,
     filterPublicMapMarkersByTaxType,
     createSingleFeatureCollection,
     getPublicMapMarkerQueryBounds,
@@ -73,7 +75,7 @@ async function run() {
     createDefaultPublicMapStageState?: () => {
       stage: "kabupaten" | "kecamatan" | "desa";
       selectedKecamatan: null | { id: string; name: string };
-      selectedDesa: null | { name: string };
+      selectedDesa: null | { key: string; name: string };
       selectedTaxType: string;
     };
     drillIntoKecamatanStage?: (params: {
@@ -108,6 +110,15 @@ async function run() {
       hasFocusOverride: boolean;
     }) => boolean;
     extractPublicMapTaxTypeOptions?: (markers: MapViewportMarker[]) => string[];
+    createPublicMapTaxFilterLabelModel?: (taxType: string) => {
+      full: string;
+      compact: string;
+    };
+    shouldResetPublicMapTaxType?: (params: {
+      selectedTaxType: string;
+      availableTaxTypeOptions: string[];
+      stageScopedMarkerCount: number;
+    }) => boolean;
     filterPublicMapMarkersByTaxType?: (params: {
       markers: MapViewportMarker[];
       selectedTaxType: string;
@@ -183,6 +194,8 @@ async function run() {
   assert.equal(typeof createPublicMapVisibleMarkers, "function", "helper visible marker per stage wajib diexport");
   assert.equal(typeof shouldActivatePublicMapMarkers, "function", "helper gating marker wajib diexport");
   assert.equal(typeof extractPublicMapTaxTypeOptions, "function", "helper opsi jenis pajak wajib diexport");
+  assert.equal(typeof createPublicMapTaxFilterLabelModel, "function", "helper label chip pajak publik wajib diexport");
+  assert.equal(typeof shouldResetPublicMapTaxType, "function", "helper reset filter pajak wajib diexport");
   assert.equal(typeof filterPublicMapMarkersByTaxType, "function", "helper filter jenis pajak wajib diexport");
   assert.equal(typeof createSingleFeatureCollection, "function", "helper selected feature collection wajib diexport");
   assert.equal(typeof getPublicMapMarkerQueryBounds, "function", "helper bbox query marker per stage wajib diexport");
@@ -226,6 +239,7 @@ async function run() {
   });
   assert.equal(afterDesa.stage, "desa");
   assert.equal(afterDesa.selectedKecamatan?.name, "Simpang");
+  assert.equal(afterDesa.selectedDesa?.key, "1609050:pelangki");
   assert.equal(afterDesa.selectedDesa?.name, "Pelangki");
 
   const afterBackToKecamatan = stepBackPublicMapStage!(afterDesa);
@@ -235,6 +249,49 @@ async function run() {
 
   const afterBackToKabupaten = stepBackPublicMapStage!(afterBackToKecamatan);
   assert.deepEqual(afterBackToKabupaten, initialState);
+
+  assert.deepEqual(
+    createPublicMapTaxFilterLabelModel!("all"),
+    {
+      full: "Semua OP",
+      compact: "Semua",
+    },
+    "chip all mobile harus disingkat tanpa mengubah label desktop",
+  );
+  assert.deepEqual(
+    createPublicMapTaxFilterLabelModel!("Pajak Sarang Burung Walet"),
+    {
+      full: "Pajak Sarang Burung Walet",
+      compact: "WLT",
+    },
+    "chip jenis pajak mobile harus memakai singkatan ringkas yang konsisten dengan marker",
+  );
+  assert.deepEqual(
+    createPublicMapTaxFilterLabelModel!("Pajak Baru Contoh"),
+    {
+      full: "Pajak Baru Contoh",
+      compact: "PBC",
+    },
+    "jenis pajak yang belum punya mapping khusus harus tetap dipendekkan dengan inisial",
+  );
+  assert.equal(
+    shouldResetPublicMapTaxType!({
+      selectedTaxType: "Pajak Sarang Burung Walet",
+      availableTaxTypeOptions: [],
+      stageScopedMarkerCount: 0,
+    }),
+    false,
+    "reload stage desa tidak boleh menghapus filter aktif hanya karena marker scoped belum selesai dimuat",
+  );
+  assert.equal(
+    shouldResetPublicMapTaxType!({
+      selectedTaxType: "Pajak Sarang Burung Walet",
+      availableTaxTypeOptions: ["Pajak Reklame"],
+      stageScopedMarkerCount: 2,
+    }),
+    true,
+    "filter aktif boleh direset bila marker scoped sudah ada tetapi jenis pajaknya memang tidak tersedia",
+  );
 
   assert.deepEqual(
     createPublicMapStageHeaderModel!({

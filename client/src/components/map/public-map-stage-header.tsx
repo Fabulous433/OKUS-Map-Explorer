@@ -1,10 +1,11 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { PublicMapStageHeaderModel } from "@/lib/map/public-map-stage-model";
+import type { PublicMapStageHeaderModel, PublicMapStageStatusModel } from "@/lib/map/public-map-stage-model";
 
 type PublicMapStageHeaderProps = {
   model: PublicMapStageHeaderModel;
+  status?: PublicMapStageStatusModel;
   onBack: () => void;
   reducedMotion: boolean;
 };
@@ -45,9 +46,33 @@ export function PublicMapStageHeader(props: PublicMapStageHeaderProps) {
         </AnimatePresence>
 
         <div className="min-w-0 flex-1">
-          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-500">{props.model.subtitle}</p>
-          <h1 className="mt-1 truncate font-sans text-xl font-black text-slate-950 sm:text-2xl">{props.model.title}</h1>
-          <p className="mt-1 text-sm leading-6 text-slate-600">{props.model.helperText}</p>
+          <p className="hidden sm:block font-mono text-[10px] uppercase tracking-[0.22em] text-slate-500">
+            {props.model.subtitle}
+          </p>
+          <h1 className="truncate font-sans text-lg font-black text-slate-950 sm:mt-1 sm:text-2xl">
+            {props.model.title}
+          </h1>
+          <p className="hidden sm:block mt-1 text-sm leading-6 text-slate-600">{props.model.helperText}</p>
+
+          {props.status && (props.status.primary || props.status.secondary || props.status.filter) ? (
+            <div className="mt-3 hidden flex-wrap items-center gap-2 sm:flex">
+              {props.status.primary ? (
+                <span className="rounded-full bg-white/85 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-slate-600">
+                  {props.status.primary}
+                </span>
+              ) : null}
+              {props.status.secondary ? (
+                <span className="rounded-full bg-slate-900 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-white">
+                  {props.status.secondary}
+                </span>
+              ) : null}
+              {props.status.filter ? (
+                <span className="rounded-full bg-rose-100 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-rose-700">
+                  {props.status.filter}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
     </motion.div>

@@ -1,5 +1,69 @@
 # Changelog
 
+## Phase 2.16n — Public Map UX Polish
+
+### Added
+- Quick-jump wilayah publik untuk `kecamatan` dan `desa`:
+  - [client/src/components/map/public-map-region-jump.tsx](/D:/Code/OKUS-Map-Explorer/client/src/components/map/public-map-region-jump.tsx)
+  - [client/src/lib/map/public-map-region-search.ts](/D:/Code/OKUS-Map-Explorer/client/src/lib/map/public-map-region-search.ts)
+- Route-state helper shareable untuk `stage`, `kecamatanId`, `desaKey`, dan `taxType`:
+  - [client/src/lib/map/public-map-route-state.ts](/D:/Code/OKUS-Map-Explorer/client/src/lib/map/public-map-route-state.ts)
+- Desktop OP rail baru untuk tahap desa:
+  - [client/src/components/map/public-map-op-rail.tsx](/D:/Code/OKUS-Map-Explorer/client/src/components/map/public-map-op-rail.tsx)
+  - [client/src/lib/map/public-map-op-list-model.ts](/D:/Code/OKUS-Map-Explorer/client/src/lib/map/public-map-op-list-model.ts)
+- Mobile OP bottom sheet baru untuk tahap desa:
+  - [client/src/components/map/public-map-op-bottom-sheet.tsx](/D:/Code/OKUS-Map-Explorer/client/src/components/map/public-map-op-bottom-sheet.tsx)
+  - [client/src/lib/map/public-map-mobile-op-sheet-model.ts](/D:/Code/OKUS-Map-Explorer/client/src/lib/map/public-map-mobile-op-sheet-model.ts)
+- Helper preferensi/public-map polish baru:
+  - [client/src/lib/map/public-map-preferences.ts](/D:/Code/OKUS-Map-Explorer/client/src/lib/map/public-map-preferences.ts)
+- Regression suites baru:
+  - [tests/integration/public-map-route-state.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/public-map-route-state.integration.ts)
+  - [tests/integration/public-map-region-search.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/public-map-region-search.integration.ts)
+  - [tests/integration/public-map-op-list-model.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/public-map-op-list-model.integration.ts)
+  - [tests/integration/public-map-mobile-op-sheet.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/public-map-mobile-op-sheet.integration.ts)
+  - [tests/integration/public-map-preferences.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/public-map-preferences.integration.ts)
+- Evidence smoke UX polish:
+  - [docs/uat/public-map-stage-drilldown-local-smoke-2026-03-18.md](/D:/Code/OKUS-Map-Explorer/docs/uat/public-map-stage-drilldown-local-smoke-2026-03-18.md)
+
+### Improved
+- Map publik sekarang bisa dibuka ulang atau dibagikan langsung ke stage `kecamatan`/`desa` yang sama, termasuk filter jenis pajak aktif.
+- Quick-jump kini toleran terhadap perbedaan penulisan seperti `Muara Dua` vs `Muaradua`, sehingga search wilayah tetap usable walau master dan boundary berbeda gaya spasi.
+- Header desktop sekarang menampilkan status kontekstual ringan seperti jumlah `kecamatan/desa`, `OP aktif`, dan singkatan filter aktif.
+- Pilihan basemap publik sekarang diingat via `localStorage`, jadi refresh tidak lagi me-reset preferensi user.
+- Saat user masuk `kecamatan`, boundary desa scoped kini diprefetch agar transisi ke desa terasa lebih cepat.
+
+### Fixed
+- Reload pada tahap desa tidak lagi menghapus `taxType` aktif sebelum marker scoped selesai dipulihkan dari route-state.
+- Surface quick-jump tidak lagi bergantung pada perilaku `cmdk` untuk menampilkan hasil; list hasil sekarang dirender langsung dan stabil untuk smoke browser.
+
+### Notes
+- Smoke lokal 2026-03-19 PASS untuk:
+  - desktop quick-jump `Muara Dua -> Batu Belang Jaya`
+  - desktop OP rail + popup marker
+  - URL restore `stage/desa/filter`
+  - basemap memory setelah refresh
+  - mobile quick-jump sheet + bottom sheet detail
+- Noise console `ERR_INSUFFICIENT_RESOURCES` dari tile basemap headless tidak dihitung sebagai error aplikasi saat smoke Playwright lokal.
+
+## Phase 2.16m — Mobile Stage Shell Compaction
+
+### Added
+- Evidence smoke mobile tambahan untuk kompaksi stage shell:
+  - [docs/uat/public-map-stage-drilldown-local-smoke-2026-03-18.md](/D:/Code/OKUS-Map-Explorer/docs/uat/public-map-stage-drilldown-local-smoke-2026-03-18.md)
+- Regression baru:
+  - [tests/integration/public-map-mobile-shell.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/public-map-mobile-shell.integration.ts)
+
+### Improved
+- Header public map pada viewport mobile sekarang hanya menampilkan judul stage agar chrome atas tidak memakan area peta.
+- Ukuran judul stage mobile diturunkan ke `text-lg` sambil mempertahankan ukuran desktop yang lebih besar.
+- Chip filter jenis pajak pada tahap desa sekarang memakai label ringkas khusus mobile, misalnya:
+  - `Semua`
+  - `WLT`
+- Marker icon dan chip filter kini memakai compact label helper yang sama agar kode singkatan tetap konsisten.
+
+### Notes
+- Smoke lokal 2026-03-19 PASS untuk flow mobile `OKU Selatan -> Muara Dua -> Batu Belang Jaya` dengan header compact dan chip pajak ringkas.
+
 ## Phase 2.16l — Desktop Desa Focus Tuning
 
 ### Added

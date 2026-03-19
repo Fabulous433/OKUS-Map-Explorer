@@ -1,11 +1,14 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import { Link } from "wouter";
 import { MapContainer, Marker, Popup, TileLayer, useMap, ZoomControl } from "react-leaflet";
 import { Layers3, Loader2, MapPin, Settings, Target } from "lucide-react";
 import L from "leaflet";
 import { PublicBoundaryLayer, PublicKabupatenMask } from "@/components/map/public-boundary-layer";
+import { PublicMapOpBottomSheet } from "@/components/map/public-map-op-bottom-sheet";
+import { PublicMapOpRail } from "@/components/map/public-map-op-rail";
+import { PublicMapRegionJump } from "@/components/map/public-map-region-jump";
 import { PublicMapStageHeader } from "@/components/map/public-map-stage-header";
 import { PublicMapTaxFilterChips } from "@/components/map/public-map-tax-filter-chips";
 import { Badge } from "@/components/ui/badge";
@@ -14,15 +17,36 @@ import { PUBLIC_BASE_MAPS, type BaseMapKey } from "@/lib/map/map-basemap-config"
 import { buildMapDataRequest, type MapViewportBbox } from "@/lib/map/map-data-source";
 import { getFocusedDesaBoundaryLayerStyle } from "@/lib/map/region-boundary-layer-style";
 import { parseMapFocusParams } from "@/lib/map/map-focus-params";
+import { loadPublicMapBaseMapPreference, savePublicMapBaseMapPreference } from "@/lib/map/public-map-preferences";
 import { loadMapViewportData, shouldShowEmptyViewportState, type MapViewportResult } from "@/lib/map/map-viewport-query";
 import { bindMapViewportTracking } from "@/lib/map/map-viewport-tracker";
 import {
+  createBoundaryFeatureSelection,
   type BoundaryFeatureSelection,
   resolveBoundarySelectionKecamatanId,
 } from "@/lib/map/public-boundary-layer-model";
 import {
+  createDefaultPublicMapMobileOpSheetState,
+  createPublicMapMobileOpSheetModel,
+  openPublicMapMobileOpSheetDetail,
+  stepBackPublicMapMobileOpSheetState,
+  syncPublicMapMobileOpSheetState,
+  type PublicMapMobileOpSheetState,
+} from "@/lib/map/public-map-mobile-op-sheet-model";
+import {
+  createPublicMapOpRailModel,
+  type PublicMapOpRailModel,
+} from "@/lib/map/public-map-op-list-model";
+import {
+  buildPublicMapRegionJumpGroups,
+  type PublicMapRegionJumpItem,
+} from "@/lib/map/public-map-region-search";
+import { applyPublicMapRouteStateToSearch, createPublicMapDesaKey, parsePublicMapRouteState, type PublicMapRouteState } from "@/lib/map/public-map-route-state";
+import {
   createDefaultPublicMapStageState,
   createPublicMapStageHeaderModel,
+  createPublicMapStageStatusModel,
+  createPublicMapTaxFilterLabelModel,
   createPublicMapVisibleMarkers,
   drillIntoDesaStage,
   drillIntoKecamatanStage,
@@ -37,7 +61,9 @@ import {
   getPublicMapStagePaddingRatio,
   getPublicMapStageViewportPlan,
   getPublicMapStageViewportPadding,
+  shouldPrefetchScopedDesaBoundary,
   shouldActivatePublicMapMarkers,
+  shouldResetPublicMapTaxType,
   stepBackPublicMapStage,
   type MapStage,
   type PublicMapStageState,
@@ -45,7 +71,7 @@ import {
 import { loadActiveRegionBoundary } from "@/lib/map/region-boundary-query";
 import { getQueryFn } from "@/lib/queryClient";
 import { regionConfig } from "@/lib/region-config";
-import type { RegionBoundaryBounds } from "@shared/region-boundary";
+import type { GeoJsonFeatureCollection, RegionBoundaryBounds } from "@shared/region-boundary";
 import type { MasterKecamatan } from "@shared/schema";
 import "leaflet/dist/leaflet.css";
 
@@ -63,11 +89,12 @@ function buildMarkerIcon(jenisPajak: string) {
     { key: "MBLB", color: "#57534E", label: "MBL" },
   ];
   const selected = palette.find((item) => jenisPajak.includes(item.key)) ?? { color: "#111827", label: "OP" };
+  const compactLabel = createPublicMapTaxFilterLabelModel(jenisPajak).compact;
 
   return new L.DivIcon({
     className: "custom-op-marker",
     html: `<div style="width:38px;height:38px;border-radius:8px;background:#e0e5ec;display:flex;align-items:center;justify-content:center;box-shadow:3px 3px 6px #babecc,-3px -3px 6px #fff;">
-      <span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.5px;color:${selected.color}">${selected.label}</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.5px;color:${selected.color}">${compactLabel || selected.label}</span>
     </div>`,
     iconSize: [38, 38],
     iconAnchor: [19, 38],
@@ -102,6 +129,85 @@ function cycleBaseMap(current: BaseMapKey): BaseMapKey {
   const currentIndex = mapKeys.indexOf(current);
   const nextIndex = (currentIndex + 1) % mapKeys.length;
   return mapKeys[nextIndex] ?? "osm";
+}
+
+function detectCompactViewport() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.innerWidth < 640;
+}
+
+function createPublicMapStageRouteState(stageState: PublicMapStageState): PublicMapRouteState {
+  if (stageState.stage === "desa" && stageState.selectedKecamatan && stageState.selectedDesa) {
+    return {
+      stage: "desa",
+      kecamatanId: stageState.selectedKecamatan.id,
+      desaKey: stageState.selectedDesa.key,
+      taxType: stageState.selectedTaxType !== "all" ? stageState.selectedTaxType : null,
+    };
+  }
+
+  if (stageState.stage === "kecamatan" && stageState.selectedKecamatan) {
+    return {
+      stage: "kecamatan",
+      kecamatanId: stageState.selectedKecamatan.id,
+      desaKey: null,
+      taxType: null,
+    };
+  }
+
+  return {
+    stage: "kabupaten",
+    kecamatanId: null,
+    desaKey: null,
+    taxType: null,
+  };
+}
+
+function findKecamatanSelectionById(params: {
+  kecamatanId: string;
+  boundary: GeoJsonFeatureCollection;
+  kecamatanList: MasterKecamatan[];
+}) {
+  for (const feature of params.boundary.features) {
+    const selection = createBoundaryFeatureSelection({
+      level: "kecamatan",
+      feature,
+    });
+    const resolvedKecamatanId = resolveBoundarySelectionKecamatanId({
+      selection,
+      kecamatanList: params.kecamatanList,
+    });
+    if (resolvedKecamatanId === params.kecamatanId) {
+      return selection;
+    }
+  }
+
+  return null;
+}
+
+function findDesaSelectionByKey(params: {
+  kecamatanId: string;
+  desaKey: string;
+  boundary: GeoJsonFeatureCollection;
+}) {
+  for (const feature of params.boundary.features) {
+    const selection = createBoundaryFeatureSelection({
+      level: "desa",
+      feature,
+    });
+    const nextDesaKey = createPublicMapDesaKey({
+      kecamatanId: params.kecamatanId,
+      desaName: selection.featureName,
+    });
+    if (nextDesaKey === params.desaKey) {
+      return selection;
+    }
+  }
+
+  return null;
 }
 
 function MapViewportTracker(props: { onChange: (bbox: MapViewportBbox, zoom: number) => void }) {
@@ -320,18 +426,59 @@ function MapDesaMarkerFocusController(props: {
   return null;
 }
 
+function MapRailMarkerFocusController(props: {
+  markerId: string | number | null;
+  target: { lat: number; lng: number } | null;
+  zoom: number;
+  reducedMotion: boolean;
+}) {
+  const map = useMap();
+  const lastMarkerIdRef = useRef("");
+
+  useEffect(() => {
+    if (props.markerId === null || !props.target) {
+      lastMarkerIdRef.current = "";
+      return;
+    }
+
+    const nextMarkerId = String(props.markerId);
+    if (lastMarkerIdRef.current === nextMarkerId) {
+      return;
+    }
+
+    lastMarkerIdRef.current = nextMarkerId;
+    map.flyTo([props.target.lat, props.target.lng], props.zoom, {
+      duration: props.reducedMotion ? 0 : 0.7,
+    });
+  }, [map, props.markerId, props.reducedMotion, props.target, props.zoom]);
+
+  return null;
+}
+
 export default function MapPage() {
+  const queryClient = useQueryClient();
   const reducedMotion = useReducedMotion() ?? false;
-  const [baseMap, setBaseMap] = useState<BaseMapKey>("osm");
+  const [baseMap, setBaseMap] = useState<BaseMapKey>(() => loadPublicMapBaseMapPreference() ?? "osm");
   const [zoom, setZoom] = useState(regionConfig.map.defaultZoom);
   const [bbox, setBbox] = useState<MapViewportBbox | null>(null);
+  const [compactViewport, setCompactViewport] = useState(() => detectCompactViewport());
   const [stageState, setStageState] = useState<PublicMapStageState>(() => createDefaultPublicMapStageState());
+  const [regionJumpOpen, setRegionJumpOpen] = useState(false);
+  const [regionJumpQuery, setRegionJumpQuery] = useState("");
+  const [selectedRailMarkerId, setSelectedRailMarkerId] = useState<string | number | null>(null);
+  const [mobileOpSheetState, setMobileOpSheetState] = useState<PublicMapMobileOpSheetState>(() =>
+    createDefaultPublicMapMobileOpSheetState(),
+  );
   const [focusParams, setFocusParams] = useState(() => parseMapFocusParams(window.location.search));
+  const initialRouteStateRef = useRef(parsePublicMapRouteState(window.location.search));
+  const [routeRestoreComplete, setRouteRestoreComplete] = useState(initialRouteStateRef.current.stage === "kabupaten");
   const [transitionPulseKey, setTransitionPulseKey] = useState(0);
   const [viewportResetToken, setViewportResetToken] = useState(0);
   const focusedMarkerRef = useRef<L.Marker | null>(null);
+  const markerRefs = useRef(new Map<string, L.Marker>());
   const hasMountedStageRef = useRef(false);
   const kecamatanListRef = useRef<MasterKecamatan[]>([]);
+  const prefetchedDesaKecamatanIdRef = useRef<string | null>(null);
   const hasFocusOverride = focusParams.id !== null || focusParams.target !== null;
 
   useEffect(() => {
@@ -342,6 +489,29 @@ export default function MapPage() {
 
     setTransitionPulseKey((current) => current + 1);
   }, [stageState.stage, stageState.selectedKecamatan?.id, stageState.selectedDesa?.name]);
+
+  useEffect(() => {
+    savePublicMapBaseMapPreference(baseMap);
+  }, [baseMap]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 639px)");
+    const updateViewportMode = () => setCompactViewport(mediaQuery.matches);
+
+    updateViewportMode();
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", updateViewportMode);
+      return () => mediaQuery.removeEventListener("change", updateViewportMode);
+    }
+
+    mediaQuery.addListener(updateViewportMode);
+    return () => mediaQuery.removeListener(updateViewportMode);
+  }, []);
 
   const { data: kecamatanData } = useQuery<MasterKecamatan[] | null>({
     queryKey: ["/api/master/kecamatan"],
@@ -422,6 +592,7 @@ export default function MapPage() {
   });
 
   const markerList = mapData?.items ?? [];
+  const kecamatanList = kecamatanData ?? [];
   const stageScopedMarkerList = useMemo(
     () =>
       createPublicMapVisibleMarkers({
@@ -443,6 +614,28 @@ export default function MapPage() {
         markers: markerList,
       }),
     [hasFocusOverride, markerList, stageState],
+  );
+  const opRailModel: PublicMapOpRailModel = useMemo(
+    () =>
+      createPublicMapOpRailModel({
+        stage: stageState.stage,
+        markers: stageScopedMarkerList,
+        selectedTaxType: stageState.selectedTaxType,
+        compactViewport,
+      }),
+    [compactViewport, stageScopedMarkerList, stageState.selectedTaxType, stageState.stage],
+  );
+  const mobileOpSheetModel = useMemo(
+    () =>
+      createPublicMapMobileOpSheetModel({
+        stage: stageState.stage,
+        compactViewport,
+        desaName: stageState.selectedDesa?.name ?? null,
+        markers: stageScopedMarkerList,
+        selectedTaxType: stageState.selectedTaxType,
+        sheetState: mobileOpSheetState,
+      }),
+    [compactViewport, mobileOpSheetState, stageScopedMarkerList, stageState.selectedDesa?.name, stageState.selectedTaxType, stageState.stage],
   );
   const stageHeaderModel = createPublicMapStageHeaderModel({
     stageState,
@@ -466,6 +659,16 @@ export default function MapPage() {
     hasKecamatanBoundary: activeKecamatanGeoJson !== null,
     hasDesaBoundary: activeDesaGeoJson !== null,
   });
+  const stageStatusModel = useMemo(
+    () =>
+      createPublicMapStageStatusModel({
+        stageState,
+        scopeFeatureCount:
+          stageState.stage === "kabupaten" ? (activeKecamatanGeoJson?.features.length ?? 0) : (activeDesaGeoJson?.features.length ?? 0),
+        markerCount: visibleMarkerList.length,
+      }),
+    [activeDesaGeoJson?.features.length, activeKecamatanGeoJson?.features.length, stageState, visibleMarkerList.length],
+  );
   const showMarkerBadges = isMarkerQueryActive && (stageState.stage === "desa" || hasFocusOverride);
   const viewportLabel =
     stageState.stage === "desa" && stageState.selectedDesa
@@ -485,17 +688,60 @@ export default function MapPage() {
     stage: stageState.stage,
     baseMapMaxZoom: mapConfig.maxZoom,
   });
+  const selectedRailMarker = useMemo(
+    () => visibleMarkerList.find((marker) => String(marker.id) === String(selectedRailMarkerId)) ?? null,
+    [selectedRailMarkerId, visibleMarkerList],
+  );
+  const selectedMobileSheetMarker = useMemo(() => {
+    if (mobileOpSheetState.mode !== "detail") {
+      return null;
+    }
+
+    return visibleMarkerList.find((marker) => String(marker.id) === String(mobileOpSheetState.markerId)) ?? null;
+  }, [mobileOpSheetState, visibleMarkerList]);
+  const desaJumpOptions = useMemo(() => {
+    if (!stageState.selectedKecamatan || !activeDesaGeoJson) {
+      return [];
+    }
+
+    return activeDesaGeoJson.features.map((feature) => {
+      const selection = createBoundaryFeatureSelection({
+        level: "desa",
+        feature,
+      });
+
+      return {
+        kecamatanId: stageState.selectedKecamatan!.id,
+        nama: selection.featureName,
+      };
+    });
+  }, [activeDesaGeoJson, stageState.selectedKecamatan]);
+  const regionJumpGroups = useMemo(
+    () =>
+      buildPublicMapRegionJumpGroups({
+        query: regionJumpQuery,
+        selectedKecamatanId: stageState.selectedKecamatan?.id ?? null,
+        kecamatan: kecamatanList.map((item) => ({
+          id: item.cpmKecId,
+          nama: item.cpmKecamatan,
+        })),
+        desa: desaJumpOptions,
+      }),
+    [desaJumpOptions, kecamatanList, regionJumpQuery, stageState.selectedKecamatan?.id],
+  );
 
   useEffect(() => {
     if (!stageState.selectedKecamatan || stageState.stage !== "desa") {
       return;
     }
 
-    if (stageState.selectedTaxType === "all") {
-      return;
-    }
-
-    if (taxTypeOptions.includes(stageState.selectedTaxType)) {
+    if (
+      !shouldResetPublicMapTaxType({
+        selectedTaxType: stageState.selectedTaxType,
+        availableTaxTypeOptions: taxTypeOptions,
+        stageScopedMarkerCount: stageScopedMarkerList.length,
+      })
+    ) {
       return;
     }
 
@@ -503,7 +749,62 @@ export default function MapPage() {
       ...current,
       selectedTaxType: "all",
     }));
-  }, [stageState.selectedKecamatan, stageState.selectedTaxType, stageState.stage, taxTypeOptions]);
+  }, [stageScopedMarkerList.length, stageState.selectedKecamatan, stageState.selectedTaxType, stageState.stage, taxTypeOptions]);
+
+  useEffect(() => {
+    if (stageState.stage !== "desa" || compactViewport) {
+      setSelectedRailMarkerId(null);
+      return;
+    }
+
+    if (selectedRailMarkerId === null) {
+      return;
+    }
+
+    const stillVisible = visibleMarkerList.some((marker) => String(marker.id) === String(selectedRailMarkerId));
+    if (!stillVisible) {
+      setSelectedRailMarkerId(null);
+    }
+  }, [compactViewport, selectedRailMarkerId, stageState.stage, visibleMarkerList]);
+
+  useEffect(() => {
+    setMobileOpSheetState((current) =>
+      syncPublicMapMobileOpSheetState({
+        current,
+        stage: stageState.stage,
+        compactViewport,
+        markers: visibleMarkerList,
+      }),
+    );
+  }, [compactViewport, stageState.stage, visibleMarkerList]);
+
+  useEffect(() => {
+    if (
+      !shouldPrefetchScopedDesaBoundary({
+        stageState,
+        prefetchedKecamatanId: prefetchedDesaKecamatanIdRef.current,
+      })
+    ) {
+      return;
+    }
+
+    const nextKecamatanId = stageState.selectedKecamatan?.id;
+    if (!nextKecamatanId) {
+      return;
+    }
+
+    prefetchedDesaKecamatanIdRef.current = nextKecamatanId;
+    void queryClient.prefetchQuery({
+      queryKey: ["active-region-boundary", regionConfig.identity.regionKey, "desa", nextKecamatanId],
+      queryFn: ({ signal }) =>
+        loadActiveRegionBoundary({
+          level: "desa",
+          kecamatanId: nextKecamatanId,
+          signal,
+        }),
+      staleTime: 5 * 60 * 1000,
+    });
+  }, [queryClient, stageState]);
 
   useEffect(() => {
     if (!focusParams.id || visibleMarkerList.length === 0 || !focusedMarkerRef.current) return;
@@ -518,11 +819,124 @@ export default function MapPage() {
     return () => window.clearTimeout(timer);
   }, [focusParams.id, visibleMarkerList]);
 
-  const kecamatanList = kecamatanData ?? [];
+  useEffect(() => {
+    if (selectedRailMarkerId === null) {
+      return;
+    }
+
+    const marker = markerRefs.current.get(String(selectedRailMarkerId));
+    if (!marker) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      marker.openPopup();
+    }, 180);
+
+    return () => window.clearTimeout(timer);
+  }, [selectedRailMarkerId, visibleMarkerList]);
+
+  useEffect(() => {
+    if (mobileOpSheetState.mode !== "detail") {
+      return;
+    }
+
+    const marker = markerRefs.current.get(String(mobileOpSheetState.markerId));
+    if (!marker) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      marker.openPopup();
+    }, 180);
+
+    return () => window.clearTimeout(timer);
+  }, [mobileOpSheetState, visibleMarkerList]);
 
   useEffect(() => {
     kecamatanListRef.current = kecamatanList;
   }, [kecamatanList]);
+
+  useEffect(() => {
+    if (routeRestoreComplete) {
+      return;
+    }
+
+    const initialRouteState = initialRouteStateRef.current;
+    if (initialRouteState.stage === "kabupaten") {
+      setRouteRestoreComplete(true);
+      return;
+    }
+
+    if (!activeKecamatanGeoJson || kecamatanList.length === 0) {
+      return;
+    }
+
+    const kecamatanSelection = findKecamatanSelectionById({
+      kecamatanId: initialRouteState.kecamatanId ?? "",
+      boundary: activeKecamatanGeoJson,
+      kecamatanList,
+    });
+    if (!kecamatanSelection) {
+      setRouteRestoreComplete(true);
+      return;
+    }
+
+    if (stageState.selectedKecamatan?.id !== initialRouteState.kecamatanId || stageState.stage === "kabupaten") {
+      setStageState((current) =>
+        drillIntoKecamatanStage({
+          current,
+          selection: kecamatanSelection,
+          kecamatanId: initialRouteState.kecamatanId ?? "",
+        }),
+      );
+      if (initialRouteState.stage === "kecamatan") {
+        setRouteRestoreComplete(true);
+      }
+      return;
+    }
+
+    if (initialRouteState.stage === "kecamatan") {
+      setRouteRestoreComplete(true);
+      return;
+    }
+
+    if (!activeDesaGeoJson || !initialRouteState.desaKey || !initialRouteState.kecamatanId) {
+      return;
+    }
+
+    const desaSelection = findDesaSelectionByKey({
+      kecamatanId: initialRouteState.kecamatanId,
+      desaKey: initialRouteState.desaKey,
+      boundary: activeDesaGeoJson,
+    });
+    if (!desaSelection) {
+      setRouteRestoreComplete(true);
+      return;
+    }
+
+    const restoredTaxType = initialRouteState.taxType ?? "all";
+    if (stageState.selectedDesa?.key !== initialRouteState.desaKey || stageState.selectedTaxType !== restoredTaxType) {
+      setStageState((current) => ({
+        ...drillIntoDesaStage({
+          current,
+          selection: desaSelection,
+        }),
+        selectedTaxType: restoredTaxType,
+      }));
+    }
+
+    setRouteRestoreComplete(true);
+  }, [
+    activeDesaGeoJson,
+    activeKecamatanGeoJson,
+    kecamatanList,
+    routeRestoreComplete,
+    stageState.selectedDesa?.key,
+    stageState.selectedKecamatan?.id,
+    stageState.selectedTaxType,
+    stageState.stage,
+  ]);
 
   function clearFocusOverride() {
     if (!hasFocusOverride) {
@@ -577,6 +991,8 @@ export default function MapPage() {
   function handleBackStage() {
     startTransition(() => {
       clearFocusOverride();
+      setRegionJumpOpen(false);
+      setRegionJumpQuery("");
       setStageState((current) => stepBackPublicMapStage(current));
     });
   }
@@ -584,8 +1000,74 @@ export default function MapPage() {
   function handleResetStage() {
     startTransition(() => {
       clearFocusOverride();
+      setRegionJumpOpen(false);
+      setRegionJumpQuery("");
       setStageState(createDefaultPublicMapStageState());
       setViewportResetToken((current) => current + 1);
+    });
+  }
+
+  function handleRegionJumpOpenChange(open: boolean) {
+    setRegionJumpOpen(open);
+
+    if (!open) {
+      setRegionJumpQuery("");
+    }
+  }
+
+  function handleRegionJumpSelect(item: PublicMapRegionJumpItem) {
+    clearFocusOverride();
+
+    if (item.type === "kecamatan") {
+      if (!activeKecamatanGeoJson) {
+        return;
+      }
+
+      const selection = findKecamatanSelectionById({
+        kecamatanId: item.kecamatanId,
+        boundary: activeKecamatanGeoJson,
+        kecamatanList: kecamatanListRef.current,
+      });
+      if (!selection) {
+        return;
+      }
+
+      setRegionJumpOpen(false);
+      setRegionJumpQuery("");
+      startTransition(() => {
+        setStageState((current) =>
+          drillIntoKecamatanStage({
+            current,
+            selection,
+            kecamatanId: item.kecamatanId,
+          }),
+        );
+      });
+      return;
+    }
+
+    if (!item.desaKey || !activeDesaGeoJson || !stageState.selectedKecamatan || stageState.selectedKecamatan.id !== item.kecamatanId) {
+      return;
+    }
+
+    const selection = findDesaSelectionByKey({
+      kecamatanId: item.kecamatanId,
+      desaKey: item.desaKey,
+      boundary: activeDesaGeoJson,
+    });
+    if (!selection) {
+      return;
+    }
+
+    setRegionJumpOpen(false);
+    setRegionJumpQuery("");
+    startTransition(() => {
+      setStageState((current) =>
+        drillIntoDesaStage({
+          current,
+          selection,
+        }),
+      );
     });
   }
 
@@ -598,10 +1080,54 @@ export default function MapPage() {
     });
   }
 
+  function handleOpRailSelect(markerId: string | number) {
+    clearFocusOverride();
+    setSelectedRailMarkerId(markerId);
+  }
+
+  function handleMobileOpSheetBack() {
+    setMobileOpSheetState((current) => stepBackPublicMapMobileOpSheetState(current));
+  }
+
+  function handleMobileOpSheetSelect(markerId: string | number) {
+    clearFocusOverride();
+    setMobileOpSheetState(openPublicMapMobileOpSheetDetail(markerId));
+  }
+
+  useEffect(() => {
+    if (!routeRestoreComplete) {
+      return;
+    }
+
+    const nextSearch = applyPublicMapRouteStateToSearch(window.location.search, createPublicMapStageRouteState(stageState));
+    if (nextSearch === window.location.search) {
+      return;
+    }
+
+    const nextUrl = new URL(window.location.href);
+    nextUrl.search = nextSearch;
+    window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+  }, [routeRestoreComplete, stageState]);
+
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background" data-testid="map-page">
-      <div className="absolute left-3 top-3 z-[1000] sm:left-4 sm:top-4">
-        <PublicMapStageHeader model={stageHeaderModel} onBack={handleBackStage} reducedMotion={reducedMotion} />
+      <div className="absolute left-3 top-3 z-[1000] flex max-w-[min(calc(100vw-1.5rem),30rem)] flex-col gap-3 sm:left-4 sm:top-4">
+        <PublicMapStageHeader
+          model={stageHeaderModel}
+          status={stageStatusModel}
+          onBack={handleBackStage}
+          reducedMotion={reducedMotion}
+        />
+        <PublicMapRegionJump
+          compactViewport={compactViewport}
+          groups={regionJumpGroups}
+          open={regionJumpOpen}
+          query={regionJumpQuery}
+          selectedKecamatanName={stageState.selectedKecamatan?.name ?? null}
+          onOpenChange={handleRegionJumpOpenChange}
+          onQueryChange={setRegionJumpQuery}
+          onSelect={handleRegionJumpSelect}
+        />
       </div>
 
       <div className="absolute right-3 top-3 z-[1000] flex items-center gap-2 sm:right-4 sm:top-4">
@@ -643,13 +1169,43 @@ export default function MapPage() {
         </Link>
       </div>
 
-      {stageState.stage === "desa" ? (
+      {stageState.stage === "desa" && !compactViewport ? (
         <div className="absolute bottom-20 left-3 right-3 z-[1000] sm:bottom-auto sm:left-4 sm:right-auto sm:top-[8.8rem]">
           <PublicMapTaxFilterChips
             options={taxTypeOptions}
             selectedTaxType={stageState.selectedTaxType}
             onSelect={handleTaxTypeChange}
             reducedMotion={reducedMotion}
+          />
+        </div>
+      ) : null}
+
+      {opRailModel.visible ? (
+        <div className="absolute right-4 top-[8.8rem] z-[1000] hidden lg:block">
+          <PublicMapOpRail
+            model={opRailModel}
+            reducedMotion={reducedMotion}
+            selectedMarkerId={selectedRailMarkerId}
+            onSelect={handleOpRailSelect}
+          />
+        </div>
+      ) : null}
+
+      {mobileOpSheetModel.visible ? (
+        <div className="absolute bottom-3 left-3 right-3 z-[1000] sm:hidden">
+          <PublicMapOpBottomSheet
+            model={mobileOpSheetModel}
+            reducedMotion={reducedMotion}
+            onBack={handleMobileOpSheetBack}
+            onSelectMarker={handleMobileOpSheetSelect}
+            filterContent={
+              <PublicMapTaxFilterChips
+                options={taxTypeOptions}
+                selectedTaxType={stageState.selectedTaxType}
+                onSelect={handleTaxTypeChange}
+                reducedMotion={reducedMotion}
+              />
+            }
           />
         </div>
       ) : null}
@@ -700,6 +1256,32 @@ export default function MapPage() {
           reducedMotion={reducedMotion}
           requiredZoom={activeViewportPlan.maxZoom}
           zoom={zoom}
+        />
+        <MapRailMarkerFocusController
+          markerId={selectedRailMarkerId}
+          target={
+            selectedRailMarker
+              ? {
+                  lat: selectedRailMarker.latitude,
+                  lng: selectedRailMarker.longitude,
+                }
+              : null
+          }
+          zoom={activeViewportPlan.maxZoom}
+          reducedMotion={reducedMotion}
+        />
+        <MapRailMarkerFocusController
+          markerId={mobileOpSheetState.mode === "detail" ? mobileOpSheetState.markerId : null}
+          target={
+            selectedMobileSheetMarker
+              ? {
+                  lat: selectedMobileSheetMarker.latitude,
+                  lng: selectedMobileSheetMarker.longitude,
+                }
+              : null
+          }
+          zoom={activeViewportPlan.maxZoom}
+          reducedMotion={reducedMotion}
         />
 
         {activeKabupatenGeoJson ? <PublicKabupatenMask boundary={activeKabupatenGeoJson} /> : null}
@@ -764,6 +1346,22 @@ export default function MapPage() {
               if (String(item.id) === String(focusParams.id)) {
                 focusedMarkerRef.current = marker;
               }
+
+              if (marker) {
+                markerRefs.current.set(String(item.id), marker);
+              } else {
+                markerRefs.current.delete(String(item.id));
+              }
+            }}
+            eventHandlers={{
+              click: () => {
+                if (compactViewport && stageState.stage === "desa") {
+                  setMobileOpSheetState(openPublicMapMobileOpSheetDetail(item.id));
+                  return;
+                }
+
+                setSelectedRailMarkerId(item.id);
+              },
             }}
           >
             <Popup autoPan={false}>
@@ -786,7 +1384,7 @@ export default function MapPage() {
         </div>
       ) : null}
 
-      {showMarkerBadges ? (
+      {showMarkerBadges && !(compactViewport && mobileOpSheetModel.visible) ? (
         <div className="absolute bottom-4 right-3 z-[1000] flex flex-wrap justify-end gap-2 sm:right-4">
           <Badge className="bg-[#2d3436] text-white">{visibleMarkerList.length} {viewportLabel}</Badge>
           {stageState.selectedTaxType !== "all" ? <Badge variant="secondary">{stageState.selectedTaxType}</Badge> : null}

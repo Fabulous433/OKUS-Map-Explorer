@@ -1,6 +1,7 @@
 import type { GeoJsonFeatureCollection, RegionBoundaryBounds } from "@shared/region-boundary";
 import { filterViewportMarkersByBoundarySelection, type BoundaryFeatureSelection } from "@/lib/map/public-boundary-layer-model";
 import type { MapViewportBbox } from "@/lib/map/map-data-source";
+import { createPublicMapDesaKey } from "@/lib/map/public-map-route-state";
 import type { MapViewportMarker } from "@/lib/map/wfs-types";
 
 export type MapStage = "kabupaten" | "kecamatan" | "desa";
@@ -13,6 +14,7 @@ export type SelectedKecamatan = {
 };
 
 export type SelectedDesa = {
+  key: string;
   name: string;
   bounds: RegionBoundaryBounds;
   feature: BoundaryFeatureSelection["feature"];
@@ -32,6 +34,12 @@ export type PublicMapStageHeaderModel = {
   backVisible: boolean;
 };
 
+export type PublicMapStageStatusModel = {
+  primary: string | null;
+  secondary: string | null;
+  filter: string | null;
+};
+
 export type PublicMapBoundaryPresentation = {
   showKabupaten: boolean;
   showKecamatan: boolean;
@@ -42,6 +50,30 @@ export type PublicMapBoundaryPresentation = {
 const ROOT_STAGE_HELPER = "Pilih satu kecamatan untuk masuk ke wilayahnya";
 const KECAMATAN_STAGE_HELPER = "Pilih desa/kelurahan untuk membuka detail wilayah";
 const DESA_STAGE_HELPER = "Filter jenis pajak lalu pilih marker OP yang ingin dilihat";
+const PUBLIC_MAP_TAX_TYPE_COMPACT_LABELS: Array<{ match: string; label: string }> = [
+  { match: "Makanan", label: "MKN" },
+  { match: "Perhotelan", label: "HTL" },
+  { match: "Parkir", label: "PKR" },
+  { match: "Hiburan", label: "HBR" },
+  { match: "Kesenian", label: "HBR" },
+  { match: "Listrik", label: "LST" },
+  { match: "Reklame", label: "RKL" },
+  { match: "Air Tanah", label: "AIR" },
+  { match: "Walet", label: "WLT" },
+  { match: "MBLB", label: "MBL" },
+];
+
+function createInitialCompactTaxLabel(value: string) {
+  const words = value
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean);
+
+  return words
+    .slice(0, 4)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("");
+}
 
 export function createDefaultPublicMapStageState(): PublicMapStageState {
   return {
@@ -74,10 +106,16 @@ export function drillIntoDesaStage(params: {
   current: PublicMapStageState;
   selection: BoundaryFeatureSelection;
 }): PublicMapStageState {
+  const kecamatanId = params.current.selectedKecamatan?.id ?? "unknown";
+
   return {
     ...params.current,
     stage: "desa",
     selectedDesa: {
+      key: createPublicMapDesaKey({
+        kecamatanId,
+        desaName: params.selection.featureName,
+      }),
       name: params.selection.featureName,
       bounds: params.selection.bounds,
       feature: params.selection.feature,
@@ -134,6 +172,53 @@ export function createPublicMapStageHeaderModel(params: {
   };
 }
 
+function pluralizeOpLabel(count: number) {
+  return `${count} OP aktif`;
+}
+
+function pluralizeStageScopeLabel(stage: MapStage, count: number) {
+  if (stage === "kabupaten") {
+    return `${count} kecamatan`;
+  }
+
+  return `${count} desa`;
+}
+
+export function createPublicMapStageStatusModel(params: {
+  stageState: PublicMapStageState;
+  scopeFeatureCount: number;
+  markerCount: number;
+}): PublicMapStageStatusModel {
+  const primary = params.scopeFeatureCount > 0 ? pluralizeStageScopeLabel(params.stageState.stage, params.scopeFeatureCount) : null;
+  const secondary = params.stageState.stage === "desa" ? pluralizeOpLabel(params.markerCount) : null;
+  const filter =
+    params.stageState.stage === "desa" && params.stageState.selectedTaxType !== "all"
+      ? createPublicMapTaxFilterLabelModel(params.stageState.selectedTaxType).compact
+      : null;
+
+  return {
+    primary,
+    secondary,
+    filter,
+  };
+}
+
+export function shouldPrefetchScopedDesaBoundary(params: {
+  stageState: Pick<PublicMapStageState, "stage" | "selectedKecamatan">;
+  prefetchedKecamatanId: string | null;
+}) {
+  const selectedKecamatanId = params.stageState.selectedKecamatan?.id ?? null;
+  if (!selectedKecamatanId) {
+    return false;
+  }
+
+  if (params.stageState.stage === "kabupaten") {
+    return false;
+  }
+
+  return params.prefetchedKecamatanId !== selectedKecamatanId;
+}
+
 export function shouldActivatePublicMapMarkers(params: {
   stageState: PublicMapStageState;
   hasFocusOverride: boolean;
@@ -149,6 +234,38 @@ export function extractPublicMapTaxTypeOptions(markers: MapViewportMarker[]) {
   return Array.from(new Set(markers.map((marker) => marker.jenisPajak.trim()).filter(Boolean))).sort((left, right) =>
     left.localeCompare(right, "id"),
   );
+}
+
+export function createPublicMapTaxFilterLabelModel(taxType: string) {
+  if (taxType === "all") {
+    return {
+      full: "Semua OP",
+      compact: "Semua",
+    };
+  }
+
+  const matchedCompactLabel = PUBLIC_MAP_TAX_TYPE_COMPACT_LABELS.find((item) => taxType.includes(item.match))?.label;
+
+  return {
+    full: taxType,
+    compact: matchedCompactLabel ?? createInitialCompactTaxLabel(taxType),
+  };
+}
+
+export function shouldResetPublicMapTaxType(params: {
+  selectedTaxType: string;
+  availableTaxTypeOptions: string[];
+  stageScopedMarkerCount: number;
+}) {
+  if (params.selectedTaxType === "all") {
+    return false;
+  }
+
+  if (params.stageScopedMarkerCount === 0) {
+    return false;
+  }
+
+  return !params.availableTaxTypeOptions.includes(params.selectedTaxType);
 }
 
 export function filterPublicMapMarkersByTaxType(params: {

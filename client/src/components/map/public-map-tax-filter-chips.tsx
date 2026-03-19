@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { createPublicMapTaxFilterLabelModel } from "@/lib/map/public-map-stage-model";
 
 type PublicMapTaxFilterChipsProps = {
   options: string[];
@@ -12,6 +13,8 @@ export function PublicMapTaxFilterChips(props: PublicMapTaxFilterChipsProps) {
   if (props.options.length === 0) {
     return null;
   }
+
+  const allLabel = createPublicMapTaxFilterLabelModel("all");
 
   return (
     <motion.div
@@ -26,24 +29,30 @@ export function PublicMapTaxFilterChips(props: PublicMapTaxFilterChipsProps) {
           type="button"
           size="sm"
           variant={props.selectedTaxType === "all" ? "default" : "outline"}
-          className="rounded-full font-mono text-[11px] uppercase tracking-[0.16em]"
+          className="rounded-full px-3 font-mono text-[11px] uppercase tracking-[0.16em]"
           onClick={() => props.onSelect("all")}
         >
-          Semua OP
+          <span className="sm:hidden">{allLabel.compact}</span>
+          <span className="hidden sm:inline">{allLabel.full}</span>
         </Button>
 
-        {props.options.map((option) => (
-          <Button
-            key={option}
-            type="button"
-            size="sm"
-            variant={props.selectedTaxType === option ? "default" : "outline"}
-            className="rounded-full px-3 text-xs"
-            onClick={() => props.onSelect(option)}
-          >
-            {option}
-          </Button>
-        ))}
+        {props.options.map((option) => {
+          const label = createPublicMapTaxFilterLabelModel(option);
+
+          return (
+            <Button
+              key={option}
+              type="button"
+              size="sm"
+              variant={props.selectedTaxType === option ? "default" : "outline"}
+              className="rounded-full px-3 text-[11px] sm:text-xs"
+              onClick={() => props.onSelect(option)}
+            >
+              <span className="sm:hidden">{label.compact}</span>
+              <span className="hidden sm:inline">{label.full}</span>
+            </Button>
+          );
+        })}
       </div>
     </motion.div>
   );
