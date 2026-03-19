@@ -38,7 +38,7 @@ import {
   type WpBadanUsahaInput,
 } from "@shared/schema";
 import { activeRegionDesaQuerySchema } from "@shared/region-boundary";
-import { regionBoundaryDraftFeatureSchema } from "@shared/region-boundary-admin";
+import { regionBoundaryDraftFeatureSchema, regionBoundaryPublishPayloadSchema } from "@shared/region-boundary-admin";
 import { stringify } from "csv-stringify/sync";
 import { parse } from "csv-parse/sync";
 import multer, { MulterError } from "multer";
@@ -49,6 +49,8 @@ import {
   getDesaDraftByKecamatan,
   listBoundaryRevisions,
   previewDraftImpact,
+  publishDraftRevision,
+  rollbackPublishedRevision,
   saveDraftBoundaryFeature,
 } from "./boundary-editor-storage";
 import { buildAttachmentDownloadPath, deleteAttachmentFile, ensureAttachmentStorageRoot, saveAttachmentBuffer } from "./file-storage";
@@ -3207,6 +3209,47 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.json(preview);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Gagal menghitung preview impact";
+      return res.status(400).json({ message });
+    }
+  });
+
+  app.post("/api/backoffice/region-boundaries/desa/publish", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
+    const parsed = regionBoundaryPublishPayloadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendZodValidationError(res, parsed.error, "Payload publish boundary tidak valid");
+    }
+
+    try {
+      const result = await publishDraftRevision({
+        revisionId: parsed.data.revisionId,
+        mode: parsed.data.mode,
+        actorName: getActorName(req),
+      });
+      return res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal publish boundary";
+      return res.status(400).json({ message });
+    }
+  });
+
+  app.post("/api/backoffice/region-boundaries/desa/revisions/:id/rollback", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
+    const revisionId = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(revisionId)) {
+      return res.status(400).json({ message: "ID revision rollback tidak valid" });
+    }
+
+    try {
+      const result = await rollbackPublishedRevision({
+        revisionId,
+        actorName: getActorName(req),
+      });
+      return res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal rollback boundary";
       return res.status(400).json({ message });
     }
   });
