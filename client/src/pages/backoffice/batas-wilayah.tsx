@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import BackofficeLayout from "./layout";
 import { BoundaryEditorShell } from "@/components/backoffice/boundary-editor-shell";
+import { BoundaryEditorImpactPanel } from "@/components/backoffice/boundary-editor-impact-panel";
 import {
   createBoundaryEditorDesaOptions,
   useBoundaryEditorDesaOptionsQuery,
@@ -8,8 +10,19 @@ import {
   useBoundaryEditorKecamatanOptionsQuery,
   useBoundaryEditorRevisionListQuery,
 } from "@/lib/backoffice/boundary-editor-query";
+import {
+  areBoundaryGeometriesEqual,
+  buildDraftFeaturePayload,
+  findBoundaryFeatureByKey,
+} from "@/lib/backoffice/boundary-editor-model";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/lib/auth";
+import { loadActiveRegionBoundary } from "@/lib/map/region-boundary-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import type { RegionBoundaryGeometry } from "@shared/region-boundary-admin";
+
+const BoundaryEditorMap = lazy(() => import("@/components/backoffice/boundary-editor-map"));
 
 function formatBoundaryEditorSavedLabel(timestamp: string | null | undefined) {
   if (!timestamp) {
@@ -56,6 +69,8 @@ export function BoundaryEditorMobileNotice() {
 }
 
 export default function BackofficeBatasWilayah() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { hasRole } = useAuth();
   const isMobile = useIsMobile();
   const isAdmin = hasRole(["admin"]);
@@ -73,6 +88,17 @@ export default function BackofficeBatasWilayah() {
   const desaQuery = useBoundaryEditorDesaOptionsQuery(selectedKecamatanId);
   const draftQuery = useBoundaryEditorDraftQuery(selectedKecamatanId);
   const revisionQuery = useBoundaryEditorRevisionListQuery();
+  const activeDesaBoundaryQuery = useQuery({
+    queryKey: ["active-region-boundary", "boundary-editor", selectedKecamatanId || "none"],
+    enabled: Boolean(selectedKecamatanId),
+    queryFn: ({ signal }) =>
+      loadActiveRegionBoundary({
+        level: "desa",
+        kecamatanId: selectedKecamatanId,
+        signal,
+      }),
+    staleTime: 5 * 60 * 1000,
+  });
 
   const desaOptions = useMemo(() => {
     return createBoundaryEditorDesaOptions({
@@ -83,6 +109,34 @@ export default function BackofficeBatasWilayah() {
   }, [desaQuery.items, draftQuery.data?.features, selectedKecamatan?.label]);
 
   const [selectedBoundaryKey, setSelectedBoundaryKey] = useState("");
+  const selectedDraftFeature =
+    draftQuery.data?.features.find((feature) => feature.boundaryKey === selectedBoundaryKey) ?? null;
+  const selectedBaseFeature = useMemo(
+    () => findBoundaryFeatureByKey(activeDesaBoundaryQuery.data?.boundary ?? null, selectedBoundaryKey),
+    [activeDesaBoundaryQuery.data?.boundary, selectedBoundaryKey],
+  );
+  const selectedDesaOption =
+    desaOptions.find((item) => item.boundaryKey === selectedBoundaryKey) ?? null;
+
+  const selectedBaseGeometry = useMemo<RegionBoundaryGeometry | null>(() => {
+    const geometry = selectedBaseFeature?.geometry;
+    if (!geometry || (geometry.type !== "Polygon" && geometry.type !== "MultiPolygon")) {
+      return null;
+    }
+
+    return {
+      type: geometry.type,
+      coordinates: geometry.coordinates,
+    };
+  }, [selectedBaseFeature]);
+
+  const sourceGeometry = selectedDraftFeature?.geometry ?? selectedBaseGeometry;
+  const [draftGeometry, setDraftGeometry] = useState<RegionBoundaryGeometry | null>(sourceGeometry);
+  const sourceGeometryKey = JSON.stringify(sourceGeometry ?? null);
+
+  useEffect(() => {
+    setDraftGeometry(sourceGeometry);
+  }, [selectedBoundaryKey, sourceGeometryKey]);
 
   useEffect(() => {
     if (desaOptions.length === 0) {
@@ -96,6 +150,71 @@ export default function BackofficeBatasWilayah() {
       setSelectedBoundaryKey(desaOptions[0].boundaryKey);
     }
   }, [desaOptions, selectedBoundaryKey]);
+
+  const hasDraftChanges = !areBoundaryGeometriesEqual(draftGeometry, sourceGeometry);
+  const selectedKelurahan =
+    desaQuery.items.find((item) => item.cpmKelId === selectedDesaOption?.id) ?? null;
+  const publishedRevisionCount = (revisionQuery.data ?? []).filter(
+    (item) => item.status === "published",
+  ).length;
+
+  const geometryStatusLabel = !selectedBoundaryKey
+    ? "Pilih desa/kelurahan untuk membuka boundary"
+    : !draftGeometry
+      ? "Geometry belum tersedia pada workspace ini"
+      : hasDraftChanges
+        ? "Draft berubah, simpan sebelum preview"
+        : selectedDraftFeature
+          ? "Draft sinkron dengan revisi aktif"
+          : "Boundary runtime siap diedit";
+
+  const saveDraftMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedBoundaryKey || !selectedKelurahan || !draftGeometry) {
+        throw new Error("Boundary aktif belum lengkap untuk disimpan");
+      }
+
+      const payload = buildDraftFeaturePayload({
+        boundaryKey: selectedBoundaryKey,
+        kecamatanId: selectedKecamatanId,
+        kelurahanId: selectedKelurahan.cpmKelId,
+        namaDesa: selectedKelurahan.cpmKelurahan,
+        geometry: draftGeometry,
+      });
+
+      const response = await apiRequest(
+        "PUT",
+        `/api/backoffice/region-boundaries/desa/draft/features/${encodeURIComponent(selectedBoundaryKey)}`,
+        payload,
+      );
+
+      return response.json();
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [
+            `/api/backoffice/region-boundaries/desa/draft?kecamatanId=${encodeURIComponent(selectedKecamatanId)}`,
+          ],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["/api/backoffice/region-boundaries/desa/revisions"],
+        }),
+      ]);
+
+      toast({
+        title: "Draft tersimpan",
+        description: "Boundary desa/kelurahan disimpan sebagai draft dan belum dipublish.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Gagal menyimpan draft",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   if (!isAdmin) {
     return (
@@ -133,9 +252,40 @@ export default function BackofficeBatasWilayah() {
             kecamatanQuery.isLoading ||
             desaQuery.isLoading ||
             draftQuery.isLoading ||
-            revisionQuery.isLoading
+            revisionQuery.isLoading ||
+            activeDesaBoundaryQuery.isLoading
           }
           lastSavedLabel={formatBoundaryEditorSavedLabel(draftQuery.data?.revision.updatedAt)}
+          mapCanvas={
+            <Suspense
+              fallback={
+                <div className="flex min-h-[430px] items-center justify-center rounded-xl border border-dashed border-black/15 bg-[#f6f3ec] p-6 text-center font-mono text-xs text-black/60">
+                  Memuat editor peta...
+                </div>
+              }
+            >
+              <BoundaryEditorMap
+                boundary={activeDesaBoundaryQuery.data?.boundary ?? null}
+                selectedBoundaryKey={selectedBoundaryKey}
+                selectedDesaLabel={selectedDesaOption?.label ?? selectedDraftFeature?.namaDesa ?? ""}
+                geometry={draftGeometry}
+                onGeometryChange={setDraftGeometry}
+              />
+            </Suspense>
+          }
+          rightPanel={
+            <BoundaryEditorImpactPanel
+              impactedCount={selectedDraftFeature ? 0 : 0}
+              sampleMoves={[]}
+              hasPreview={false}
+              hasDraftChanges={hasDraftChanges}
+              publishedRevisionCount={publishedRevisionCount}
+              geometryStatusLabel={geometryStatusLabel}
+              saveDisabled={!selectedBoundaryKey || !draftGeometry || !hasDraftChanges || saveDraftMutation.isPending}
+              isSaving={saveDraftMutation.isPending}
+              onSaveDraft={() => saveDraftMutation.mutate()}
+            />
+          }
           onSelectKecamatan={setSelectedKecamatanId}
           onSelectBoundaryKey={setSelectedBoundaryKey}
         />

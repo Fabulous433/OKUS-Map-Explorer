@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Map, Upload, Save, Eye, Rocket, RotateCcw, PenTool } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,8 @@ export function BoundaryEditorShell(props: {
   revisions: RegionBoundaryRevision[];
   isLoading?: boolean;
   lastSavedLabel?: string | null;
+  mapCanvas?: ReactNode;
+  rightPanel?: ReactNode;
   onSelectKecamatan?: (value: string) => void;
   onSelectBoundaryKey?: (value: string) => void;
 }) {
@@ -45,6 +48,8 @@ export function BoundaryEditorShell(props: {
     revisions,
     isLoading = false,
     lastSavedLabel = null,
+    mapCanvas,
+    rightPanel,
     onSelectKecamatan,
     onSelectBoundaryKey,
   } = props;
@@ -173,85 +178,91 @@ export function BoundaryEditorShell(props: {
             </div>
           </CardHeader>
           <CardContent>
-            <div
-              className="flex min-h-[430px] items-center justify-center rounded-xl border border-dashed border-black/15 bg-[radial-gradient(circle_at_top,#ffffff_0%,#f4eee4_60%,#ebe1cf_100%)] p-6 text-center"
-              data-testid="boundary-editor-map-shell"
-            >
-              <div className="max-w-md space-y-3">
-                <p className="font-mono text-[11px] font-bold uppercase tracking-[0.22em] text-black/45">
-                  Spatial Console
-                </p>
-                <h2 className="font-sans text-2xl font-black uppercase text-black/85">
-                  Editor polygon masuk di task berikutnya
-                </h2>
-                <p className="font-mono text-xs leading-6 text-black/65">
-                  Shell ini sengaja sudah memisahkan workspace revisi, canvas peta, dan panel dampak
-                  tanpa memuat dependency editor GIS lebih awal.
-                </p>
+            {mapCanvas ?? (
+              <div
+                className="flex min-h-[430px] items-center justify-center rounded-xl border border-dashed border-black/15 bg-[radial-gradient(circle_at_top,#ffffff_0%,#f4eee4_60%,#ebe1cf_100%)] p-6 text-center"
+                data-testid="boundary-editor-map-shell"
+              >
+                <div className="max-w-md space-y-3">
+                  <p className="font-mono text-[11px] font-bold uppercase tracking-[0.22em] text-black/45">
+                    Spatial Console
+                  </p>
+                  <h2 className="font-sans text-2xl font-black uppercase text-black/85">
+                    Editor polygon masuk di task berikutnya
+                  </h2>
+                  <p className="font-mono text-xs leading-6 text-black/65">
+                    Shell ini sengaja sudah memisahkan workspace revisi, canvas peta, dan panel dampak
+                    tanpa memuat dependency editor GIS lebih awal.
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </main>
 
       <aside className="space-y-4">
-        <Card className="border border-black/10">
-          <CardHeader className="pb-4">
-            <CardTitle className="font-sans text-lg font-black uppercase">Action Dock</CardTitle>
-            <CardDescription className="font-mono text-[11px]">
-              Workflow edit disiapkan dulu, aksi aktif menyusul saat map editor tersedia.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-2">
-            <Button type="button" className="justify-start font-mono text-xs font-bold" disabled>
-              <PenTool className="mr-2 h-4 w-4" />
-              Edit Polygon
-            </Button>
-            <Button type="button" variant="outline" className="justify-start font-mono text-xs font-bold" disabled>
-              <Upload className="mr-2 h-4 w-4" />
-              Upload GeoJSON
-            </Button>
-            <Button type="button" variant="outline" className="justify-start font-mono text-xs font-bold" disabled>
-              <Eye className="mr-2 h-4 w-4" />
-              Preview Impact
-            </Button>
-            <Button type="button" variant="outline" className="justify-start font-mono text-xs font-bold" disabled>
-              <Save className="mr-2 h-4 w-4" />
-              Save Draft
-            </Button>
-            <Button type="button" variant="outline" className="justify-start font-mono text-xs font-bold" disabled>
-              <Rocket className="mr-2 h-4 w-4" />
-              Publish
-            </Button>
-            <Button type="button" variant="outline" className="justify-start font-mono text-xs font-bold" disabled>
-              <RotateCcw className="mr-2 h-4 w-4" />
-              Rollback
-            </Button>
-          </CardContent>
-        </Card>
+        {rightPanel ?? (
+          <>
+            <Card className="border border-black/10">
+              <CardHeader className="pb-4">
+                <CardTitle className="font-sans text-lg font-black uppercase">Action Dock</CardTitle>
+                <CardDescription className="font-mono text-[11px]">
+                  Workflow edit disiapkan dulu, aksi aktif menyusul saat map editor tersedia.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-2">
+                <Button type="button" className="justify-start font-mono text-xs font-bold" disabled>
+                  <PenTool className="mr-2 h-4 w-4" />
+                  Edit Polygon
+                </Button>
+                <Button type="button" variant="outline" className="justify-start font-mono text-xs font-bold" disabled>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload GeoJSON
+                </Button>
+                <Button type="button" variant="outline" className="justify-start font-mono text-xs font-bold" disabled>
+                  <Eye className="mr-2 h-4 w-4" />
+                  Preview Impact
+                </Button>
+                <Button type="button" variant="outline" className="justify-start font-mono text-xs font-bold" disabled>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Draft
+                </Button>
+                <Button type="button" variant="outline" className="justify-start font-mono text-xs font-bold" disabled>
+                  <Rocket className="mr-2 h-4 w-4" />
+                  Publish
+                </Button>
+                <Button type="button" variant="outline" className="justify-start font-mono text-xs font-bold" disabled>
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Rollback
+                </Button>
+              </CardContent>
+            </Card>
 
-        <Card className="border border-black/10">
-          <CardHeader className="pb-4">
-            <CardTitle className="font-sans text-lg font-black uppercase">Impact Summary</CardTitle>
-            <CardDescription className="font-mono text-[11px]">
-              Preview dampak OP akan muncul di sini sebelum publish.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="rounded-lg border border-black/10 bg-white p-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">Preview revisi</p>
-              <p className="mt-2 font-mono text-sm font-bold text-black/85">
-                {revisions[0]?.impactSummary
-                  ? `${revisions[0].impactSummary.impactedCount} OP potensial pindah desa`
-                  : "Belum ada preview impact"}
-              </p>
-            </div>
-            <div className="rounded-lg border border-dashed border-black/15 p-3 font-mono text-xs leading-6 text-black/60">
-              Publish final tetap dibatasi untuk admin dan hanya berlaku pada boundary desa OKU Selatan.
-              Asset GeoJSON dasar runtime tidak disentuh langsung dari browser.
-            </div>
-          </CardContent>
-        </Card>
+            <Card className="border border-black/10">
+              <CardHeader className="pb-4">
+                <CardTitle className="font-sans text-lg font-black uppercase">Impact Summary</CardTitle>
+                <CardDescription className="font-mono text-[11px]">
+                  Preview dampak OP akan muncul di sini sebelum publish.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-lg border border-black/10 bg-white p-3">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">Preview revisi</p>
+                  <p className="mt-2 font-mono text-sm font-bold text-black/85">
+                    {revisions[0]?.impactSummary
+                      ? `${revisions[0].impactSummary.impactedCount} OP potensial pindah desa`
+                      : "Belum ada preview impact"}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-dashed border-black/15 p-3 font-mono text-xs leading-6 text-black/60">
+                  Publish final tetap dibatasi untuk admin dan hanya berlaku pada boundary desa OKU Selatan.
+                  Asset GeoJSON dasar runtime tidak disentuh langsung dari browser.
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </aside>
     </section>
   );

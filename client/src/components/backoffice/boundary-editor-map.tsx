@@ -1,0 +1,278 @@
+import type { ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FeatureGroup, GeoJSON, MapContainer, TileLayer, useMap } from "react-leaflet";
+import { Upload } from "lucide-react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import "leaflet-draw";
+import "leaflet-draw/dist/leaflet.draw.css";
+import { Button } from "@/components/ui/button";
+import { parseBoundaryUpload } from "@/lib/backoffice/boundary-editor-model";
+import type { RegionBoundaryGeometry } from "@shared/region-boundary-admin";
+import type { GeoJsonFeatureCollection } from "@shared/region-boundary";
+
+function collectGeometryCoordinates(input: unknown, points: Array<[number, number]>) {
+  if (!Array.isArray(input)) {
+    return;
+  }
+
+  if (
+    input.length >= 2 &&
+    typeof input[0] === "number" &&
+    typeof input[1] === "number"
+  ) {
+    points.push([input[1], input[0]]);
+    return;
+  }
+
+  for (const item of input) {
+    collectGeometryCoordinates(item, points);
+  }
+}
+
+function getGeometryBounds(
+  boundary: GeoJsonFeatureCollection | null,
+  geometry: RegionBoundaryGeometry | null,
+) {
+  const points: Array<[number, number]> = [];
+
+  if (boundary) {
+    for (const feature of boundary.features) {
+      collectGeometryCoordinates(feature.geometry.coordinates, points);
+    }
+  }
+
+  if (geometry) {
+    collectGeometryCoordinates(geometry.coordinates, points);
+  }
+
+  if (points.length === 0) {
+    return L.latLngBounds([
+      [-4.7, 103.8],
+      [-4.2, 104.4],
+    ]);
+  }
+
+  return L.latLngBounds(points);
+}
+
+function EditableBoundaryLayer(props: {
+  geometry: RegionBoundaryGeometry | null;
+  boundary: GeoJsonFeatureCollection | null;
+  onGeometryChange: (geometry: RegionBoundaryGeometry) => void;
+}) {
+  const map = useMap();
+  const featureGroupRef = useRef<L.FeatureGroup | null>(null);
+
+  useEffect(() => {
+    if (!featureGroupRef.current) {
+      return;
+    }
+
+    const featureGroup = featureGroupRef.current;
+    featureGroup.clearLayers();
+
+    if (props.geometry) {
+      L.geoJSON(
+        {
+          type: "Feature",
+          properties: {},
+          geometry: props.geometry,
+        } as GeoJSON.Feature,
+        {
+          style: {
+            color: "#b7410e",
+            weight: 3,
+            fillColor: "#f59e0b",
+            fillOpacity: 0.22,
+          },
+        },
+      ).eachLayer((layer) => {
+        featureGroup.addLayer(layer);
+      });
+    }
+
+    const bounds = getGeometryBounds(props.boundary, props.geometry);
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [24, 24] });
+    }
+  }, [map, props.boundary, props.geometry]);
+
+  useEffect(() => {
+    if (!featureGroupRef.current) {
+      return;
+    }
+
+    const drawControl = new L.Control.Draw({
+      draw: {
+        polyline: false,
+        polygon: false,
+        rectangle: false,
+        circle: false,
+        marker: false,
+        circlemarker: false,
+      },
+      edit: {
+        featureGroup: featureGroupRef.current,
+        remove: false,
+      },
+    });
+
+    const handleEdited = (event: L.LeafletEvent & { layers?: L.LayerGroup }) => {
+      event.layers?.eachLayer((layer) => {
+        if (!("toGeoJSON" in layer) || typeof layer.toGeoJSON !== "function") {
+          return;
+        }
+
+        const nextFeature = layer.toGeoJSON() as GeoJSON.Feature;
+        const geometry = nextFeature.geometry;
+        if (geometry.type === "Polygon" || geometry.type === "MultiPolygon") {
+          props.onGeometryChange({
+            type: geometry.type,
+            coordinates: geometry.coordinates,
+          });
+        }
+      });
+    };
+
+    map.addControl(drawControl);
+    map.on("draw:edited", handleEdited);
+
+    return () => {
+      map.off("draw:edited", handleEdited);
+      map.removeControl(drawControl);
+    };
+  }, [map, props.onGeometryChange]);
+
+  return <FeatureGroup ref={featureGroupRef} />;
+}
+
+export function BoundaryEditorMap(props: {
+  boundary: GeoJsonFeatureCollection | null;
+  selectedBoundaryKey: string;
+  selectedDesaLabel: string;
+  geometry: RegionBoundaryGeometry | null;
+  onGeometryChange: (geometry: RegionBoundaryGeometry) => void;
+}) {
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const selectedFeatureCollection = useMemo(() => {
+    if (!props.boundary || !props.selectedBoundaryKey) {
+      return null;
+    }
+
+    return {
+      type: "FeatureCollection" as const,
+      features: props.boundary.features.filter(
+        (feature) =>
+          String((feature.properties as Record<string, unknown> | undefined)?.__boundaryKey ?? "") === props.selectedBoundaryKey,
+      ),
+    };
+  }, [props.boundary, props.selectedBoundaryKey]);
+
+  async function handleUploadChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    const result = parseBoundaryUpload(await file.text());
+    if (!result.success) {
+      setUploadError(result.message);
+      return;
+    }
+
+    setUploadError(null);
+    props.onGeometryChange(result.geometry);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-black/10 bg-white/80 px-4 py-3">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">Active geometry</p>
+          <p className="mt-1 font-mono text-sm font-bold text-black/85">{props.selectedDesaLabel || "Pilih desa/kelurahan"}</p>
+        </div>
+        <label>
+          <input
+            type="file"
+            accept=".geojson,application/geo+json,application/json"
+            className="sr-only"
+            onChange={handleUploadChange}
+          />
+          <Button type="button" variant="outline" className="font-mono text-xs font-bold" asChild>
+            <span>
+              <Upload className="mr-2 h-4 w-4" />
+              Upload GeoJSON
+            </span>
+          </Button>
+        </label>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-black/10" data-testid="boundary-editor-map-live">
+        <MapContainer
+          center={[-4.5, 104.1]}
+          zoom={11}
+          className="h-[430px] w-full"
+          zoomControl={true}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          {props.boundary ? (
+            <GeoJSON
+              data={props.boundary as GeoJSON.FeatureCollection}
+              style={(feature) => {
+                const isSelected =
+                  String((feature?.properties as Record<string, unknown> | undefined)?.__boundaryKey ?? "") ===
+                  props.selectedBoundaryKey;
+
+                if (isSelected) {
+                  return {
+                    color: "#f97316",
+                    weight: 1.2,
+                    fillColor: "#f59e0b",
+                    fillOpacity: 0.05,
+                  };
+                }
+
+                return {
+                  color: "#7c6f64",
+                  weight: 1,
+                  fillColor: "#a8a29e",
+                  fillOpacity: 0.08,
+                };
+              }}
+            />
+          ) : null}
+          {selectedFeatureCollection ? (
+            <GeoJSON
+              data={selectedFeatureCollection as GeoJSON.FeatureCollection}
+              style={{
+                color: "#b7410e",
+                weight: 2,
+                fillOpacity: 0,
+              }}
+            />
+          ) : null}
+          <EditableBoundaryLayer
+            boundary={props.boundary}
+            geometry={props.geometry}
+            onGeometryChange={props.onGeometryChange}
+          />
+        </MapContainer>
+      </div>
+
+      {uploadError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-mono text-xs text-red-700">
+          {uploadError}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export default BoundaryEditorMap;
