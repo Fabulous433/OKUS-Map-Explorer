@@ -208,6 +208,35 @@ export const auditLog = pgTable("audit_log", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const regionBoundaryRevision = pgTable("region_boundary_revision", {
+  id: serial("id").primaryKey(),
+  regionKey: varchar("region_key", { length: 20 }).notNull(),
+  level: varchar("level", { length: 20 }).notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("draft"),
+  notes: text("notes"),
+  createdBy: varchar("created_by", { length: 120 }).notNull(),
+  publishedBy: varchar("published_by", { length: 120 }),
+  publishedAt: timestamp("published_at"),
+  impactSummary: jsonb("impact_summary"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const regionBoundaryRevisionFeature = pgTable("region_boundary_revision_feature", {
+  id: serial("id").primaryKey(),
+  revisionId: integer("revision_id")
+    .notNull()
+    .references(() => regionBoundaryRevision.id, { onDelete: "cascade" }),
+  boundaryKey: varchar("boundary_key", { length: 160 }).notNull(),
+  kecamatanId: varchar("kecamatan_id", { length: 16 }).notNull(),
+  kelurahanId: varchar("kelurahan_id", { length: 16 }).notNull(),
+  namaDesa: text("nama_desa").notNull(),
+  geometry: jsonb("geometry").notNull(),
+  bounds: jsonb("bounds").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const entityAttachment = pgTable("entity_attachment", {
   id: varchar("id", { length: 64 }).primaryKey(),
   entityType: varchar("entity_type", { length: 40 }).notNull(),
@@ -758,6 +787,8 @@ export type MasterKecamatan = typeof masterKecamatan.$inferSelect;
 export type MasterKelurahan = typeof masterKelurahan.$inferSelect;
 export type MasterRekeningPajak = typeof masterRekeningPajak.$inferSelect;
 export type AuditLog = typeof auditLog.$inferSelect;
+export type RegionBoundaryRevisionRow = typeof regionBoundaryRevision.$inferSelect;
+export type RegionBoundaryRevisionFeatureRow = typeof regionBoundaryRevisionFeature.$inferSelect;
 export type EntityAttachment = typeof entityAttachment.$inferSelect;
 
 export type MasterKecamatanPayload = z.infer<typeof masterKecamatanPayloadSchema>;
