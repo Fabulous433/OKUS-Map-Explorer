@@ -4,6 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 
 const testPort = 5012;
 const testBaseUrl = `http://127.0.0.1:${testPort}`;
+const insideMapBbox = "104.06,-4.55,104.09,-4.52";
 
 function runCommand(command: string, args: string[], label: string) {
   return new Promise<void>((resolve, reject) => {
@@ -117,6 +118,20 @@ async function run() {
     assert.equal(body.boundary.type, "FeatureCollection");
     assert.ok(Array.isArray(body.boundary.features));
     assert.ok(body.boundary.features.length > 0);
+
+    const mapResponse = await fetch(
+      `${testBaseUrl}/api/objek-pajak/map?bbox=${encodeURIComponent(insideMapBbox)}&limit=50`,
+    );
+    const mapBody = await mapResponse.json();
+
+    assert.equal(
+      mapResponse.status,
+      200,
+      `production bundle map route must stay healthy, got ${mapResponse.status}: ${JSON.stringify(mapBody)}`,
+    );
+    assert.ok(Array.isArray(mapBody.items), "map route must return items array");
+    assert.equal(typeof mapBody.meta?.totalInView, "number");
+    assert.equal(typeof mapBody.meta?.isCapped, "boolean");
   } finally {
     await stopProcess(server);
   }

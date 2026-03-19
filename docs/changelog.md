@@ -8,11 +8,13 @@
 
 ### Fixed
 - Route `/api/region-boundaries/active/*` tidak lagi gagal hanya pada output server production `dist/index.cjs`.
+- Route `/api/objek-pajak/map` juga tidak lagi gagal di bundle produksi saat memfilter marker ke dalam kabupaten aktif.
 - Perhitungan `bounds` boundary sekarang tidak lagi bergantung pada jalur import runtime yang sehat di `tsx` dev tetapi pecah di bundle produksi; `server/region-boundaries.ts` kini menghitung bounds langsung dari koordinat GeoJSON.
+- Spatial point-in-polygon check server sekarang memakai named import Turf yang tetap stabil setelah externalized CJS bundling, sehingga parity dev vs production kembali konsisten.
 
 ### Notes
-- Root cause mismatch VPS vs localhost: staging/prod bundle gagal memuat boundary kabupaten dengan `500`, sehingga UI jatuh ke fallback center/zoom dan polygon kabupaten/kecamatan tidak muncul walau shell stage header sudah termuat.
-- Setelah fix ini, route `GET /api/region-boundaries/active/kabupaten` kembali `200` di mode production lokal yang mem-boot `dist/index.cjs`, sehingga staging perlu redeploy commit terbaru untuk mendapatkan perilaku yang sama.
+- Root cause mismatch VPS vs localhost: staging/prod bundle memecahkan jalur Turf yang diimport sebagai `default`, sehingga endpoint boundary aktif dan internal map filter bisa `500` walau instance lokal `tsx` dev terlihat sehat.
+- Setelah fix ini, route `GET /api/region-boundaries/active/kabupaten` dan `GET /api/objek-pajak/map` kembali `200` di mode production lokal yang mem-boot `dist/index.cjs`, sehingga staging perlu redeploy commit terbaru untuk mendapatkan perilaku yang sama.
 
 ## Phase 2.16n — Public Map UX Polish
 

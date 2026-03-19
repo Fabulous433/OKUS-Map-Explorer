@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
+import { booleanPointInPolygon } from "@turf/boolean-point-in-polygon";
 import type {
   GeoJsonFeature,
   GeoJsonFeatureCollection,
