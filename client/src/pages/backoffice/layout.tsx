@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useLocation, useRoute } from "wouter";
-import { BarChart3, Users, Building2, Map, ChevronRight, Sparkles, Database, LogOut, User, Settings, FileSpreadsheet } from "lucide-react";
+import { BarChart3, Users, Building2, Map, ChevronRight, Sparkles, Database, LogOut, User, Settings, FileSpreadsheet, PenTool } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { regionConfig } from "@/lib/region-config";
@@ -15,16 +15,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const NAV_ITEMS = [
+export const BACKOFFICE_NAV_ITEMS = [
   { href: "/backoffice", label: "Dashboard", icon: BarChart3, match: "/backoffice" },
   { href: "/backoffice/wajib-pajak", label: "Wajib Pajak", icon: Users, match: "/backoffice/wajib-pajak" },
   { href: "/backoffice/objek-pajak", label: "Objek Pajak", icon: Building2, match: "/backoffice/objek-pajak" },
   { href: "/backoffice/master-data", label: "Master Data", icon: Database, match: "/backoffice/master-data", roles: ["admin"] as const },
+  { href: "/backoffice/batas-wilayah", label: "Batas Wilayah", icon: PenTool, match: "/backoffice/batas-wilayah", roles: ["admin"] as const },
   { href: "/backoffice/data-tools", label: "Data Tools", icon: FileSpreadsheet, match: "/backoffice/data-tools" },
   { href: "/backoffice/mockup-form", label: "Mockup Form", icon: Sparkles, match: "/backoffice/mockup-form" },
 ];
 
-function NavItem({ href, label, icon: Icon, match }: (typeof NAV_ITEMS)[number]) {
+function NavItem({ href, label, icon: Icon, match }: (typeof BACKOFFICE_NAV_ITEMS)[number]) {
   const [isActive] = useRoute(match);
 
   return (
@@ -75,7 +76,7 @@ export default function BackofficeLayout({
     return null;
   }
 
-  const visibleNavItems = NAV_ITEMS.filter((item) => {
+  const visibleNavItems = BACKOFFICE_NAV_ITEMS.filter((item) => {
     if (!item.roles) return true;
     return hasRole(item.roles as readonly AppRole[]);
   });

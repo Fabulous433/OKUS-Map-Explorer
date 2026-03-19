@@ -14,6 +14,7 @@ import BackofficeFormMockup from "@/pages/backoffice/form-mockup";
 import BackofficeMasterData from "@/pages/backoffice/master-data";
 import BackofficeDataTools from "@/pages/backoffice/data-tools";
 import BackofficeLogin from "@/pages/backoffice/login";
+import BackofficeBatasWilayah from "@/pages/backoffice/batas-wilayah";
 import { AuthProvider } from "@/lib/auth";
 
 function Router() {
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/backoffice/objek-pajak/:id" component={BackofficeObjekPajakDetail} />
       <Route path="/backoffice/objek-pajak" component={BackofficeObjekPajak} />
       <Route path="/backoffice/master-data" component={BackofficeMasterData} />
+      <Route path="/backoffice/batas-wilayah" component={BackofficeBatasWilayah} />
       <Route path="/backoffice/data-tools" component={BackofficeDataTools} />
       <Route path="/backoffice/mockup-form" component={BackofficeFormMockup} />
       <Route component={NotFound} />
