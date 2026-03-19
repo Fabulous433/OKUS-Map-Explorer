@@ -1,5 +1,19 @@
 # Changelog
 
+## Phase 2.16o — Public Map Production Boundary Parity
+
+### Added
+- Production-bundle regression coverage for active region boundaries:
+  - [tests/integration/region-boundary-production-bundle.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/region-boundary-production-bundle.integration.ts)
+
+### Fixed
+- Route `/api/region-boundaries/active/*` tidak lagi gagal hanya pada output server production `dist/index.cjs`.
+- Perhitungan `bounds` boundary sekarang tidak lagi bergantung pada jalur import runtime yang sehat di `tsx` dev tetapi pecah di bundle produksi; `server/region-boundaries.ts` kini menghitung bounds langsung dari koordinat GeoJSON.
+
+### Notes
+- Root cause mismatch VPS vs localhost: staging/prod bundle gagal memuat boundary kabupaten dengan `500`, sehingga UI jatuh ke fallback center/zoom dan polygon kabupaten/kecamatan tidak muncul walau shell stage header sudah termuat.
+- Setelah fix ini, route `GET /api/region-boundaries/active/kabupaten` kembali `200` di mode production lokal yang mem-boot `dist/index.cjs`, sehingga staging perlu redeploy commit terbaru untuk mendapatkan perilaku yang sama.
+
 ## Phase 2.16n — Public Map UX Polish
 
 ### Added

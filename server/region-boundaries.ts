@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import bbox from "@turf/bbox";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import type {
   GeoJsonFeature,
@@ -117,7 +116,42 @@ export async function getActiveRegionBounds(): Promise<RegionBoundaryBounds> {
 }
 
 function getBoundaryBounds(boundary: GeoJsonFeatureCollection): RegionBoundaryBounds {
-  const [minLng, minLat, maxLng, maxLat] = bbox(boundary as any);
+  let minLng = Number.POSITIVE_INFINITY;
+  let minLat = Number.POSITIVE_INFINITY;
+  let maxLng = Number.NEGATIVE_INFINITY;
+  let maxLat = Number.NEGATIVE_INFINITY;
+
+  const updateBoundsFromCoordinates = (coordinates: unknown) => {
+    if (!Array.isArray(coordinates)) {
+      return;
+    }
+
+    if (
+      coordinates.length >= 2 &&
+      typeof coordinates[0] === "number" &&
+      typeof coordinates[1] === "number"
+    ) {
+      const [lng, lat] = coordinates;
+      minLng = Math.min(minLng, lng);
+      minLat = Math.min(minLat, lat);
+      maxLng = Math.max(maxLng, lng);
+      maxLat = Math.max(maxLat, lat);
+      return;
+    }
+
+    for (const entry of coordinates) {
+      updateBoundsFromCoordinates(entry);
+    }
+  };
+
+  for (const feature of boundary.features) {
+    updateBoundsFromCoordinates(feature.geometry?.coordinates);
+  }
+
+  if (![minLng, minLat, maxLng, maxLat].every(Number.isFinite)) {
+    throw new Error("Boundary collection does not contain valid coordinates");
+  }
+
   return {
     minLng,
     minLat,
