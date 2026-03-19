@@ -136,6 +136,7 @@
 - Update 2026-03-18 (desktop tuning pass): evidence yang sama sekarang juga memuat addendum desktop untuk selected-desa-clear, ESRI zoom-safe `16`, dan marker-visible flow `Muara Dua -> Batu Belang Jaya`.
 - Update 2026-03-19 (mobile compact shell pass): evidence yang sama sekarang juga memuat addendum mobile untuk header title-only `18px` dan chip filter desa ringkas `Semua/WLT`.
 - Update 2026-03-19 (ux polish local smoke pass): evidence yang sama sekarang juga memuat addendum UX polish untuk quick-jump `Muara Dua -> Batu Belang Jaya`, desktop OP rail, mobile bottom sheet detail, route restore `stage/desa/filter`, dan basemap memory `Carto` setelah refresh.
+- Update 2026-03-19 (staging blocker): repo/env lokal masih hanya memuat URL local `http://127.0.0.1:5000` dan placeholder `staging-map.domainkamu.com`. Eksekusi `7.0` tetap blocked sampai base URL staging nyata diberikan atau tersedia di environment.
   - [ ] 7.1 Jalankan browser smoke berdasarkan `docs/uat/public-map-wfs-staging-handoff.md`
   - [ ] 7.2 Simpan evidence PASS/FAIL untuk desktop, mobile, idle browse-first state, empty state, dan error state
   - [ ] 7.3 Konfirmasi apakah staging tetap memakai `backend-proxy` atau rollback sementara ke `internal-api`
