@@ -1,5 +1,25 @@
 # Changelog
 
+## Phase 2.16p — Public Map Staging Validation
+
+### Added
+- Evidence staging smoke baru:
+  - [docs/uat/public-map-wfs-staging-smoke-2026-03-19.md](/D:/Code/OKUS-Map-Explorer/docs/uat/public-map-wfs-staging-smoke-2026-03-19.md)
+
+### Notes
+- Smoke staging nyata pada `https://staging-map.ucup.me` sekarang sudah terekam untuk:
+  - desktop root
+  - desktop `kecamatan`
+  - desktop `desa` positive + popup
+  - desktop empty state
+  - mobile root
+  - mobile `desa` positive + bottom sheet
+  - mobile empty state
+  - focus-link existing
+  - basemap cycle sampai `ESRI Sat`
+- Mode runtime final yang teramati saat smoke staging ini adalah `internal-api`, karena marker aktif dimuat dari `/api/objek-pajak/map`, sementara `map-wfs` tetap sehat hanya sebagai spot-check API.
+- Error-state browser belum dipaksa di staging karena tidak ada trigger UI aman dan Playwright CLI pada host ini tidak menyediakan network mocking yang stabil; status itu dicatat jujur sebagai `NOT EXERCISED`.
+
 ## Phase 2.16o — Public Map Production Boundary Parity
 
 ### Added

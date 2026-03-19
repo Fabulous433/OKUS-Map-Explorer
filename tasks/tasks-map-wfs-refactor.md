@@ -128,7 +128,7 @@
     - area yang perlu diamati saat UAT
     - Output: `docs/uat/public-map-wfs-staging-handoff.md`
 
-- [ ] 7.0 Execute manual staging validation
+- [x] 7.0 Execute manual staging validation
   - Catatan: local pre-staging smoke sudah direkam di `docs/uat/public-map-wfs-local-smoke-2026-03-12.md`, lalu dilengkapi evidence frontend baru di `docs/uat/public-map-browse-first-static-smoke-2026-03-13.md`, `docs/uat/public-map-city-first-local-smoke-2026-03-13.md`, dan smoke Playwright lokal terbaru di `docs/uat/public-map-playwright-local-smoke-2026-03-17.md`.
   - Update 2026-03-17: smoke lokal boundary drill-down sudah PASS untuk klik `kecamatan` (`Muara Dua`) dan `desa` (`Batu Belang Jaya`); task ini tetap terbuka karena target staging nyata belum dijalankan.
 - Update 2026-03-18: baseline UI publik sekarang sudah bergeser ke model stage drill-down `kabupaten -> kecamatan -> desa` dengan marker OP hanya aktif pada tahap desa. Smoke browser untuk baseline baru ini masih pending dan harus menggantikan asumsi atlas panel lama saat UAT staging dijalankan.
@@ -138,6 +138,18 @@
 - Update 2026-03-19 (ux polish local smoke pass): evidence yang sama sekarang juga memuat addendum UX polish untuk quick-jump `Muara Dua -> Batu Belang Jaya`, desktop OP rail, mobile bottom sheet detail, route restore `stage/desa/filter`, dan basemap memory `Carto` setelah refresh.
 - Update 2026-03-19 (staging blocker): repo/env lokal masih hanya memuat URL local `http://127.0.0.1:5000` dan placeholder `staging-map.domainkamu.com`. Eksekusi `7.0` tetap blocked sampai base URL staging nyata diberikan atau tersedia di environment.
 - Update 2026-03-19 (production parity fix): mismatch staging vs localhost berhasil di-root-cause ke jalur Turf default-import yang sehat di `tsx` dev tetapi gagal di `dist/index.cjs`. Dampaknya bukan hanya `/api/region-boundaries/active/*`, tetapi juga `/api/objek-pajak/map` saat memfilter marker ke dalam kabupaten aktif. Fix sudah masuk di `server/region-boundaries.ts`, dan regression produksi sekarang mem-boot server bundle lalu assert boundary route dan internal map route sama-sama `200`. Staging perlu redeploy commit ini sebelum smoke Task `7.0` dilanjutkan.
-  - [ ] 7.1 Jalankan browser smoke berdasarkan `docs/uat/public-map-wfs-staging-handoff.md`
-  - [ ] 7.2 Simpan evidence PASS/FAIL untuk desktop, mobile, idle browse-first state, empty state, dan error state
-  - [ ] 7.3 Konfirmasi apakah staging tetap memakai `backend-proxy` atau rollback sementara ke `internal-api`
+  - Update 2026-03-19 (staging smoke executed): smoke nyata pada `https://staging-map.ucup.me` sudah direkam di `docs/uat/public-map-wfs-staging-smoke-2026-03-19.md`. Hasil utamanya:
+    - PASS: desktop root `OKU Selatan`
+    - PASS: desktop stage `Muara Dua`
+    - PASS: desktop stage `Bumi Agung` dengan `1 OP aktif` dan popup `Cemara Homestay`
+    - PASS: desktop empty state `Batu Belang Jaya`
+    - PASS: mobile root compact header
+    - PASS: mobile stage `Bumi Agung` dengan bottom sheet OP
+    - PASS: mobile empty state `Batu Belang Jaya`
+    - PASS: focus-link existing `focusOpId/focusLat/focusLng`
+    - PASS: basemap cycle sampai `ESRI Sat`
+    - NOT EXERCISED: forced error-state browser di staging, karena tidak ada trigger UI aman dan tool Playwright yang tersedia tidak menyediakan network mocking stabil
+  - [x] 7.1 Jalankan browser smoke berdasarkan `docs/uat/public-map-wfs-staging-handoff.md`
+  - [x] 7.2 Simpan evidence PASS/FAIL untuk desktop, mobile, idle browse-first state, empty state, dan error state
+  - [x] 7.3 Konfirmasi apakah staging tetap memakai `backend-proxy` atau rollback sementara ke `internal-api`
+    - Konfirmasi 2026-03-19: runtime final yang teramati di staging adalah `internal-api`, karena request marker aktif datang dari `/api/objek-pajak/map`. Endpoint WFS `/api/objek-pajak/map-wfs` tetap sehat (`200`/`400` spot-check), tetapi tidak menjadi jalur marker aktif saat smoke ini.
