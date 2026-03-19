@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { booleanPointInPolygon } from "@turf/boolean-point-in-polygon";
+import { and, desc, eq } from "drizzle-orm";
 import type {
   GeoJsonFeature,
   GeoJsonFeatureCollection,
@@ -10,6 +11,8 @@ import type {
   RegionBoundaryResponse,
   RegionBoundaryScope,
 } from "@shared/region-boundary";
+import { regionBoundaryRevision, regionBoundaryRevisionFeature } from "@shared/schema";
+import { mergePublishedDesaOverrides, type PublishedBoundaryFeature } from "./region-boundary-overrides";
 
 type ActiveRegionBundle = {
   regionKey: "okus";
@@ -42,6 +45,8 @@ const regionDataDir = path.join(
 );
 
 let activeRegionBundlePromise: Promise<ActiveRegionBundle> | null = null;
+let mergedDesaPreciseBoundaryPromise: Promise<GeoJsonFeatureCollection> | null = null;
+let mergedDesaLightBoundaryPromise: Promise<GeoJsonFeatureCollection> | null = null;
 
 async function readCollection(fileName: string) {
   const raw = await readFile(path.join(regionDataDir, fileName), "utf-8");
@@ -75,6 +80,12 @@ export async function getActiveRegionBundle() {
   return activeRegionBundlePromise;
 }
 
+export function invalidateActiveRegionBoundaryCache() {
+  activeRegionBundlePromise = null;
+  mergedDesaPreciseBoundaryPromise = null;
+  mergedDesaLightBoundaryPromise = null;
+}
+
 export async function isPointInsideActiveKabupaten(longitude: number, latitude: number) {
   const bundle = await getActiveRegionBundle();
   return bundle.kabupaten.precise.features.some((feature) =>
@@ -106,8 +117,8 @@ export async function findContainingKecamatan(longitude: number, latitude: numbe
 }
 
 export async function findContainingDesa(longitude: number, latitude: number) {
-  const bundle = await getActiveRegionBundle();
-  return findContainingFeature(bundle.desa.precise, longitude, latitude, "WADMKD");
+  const boundary = await getMergedDesaBoundary("precise");
+  return findContainingFeature(boundary, longitude, latitude, "WADMKD");
 }
 
 export async function getActiveRegionBounds(): Promise<RegionBoundaryBounds> {
@@ -177,6 +188,71 @@ function filterDesaBoundaryByKecamatan(
   };
 }
 
+async function loadPublishedDesaOverrides(): Promise<PublishedBoundaryFeature[]> {
+  const { db } = await import("./storage");
+  const rows = await db
+    .select({
+      revisionId: regionBoundaryRevision.id,
+      publishedAt: regionBoundaryRevision.publishedAt,
+      boundaryKey: regionBoundaryRevisionFeature.boundaryKey,
+      kecamatanId: regionBoundaryRevisionFeature.kecamatanId,
+      kelurahanId: regionBoundaryRevisionFeature.kelurahanId,
+      namaDesa: regionBoundaryRevisionFeature.namaDesa,
+      geometry: regionBoundaryRevisionFeature.geometry,
+    })
+    .from(regionBoundaryRevisionFeature)
+    .innerJoin(regionBoundaryRevision, eq(regionBoundaryRevisionFeature.revisionId, regionBoundaryRevision.id))
+    .where(
+      and(
+        eq(regionBoundaryRevision.regionKey, "okus"),
+        eq(regionBoundaryRevision.level, "desa"),
+        eq(regionBoundaryRevision.status, "published"),
+      ),
+    )
+    .orderBy(desc(regionBoundaryRevision.publishedAt), desc(regionBoundaryRevision.id), desc(regionBoundaryRevisionFeature.id));
+
+  const overrideByBoundaryKey = new Map<string, PublishedBoundaryFeature>();
+  for (const row of rows) {
+    if (!overrideByBoundaryKey.has(row.boundaryKey)) {
+      overrideByBoundaryKey.set(row.boundaryKey, {
+        boundaryKey: row.boundaryKey,
+        kecamatanId: row.kecamatanId,
+        kelurahanId: row.kelurahanId,
+        namaDesa: row.namaDesa,
+        geometry: row.geometry as PublishedBoundaryFeature["geometry"],
+      });
+    }
+  }
+
+  return Array.from(overrideByBoundaryKey.values());
+}
+
+async function getMergedDesaBoundary(precision: RegionBoundaryPrecision) {
+  const cachedPromise =
+    precision === "precise" ? mergedDesaPreciseBoundaryPromise : mergedDesaLightBoundaryPromise;
+  if (cachedPromise) {
+    return cachedPromise;
+  }
+
+  const nextPromise = (async () => {
+    const bundle = await getActiveRegionBundle();
+    const overrides = await loadPublishedDesaOverrides();
+    const baseBoundary = precision === "precise" ? bundle.desa.precise : bundle.desa.light;
+    return mergePublishedDesaOverrides({
+      baseBoundary,
+      overrides,
+    });
+  })();
+
+  if (precision === "precise") {
+    mergedDesaPreciseBoundaryPromise = nextPromise;
+  } else {
+    mergedDesaLightBoundaryPromise = nextPromise;
+  }
+
+  return nextPromise;
+}
+
 export async function getActiveRegionBoundary(
   level: RegionBoundaryLevel,
   precision: RegionBoundaryPrecision,
@@ -193,7 +269,7 @@ export async function getActiveRegionBoundary(
           ? bundle.kecamatan.light
           : bundle.kecamatan.precise
         : filterDesaBoundaryByKecamatan(
-            precision === "light" ? bundle.desa.light : bundle.desa.precise,
+            await getMergedDesaBoundary(precision),
             String(scope?.kecamatanName ?? "").trim(),
           );
 
