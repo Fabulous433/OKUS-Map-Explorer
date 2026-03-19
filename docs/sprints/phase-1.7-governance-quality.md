@@ -78,7 +78,7 @@ npm run test:integration
 
 ## Risiko & Mitigasi
 - Risiko: `drizzle-kit push` prompt interaktif constraint (blocking CI/local).
-  - Mitigasi: one-off SQL migration manual via `script/phase-1.7-governance-quality.sql`.
+  - Mitigasi: one-off SQL migration manual via `script/phase-1.7-governance-quality.sql`, termasuk normalisasi legacy unique constraint name agar state schema tetap cocok dengan Drizzle.
 - Risiko: data lama OP otomatis tidak `verified`.
   - Mitigasi: backfill status existing ke `verified` saat migrasi manual.
 

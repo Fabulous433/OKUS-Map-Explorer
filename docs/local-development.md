@@ -74,6 +74,7 @@ Catatan:
 ```bash
 docker exec -i okus-postgres psql -U okus_dev -d okus_map_explorer < script/phase-1.7-governance-quality.sql
 ```
+- Fallback di atas juga menormalkan legacy unique constraint name `*_key -> *_unique` untuk `master_kecamatan` dan `master_rekening_pajak`, lalu menghapus duplicate index lama bila ada.
 - Jika DB lama belum punya kolom role untuk auth:
 ```bash
 docker exec -i okus-postgres psql -U okus_dev -d okus_map_explorer < script/phase-1.8-auth-rbac.sql

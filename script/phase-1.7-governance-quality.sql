@@ -1,5 +1,7 @@
 -- Phase 1.7 Governance & Quality (manual SQL fallback)
 -- Use when `drizzle-kit push` is blocked by interactive constraint prompt.
+-- This fallback also normalizes legacy unique constraint names on older
+-- local databases so Drizzle no longer detects false-positive drift.
 
 ALTER TABLE objek_pajak ADD COLUMN IF NOT EXISTS status_verifikasi varchar(20);
 ALTER TABLE objek_pajak ALTER COLUMN status_verifikasi SET DEFAULT 'draft';
@@ -24,19 +26,51 @@ CREATE TABLE IF NOT EXISTS audit_log (
 
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_class c
-    JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE c.relname = 'master_kecamatan_cpm_kode_kec_unique' AND n.nspname = 'public'
+  IF EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'master_kecamatan_cpm_kode_kec_key'
+      AND conrelid = 'master_kecamatan'::regclass
+  ) AND NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'master_kecamatan_cpm_kode_kec_unique'
+      AND conrelid = 'master_kecamatan'::regclass
   ) THEN
-    IF NOT EXISTS (
-      SELECT cpm_kode_kec
-      FROM master_kecamatan
-      GROUP BY cpm_kode_kec
-      HAVING count(*) > 1
-      LIMIT 1
+    IF EXISTS (
+      SELECT 1
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE c.relname = 'master_kecamatan_cpm_kode_kec_unique'
+        AND n.nspname = 'public'
     ) THEN
-      CREATE UNIQUE INDEX master_kecamatan_cpm_kode_kec_unique ON master_kecamatan(cpm_kode_kec);
+      EXECUTE 'DROP INDEX public.master_kecamatan_cpm_kode_kec_unique';
     END IF;
+
+    EXECUTE 'ALTER TABLE public.master_kecamatan RENAME CONSTRAINT master_kecamatan_cpm_kode_kec_key TO master_kecamatan_cpm_kode_kec_unique';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'master_rekening_pajak_kode_rekening_key'
+      AND conrelid = 'master_rekening_pajak'::regclass
+  ) AND NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'master_rekening_pajak_kode_rekening_unique'
+      AND conrelid = 'master_rekening_pajak'::regclass
+  ) THEN
+    IF EXISTS (
+      SELECT 1
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE c.relname = 'master_rekening_pajak_kode_rekening_unique'
+        AND n.nspname = 'public'
+    ) THEN
+      EXECUTE 'DROP INDEX public.master_rekening_pajak_kode_rekening_unique';
+    END IF;
+
+    EXECUTE 'ALTER TABLE public.master_rekening_pajak RENAME CONSTRAINT master_rekening_pajak_kode_rekening_key TO master_rekening_pajak_kode_rekening_unique';
   END IF;
 END $$;
