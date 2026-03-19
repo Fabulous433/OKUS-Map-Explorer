@@ -37,8 +37,10 @@ export function BoundaryEditorShell(props: {
   lastSavedLabel?: string | null;
   mapCanvas?: ReactNode;
   rightPanel?: ReactNode;
+  rollbackRevisionId?: number | null;
   onSelectKecamatan?: (value: string) => void;
   onSelectBoundaryKey?: (value: string) => void;
+  onRollbackRevision?: (revisionId: number) => void;
 }) {
   const {
     selectedKecamatanId,
@@ -50,8 +52,10 @@ export function BoundaryEditorShell(props: {
     lastSavedLabel = null,
     mapCanvas,
     rightPanel,
+    rollbackRevisionId = null,
     onSelectKecamatan,
     onSelectBoundaryKey,
+    onRollbackRevision,
   } = props;
 
   return (
@@ -154,6 +158,18 @@ export function BoundaryEditorShell(props: {
                       ? `${revision.impactSummary.impactedCount} OP terdampak`
                       : "Belum ada impact summary"}
                   </p>
+                  {revision.status === "published" && onRollbackRevision ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-3 w-full justify-start font-mono text-[11px] font-bold"
+                      onClick={() => onRollbackRevision(revision.id)}
+                      disabled={rollbackRevisionId === revision.id}
+                    >
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      {rollbackRevisionId === revision.id ? "Memproses Rollback..." : "Rollback Revision"}
+                    </Button>
+                  ) : null}
                 </article>
               ))
             )}

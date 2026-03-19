@@ -1,7 +1,7 @@
-- [ ] Task 1: Lock admin boundary override contract and database shape
-- [ ] Task 2: Add runtime merge layer for published desa overrides
-- [ ] Task 3: Add admin draft, impact preview, and revision APIs
-- [ ] Task 4: Add publish, reconcile, and rollback pipeline
-- [ ] Task 5: Add backoffice route, admin shell, and revision workspace
-- [ ] Task 6: Add polygon editing workspace with upload and vertex editing
-- [ ] Task 7: Add preview, publish, rollback UX, and final docs
+- [x] Task 1: Lock admin boundary override contract and database shape
+- [x] Task 2: Add runtime merge layer for published desa overrides
+- [x] Task 3: Add admin draft, impact preview, and revision APIs
+- [x] Task 4: Add publish, reconcile, and rollback pipeline
+- [x] Task 5: Add backoffice route, admin shell, and revision workspace
+- [x] Task 6: Add polygon editing workspace with upload and vertex editing
+- [x] Task 7: Add preview, publish, rollback UX, and final docs

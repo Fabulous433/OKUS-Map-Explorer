@@ -152,6 +152,17 @@ export function createBoundaryImpactPanelModel(params: {
   };
 }
 
+export function createBoundaryPublishSuccessDescription(params: {
+  movedCount: number;
+  mode: "publish-only" | "publish-and-reconcile";
+}) {
+  if (params.mode === "publish-and-reconcile") {
+    return `Boundary berhasil dipublish. ${params.movedCount} OP ikut direkonsiliasi ke desa baru.`;
+  }
+
+  return `Boundary berhasil dipublish. ${params.movedCount} OP terdampak tercatat pada preview.`;
+}
+
 export function findBoundaryFeatureByKey(
   boundary: GeoJsonFeatureCollection | null | undefined,
   boundaryKey: string,

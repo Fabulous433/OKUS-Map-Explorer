@@ -1,5 +1,32 @@
 # Changelog
 
+## Phase 2.16q — Backoffice Desa Boundary Editor
+
+### Added
+- Backoffice admin editor untuk override boundary desa OKU Selatan:
+  - [client/src/pages/backoffice/batas-wilayah.tsx](/D:/Code/OKUS-Map-Explorer/client/src/pages/backoffice/batas-wilayah.tsx)
+  - [client/src/components/backoffice/boundary-editor-shell.tsx](/D:/Code/OKUS-Map-Explorer/client/src/components/backoffice/boundary-editor-shell.tsx)
+  - [client/src/components/backoffice/boundary-editor-map.tsx](/D:/Code/OKUS-Map-Explorer/client/src/components/backoffice/boundary-editor-map.tsx)
+  - [client/src/components/backoffice/boundary-editor-impact-panel.tsx](/D:/Code/OKUS-Map-Explorer/client/src/components/backoffice/boundary-editor-impact-panel.tsx)
+- Query/model helper frontend untuk editor boundary:
+  - [client/src/lib/backoffice/boundary-editor-query.ts](/D:/Code/OKUS-Map-Explorer/client/src/lib/backoffice/boundary-editor-query.ts)
+  - [client/src/lib/backoffice/boundary-editor-model.ts](/D:/Code/OKUS-Map-Explorer/client/src/lib/backoffice/boundary-editor-model.ts)
+- Regression suites baru:
+  - [tests/integration/backoffice-boundary-editor-shell.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/backoffice-boundary-editor-shell.integration.ts)
+  - [tests/integration/boundary-editor-model.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/boundary-editor-model.integration.ts)
+  - [tests/integration/backoffice-boundary-editor-publish.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/backoffice-boundary-editor-publish.integration.ts)
+- Smoke evidence batch boundary editor:
+  - [docs/uat/backoffice-boundary-editor-smoke-2026-03-20.md](/D:/Code/OKUS-Map-Explorer/docs/uat/backoffice-boundary-editor-smoke-2026-03-20.md)
+
+### Improved
+- Admin sekarang bisa memilih `kecamatan` dan `desa/kelurahan`, membuka geometry aktif scoped OKU Selatan, mengedit vertex polygon via `Leaflet Draw`, upload GeoJSON pengganti, menyimpan draft, preview impact, publish, dan rollback dari backoffice.
+- CTA publish kini terkunci di belakang preview impact yang sukses, dengan mode default `publish-and-reconcile`.
+- Revision list backoffice sekarang menampilkan rollback CTA hanya untuk revision published.
+
+### Notes
+- Runtime tetap hanya memuat asset GeoJSON OKU Selatan dan published override dari PostgreSQL; shapefile nasional tidak dibawa ke runtime aplikasi.
+- Dependency editor GIS yang dipakai pada batch ini adalah `leaflet-draw` dan build frontend production tervalidasi hijau setelah dependency ditambahkan.
+
 ## Phase 2.16p — Public Map Staging Validation
 
 ### Added

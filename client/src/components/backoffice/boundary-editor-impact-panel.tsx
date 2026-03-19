@@ -1,4 +1,5 @@
 import { Eye, Rocket, RotateCcw, Save } from "lucide-react";
+import type { ChangeEvent } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,9 +27,17 @@ export function BoundaryEditorImpactPanel(props: {
   hasDraftChanges: boolean;
   publishedRevisionCount: number;
   geometryStatusLabel: string;
+  publishMode?: "publish-only" | "publish-and-reconcile";
+  onPublishModeChange?: (value: "publish-only" | "publish-and-reconcile") => void;
   saveDisabled?: boolean;
+  previewDisabled?: boolean;
+  publishDisabled?: boolean;
   isSaving?: boolean;
+  isPreviewing?: boolean;
+  isPublishing?: boolean;
   onSaveDraft?: () => void;
+  onPreviewImpact?: () => void;
+  onPublish?: () => void;
 }) {
   const model = createBoundaryImpactPanelModel({
     impactedCount: props.impactedCount,
@@ -53,9 +62,29 @@ export function BoundaryEditorImpactPanel(props: {
           </div>
         </CardHeader>
         <CardContent className="grid gap-2">
-          <Button type="button" variant="outline" className="justify-start font-mono text-xs font-bold" disabled={!model.canPreview}>
+          <div className="rounded-lg border border-black/10 bg-white p-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">Publish mode</p>
+            <select
+              className="mt-2 h-10 w-full rounded-lg border border-black/10 bg-white px-3 font-mono text-xs font-bold"
+              value={props.publishMode ?? "publish-and-reconcile"}
+              onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                props.onPublishModeChange?.(event.target.value as "publish-only" | "publish-and-reconcile")
+              }
+              data-testid="boundary-editor-publish-mode"
+            >
+              <option value="publish-and-reconcile">publish-and-reconcile</option>
+              <option value="publish-only">publish-only</option>
+            </select>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="justify-start font-mono text-xs font-bold"
+            disabled={props.previewDisabled ?? !model.canPreview}
+            onClick={props.onPreviewImpact}
+          >
             <Eye className="mr-2 h-4 w-4" />
-            Preview Impact
+            {props.isPreviewing ? "Memproses Preview..." : "Preview Impact"}
           </Button>
           <Button
             type="button"
@@ -66,9 +95,15 @@ export function BoundaryEditorImpactPanel(props: {
             <Save className="mr-2 h-4 w-4" />
             {props.isSaving ? "Menyimpan..." : "Save Draft"}
           </Button>
-          <Button type="button" variant="outline" className="justify-start font-mono text-xs font-bold" disabled={!model.canPublish}>
+          <Button
+            type="button"
+            variant="outline"
+            className="justify-start font-mono text-xs font-bold"
+            disabled={props.publishDisabled ?? !model.canPublish}
+            onClick={props.onPublish}
+          >
             <Rocket className="mr-2 h-4 w-4" />
-            Publish
+            {props.isPublishing ? "Publishing..." : "Publish"}
           </Button>
           <Button type="button" variant="outline" className="justify-start font-mono text-xs font-bold" disabled>
             <RotateCcw className="mr-2 h-4 w-4" />
