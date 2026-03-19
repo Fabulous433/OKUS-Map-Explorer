@@ -1,13 +1,19 @@
 import type { ChangeEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FeatureGroup, GeoJSON, MapContainer, TileLayer, useMap } from "react-leaflet";
-import { Upload } from "lucide-react";
+import { Layers3, Upload } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw";
 import "leaflet-draw/dist/leaflet.draw.css";
 import { Button } from "@/components/ui/button";
-import { parseBoundaryUpload } from "@/lib/backoffice/boundary-editor-model";
+import {
+  BOUNDARY_EDITOR_BASE_MAPS,
+  DEFAULT_BOUNDARY_EDITOR_BASE_MAP_KEY,
+  countBoundaryGeometryVertices,
+  parseBoundaryUpload,
+  simplifyBoundaryEditingGeometry,
+} from "@/lib/backoffice/boundary-editor-model";
 import type { RegionBoundaryGeometry } from "@shared/region-boundary-admin";
 import type { GeoJsonFeatureCollection } from "@shared/region-boundary";
 
@@ -63,6 +69,10 @@ function EditableBoundaryLayer(props: {
 }) {
   const map = useMap();
   const featureGroupRef = useRef<L.FeatureGroup | null>(null);
+  const editableGeometry = useMemo(
+    () => simplifyBoundaryEditingGeometry(props.geometry),
+    [props.geometry],
+  );
 
   useEffect(() => {
     if (!featureGroupRef.current) {
@@ -72,12 +82,12 @@ function EditableBoundaryLayer(props: {
     const featureGroup = featureGroupRef.current;
     featureGroup.clearLayers();
 
-    if (props.geometry) {
+    if (editableGeometry) {
       L.geoJSON(
         {
           type: "Feature",
           properties: {},
-          geometry: props.geometry,
+          geometry: editableGeometry,
         } as GeoJSON.Feature,
         {
           style: {
@@ -92,11 +102,11 @@ function EditableBoundaryLayer(props: {
       });
     }
 
-    const bounds = getGeometryBounds(props.boundary, props.geometry);
+    const bounds = getGeometryBounds(props.boundary, editableGeometry);
     if (bounds.isValid()) {
       map.fitBounds(bounds, { padding: [24, 24] });
     }
-  }, [map, props.boundary, props.geometry]);
+  }, [editableGeometry, map, props.boundary]);
 
   useEffect(() => {
     if (!featureGroupRef.current) {
@@ -155,6 +165,9 @@ export function BoundaryEditorMap(props: {
   onGeometryChange: (geometry: RegionBoundaryGeometry) => void;
 }) {
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [baseMapKey, setBaseMapKey] = useState<keyof typeof BOUNDARY_EDITOR_BASE_MAPS>(
+    DEFAULT_BOUNDARY_EDITOR_BASE_MAP_KEY,
+  );
 
   const selectedFeatureCollection = useMemo(() => {
     if (!props.boundary || !props.selectedBoundaryKey) {
@@ -169,6 +182,13 @@ export function BoundaryEditorMap(props: {
       ),
     };
   }, [props.boundary, props.selectedBoundaryKey]);
+  const editableGeometry = useMemo(
+    () => simplifyBoundaryEditingGeometry(props.geometry),
+    [props.geometry],
+  );
+  const editableVertexCount = countBoundaryGeometryVertices(editableGeometry);
+  const originalVertexCount = countBoundaryGeometryVertices(props.geometry);
+  const activeBaseMap = BOUNDARY_EDITOR_BASE_MAPS[baseMapKey];
 
   async function handleUploadChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -194,21 +214,40 @@ export function BoundaryEditorMap(props: {
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">Active geometry</p>
           <p className="mt-1 font-mono text-sm font-bold text-black/85">{props.selectedDesaLabel || "Pilih desa/kelurahan"}</p>
+          <p className="mt-1 font-mono text-[11px] text-black/55">
+            Handle edit: {editableVertexCount} titik
+            {originalVertexCount > editableVertexCount ? ` dari ${originalVertexCount} vertex asli` : ""}
+          </p>
         </div>
-        <label>
-          <input
-            type="file"
-            accept=".geojson,application/geo+json,application/json"
-            className="sr-only"
-            onChange={handleUploadChange}
-          />
-          <Button type="button" variant="outline" className="font-mono text-xs font-bold" asChild>
-            <span>
-              <Upload className="mr-2 h-4 w-4" />
-              Upload GeoJSON
-            </span>
-          </Button>
-        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <label>
+            <input
+              type="file"
+              accept=".geojson,application/geo+json,application/json"
+              className="sr-only"
+              onChange={handleUploadChange}
+            />
+            <Button type="button" variant="outline" className="font-mono text-xs font-bold" asChild>
+              <span>
+                <Upload className="mr-2 h-4 w-4" />
+                Upload GeoJSON
+              </span>
+            </Button>
+          </label>
+          <label className="flex items-center gap-2 rounded-lg border border-black/10 bg-white px-3 py-2">
+            <Layers3 className="h-4 w-4 text-black/60" />
+            <span className="font-mono text-[11px] font-bold uppercase text-black/60">Basemap</span>
+            <select
+              value={baseMapKey}
+              onChange={(event) => setBaseMapKey(event.target.value as keyof typeof BOUNDARY_EDITOR_BASE_MAPS)}
+              className="bg-transparent font-mono text-xs font-bold"
+            >
+              <option value="esri">ESRI</option>
+              <option value="osm">OSM</option>
+              <option value="carto">CartoDB</option>
+            </select>
+          </label>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-black/10" data-testid="boundary-editor-map-live">
@@ -219,8 +258,9 @@ export function BoundaryEditorMap(props: {
           zoomControl={true}
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution={activeBaseMap.attribution}
+            url={activeBaseMap.url}
+            maxZoom={activeBaseMap.maxZoom}
           />
           {props.boundary ? (
             <GeoJSON
@@ -269,6 +309,11 @@ export function BoundaryEditorMap(props: {
       {uploadError ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-mono text-xs text-red-700">
           {uploadError}
+        </div>
+      ) : null}
+      {originalVertexCount > editableVertexCount ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 font-mono text-xs text-amber-800">
+          Vertex edit disederhanakan sementara agar handle tidak terlalu rapat dan drag lebih mudah.
         </div>
       ) : null}
     </div>

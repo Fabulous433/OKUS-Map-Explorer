@@ -1,3 +1,4 @@
+import simplify from "@turf/simplify";
 import {
   regionBoundaryDraftFeatureSchema,
   type RegionBoundaryDraftFeature,
@@ -5,6 +6,7 @@ import {
   type RegionBoundaryImpactMovedItem,
 } from "@shared/region-boundary-admin";
 import type { GeoJsonFeatureCollection } from "@shared/region-boundary";
+import { PUBLIC_BASE_MAPS, type BaseMapKey } from "@/lib/map/map-basemap-config";
 
 type GeoJsonFeatureInput = {
   type: "Feature";
@@ -24,6 +26,14 @@ type GeoJsonUploadResult =
       success: false;
       message: string;
     };
+
+export const BOUNDARY_EDITOR_BASE_MAPS = {
+  esri: PUBLIC_BASE_MAPS.esri,
+  osm: PUBLIC_BASE_MAPS.osm,
+  carto: PUBLIC_BASE_MAPS.carto,
+} as const satisfies Record<BaseMapKey, (typeof PUBLIC_BASE_MAPS)[BaseMapKey]>;
+
+export const DEFAULT_BOUNDARY_EDITOR_BASE_MAP_KEY = "esri" as const;
 
 function isPolygonGeometry(
   geometry: GeoJsonFeatureInput["geometry"],
@@ -161,6 +171,109 @@ export function createBoundaryPublishSuccessDescription(params: {
   }
 
   return `Boundary berhasil dipublish. ${params.movedCount} OP terdampak tercatat pada preview.`;
+}
+
+function collectVertexPairs(input: unknown, points: number[][]) {
+  if (!Array.isArray(input)) {
+    return;
+  }
+
+  if (
+    input.length >= 2 &&
+    typeof input[0] === "number" &&
+    typeof input[1] === "number"
+  ) {
+    points.push([input[0], input[1]]);
+    return;
+  }
+
+  for (const item of input) {
+    collectVertexPairs(item, points);
+  }
+}
+
+export function countBoundaryGeometryVertices(geometry: RegionBoundaryGeometry | null | undefined) {
+  if (!geometry) {
+    return 0;
+  }
+
+  const points: number[][] = [];
+  collectVertexPairs(geometry.coordinates, points);
+  return points.length;
+}
+
+function collectBounds(input: unknown, acc: { minLng: number; maxLng: number; minLat: number; maxLat: number }) {
+  if (!Array.isArray(input)) {
+    return;
+  }
+
+  if (
+    input.length >= 2 &&
+    typeof input[0] === "number" &&
+    typeof input[1] === "number"
+  ) {
+    acc.minLng = Math.min(acc.minLng, input[0]);
+    acc.maxLng = Math.max(acc.maxLng, input[0]);
+    acc.minLat = Math.min(acc.minLat, input[1]);
+    acc.maxLat = Math.max(acc.maxLat, input[1]);
+    return;
+  }
+
+  for (const item of input) {
+    collectBounds(item, acc);
+  }
+}
+
+export function simplifyBoundaryEditingGeometry(
+  geometry: RegionBoundaryGeometry | null | undefined,
+): RegionBoundaryGeometry | null {
+  if (!geometry) {
+    return null;
+  }
+
+  const vertexCount = countBoundaryGeometryVertices(geometry);
+  if (vertexCount <= 40) {
+    return geometry;
+  }
+
+  const bounds = {
+    minLng: Number.POSITIVE_INFINITY,
+    maxLng: Number.NEGATIVE_INFINITY,
+    minLat: Number.POSITIVE_INFINITY,
+    maxLat: Number.NEGATIVE_INFINITY,
+  };
+  collectBounds(geometry.coordinates, bounds);
+
+  const spanLng = Number.isFinite(bounds.maxLng - bounds.minLng) ? bounds.maxLng - bounds.minLng : 0;
+  const spanLat = Number.isFinite(bounds.maxLat - bounds.minLat) ? bounds.maxLat - bounds.minLat : 0;
+  const tolerance = Math.min(0.0002, Math.max(0.00002, Math.max(spanLng, spanLat) * 0.0025));
+
+  const simplifiedFeature = simplify(
+    {
+      type: "Feature",
+      properties: {},
+      geometry,
+    } as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>,
+    {
+      tolerance,
+      highQuality: true,
+      mutate: false,
+    },
+  );
+
+  const simplifiedGeometry = simplifiedFeature.geometry;
+  if (simplifiedGeometry.type !== "Polygon" && simplifiedGeometry.type !== "MultiPolygon") {
+    return geometry;
+  }
+
+  if (countBoundaryGeometryVertices(simplifiedGeometry) >= vertexCount) {
+    return geometry;
+  }
+
+  return {
+    type: simplifiedGeometry.type,
+    coordinates: simplifiedGeometry.coordinates,
+  };
 }
 
 export function findBoundaryFeatureByKey(
