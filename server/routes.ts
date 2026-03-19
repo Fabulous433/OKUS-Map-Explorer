@@ -38,12 +38,19 @@ import {
   type WpBadanUsahaInput,
 } from "@shared/schema";
 import { activeRegionDesaQuerySchema } from "@shared/region-boundary";
+import { regionBoundaryDraftFeatureSchema } from "@shared/region-boundary-admin";
 import { stringify } from "csv-stringify/sync";
 import { parse } from "csv-parse/sync";
 import multer, { MulterError } from "multer";
 import { ZodError, type ZodIssue } from "zod";
 import { APP_ROLE_OPTIONS, hashPassword, isAppRole, PASSWORD_POLICY, validatePasswordPolicy, verifyPassword, type AppRole, type SessionUser } from "./auth";
 import { LoginSecurityService, resolveLoginClientId } from "./auth-security";
+import {
+  getDesaDraftByKecamatan,
+  listBoundaryRevisions,
+  previewDraftImpact,
+  saveDraftBoundaryFeature,
+} from "./boundary-editor-storage";
 import { buildAttachmentDownloadPath, deleteAttachmentFile, ensureAttachmentStorageRoot, saveAttachmentBuffer } from "./file-storage";
 import { getActiveRegionBoundary } from "./region-boundaries";
 
@@ -3134,6 +3141,74 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       kecamatanName: kecamatan.cpmKecamatan,
     });
     return sendJsonWithEtag(req, res, boundary);
+  });
+
+  app.get("/api/backoffice/region-boundaries/desa/revisions", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+    const revisions = await listBoundaryRevisions();
+    return res.json(revisions);
+  });
+
+  app.get("/api/backoffice/region-boundaries/desa/draft", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
+    const queryResult = activeRegionDesaQuerySchema.safeParse({
+      kecamatanId: req.query.kecamatanId,
+    });
+    if (!queryResult.success) {
+      return res.status(400).json({
+        message: "kecamatanId wajib diisi untuk memuat draft batas desa/kelurahan",
+      });
+    }
+
+    try {
+      const draft = await getDesaDraftByKecamatan(queryResult.data.kecamatanId, getActorName(req));
+      return res.json(draft);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal memuat draft boundary";
+      return res.status(400).json({ message });
+    }
+  });
+
+  app.put("/api/backoffice/region-boundaries/desa/draft/features/:boundaryKey", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
+    const parsed = regionBoundaryDraftFeatureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendZodValidationError(res, parsed.error, "Draft boundary tidak valid");
+    }
+
+    if (parsed.data.boundaryKey !== req.params.boundaryKey) {
+      return res.status(400).json({ message: "boundaryKey pada path dan payload harus sama" });
+    }
+
+    try {
+      const result = await saveDraftBoundaryFeature({
+        ...parsed.data,
+        actorName: getActorName(req),
+      });
+      return res.json(result.feature);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal menyimpan draft boundary";
+      return res.status(400).json({ message });
+    }
+  });
+
+  app.post("/api/backoffice/region-boundaries/desa/preview-impact", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
+    const parsed = regionBoundaryDraftFeatureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendZodValidationError(res, parsed.error, "Preview boundary tidak valid");
+    }
+
+    try {
+      const preview = await previewDraftImpact(parsed.data);
+      return res.json(preview);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal menghitung preview impact";
+      return res.status(400).json({ message });
+    }
   });
 
   app.get("/api/objek-pajak/map", async (req, res) => {

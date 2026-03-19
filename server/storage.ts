@@ -1116,6 +1116,10 @@ export class DatabaseStorage implements IStorage {
     return rows.map((row) => mapObjekPajakRecord(row, detailMap.get(row.op.id) ?? null));
   }
 
+  async getObjekPajakByKecamatanId(kecamatanId: string): Promise<ObjekPajak[]> {
+    return this.getAllObjekPajak({ kecamatanId });
+  }
+
   async getObjekPajakPage(filters: ObjekPajakListFilter): Promise<PaginatedResult<ObjekPajakListItem>> {
     const baseConditions: SQL[] = [];
     const cursor = filters.cursor ?? null;
