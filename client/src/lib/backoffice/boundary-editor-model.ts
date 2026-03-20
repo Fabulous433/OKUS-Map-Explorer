@@ -4,6 +4,8 @@ import {
   type RegionBoundaryDraftFeature,
   type RegionBoundaryGeometry,
   type RegionBoundaryImpactMovedItem,
+  type RegionBoundaryTopologyAnalysis,
+  type RegionBoundaryTopologyFragment,
 } from "@shared/region-boundary-admin";
 import type { GeoJsonFeatureCollection } from "@shared/region-boundary";
 import { PUBLIC_BASE_MAPS, type BaseMapKey } from "@/lib/map/map-basemap-config";
@@ -34,6 +36,122 @@ export const BOUNDARY_EDITOR_BASE_MAPS = {
 } as const satisfies Record<BaseMapKey, (typeof PUBLIC_BASE_MAPS)[BaseMapKey]>;
 
 export const DEFAULT_BOUNDARY_EDITOR_BASE_MAP_KEY = "esri" as const;
+
+export type DraftTopologySummary = RegionBoundaryTopologyAnalysis & {
+  requiresTakeoverConfirmation?: boolean;
+};
+
+type DraftTopologyFragment = RegionBoundaryTopologyFragment;
+
+function getTopologyStatusLabel(input: DraftTopologySummary) {
+  if (input.topologyStatus === "draft-editing") {
+    return "DRAFT EDITING";
+  }
+
+  if (input.topologyStatus === "draft-needs-resolution") {
+    return "NEEDS RESOLUTION";
+  }
+
+  if (input.topologyStatus === "draft-ready") {
+    return "TOPOLOGY CLEAN";
+  }
+
+  if (input.topologyStatus === "published") {
+    return "PUBLISHED";
+  }
+
+  return "SUPERSEDED";
+}
+
+function hasTopologyTakeover(input: DraftTopologySummary) {
+  return (
+    input.requiresTakeoverConfirmation === true ||
+    input.fragments.some((fragment) => fragment.type === "takeover-area")
+  );
+}
+
+function getFragmentDisplayLabel(fragment: DraftTopologyFragment) {
+  const assignmentLabel =
+    fragment.assignmentMode === "auto"
+      ? "auto"
+      : fragment.assignmentMode === "manual"
+        ? "manual"
+        : "unassigned";
+
+  if (fragment.type === "takeover-area") {
+    return `${fragment.fragmentId} takeover ${assignmentLabel} -> ${fragment.assignedBoundaryKey ?? "n/a"}`;
+  }
+
+  return `${fragment.fragmentId} released ${assignmentLabel} -> ${fragment.assignedBoundaryKey ?? "n/a"}`;
+}
+
+function buildTopologyModel(input: DraftTopologySummary) {
+  const takeoverDetected = hasTopologyTakeover(input);
+  const unresolvedFragments = input.fragments.filter((fragment) => fragment.status === "unresolved");
+  const autoAssignedFragments = input.fragments.filter(
+    (fragment) => fragment.status === "resolved" && fragment.assignmentMode === "auto",
+  );
+  const manualResolutionQueue = unresolvedFragments.map((fragment) => ({
+    fragmentId: fragment.fragmentId,
+    candidateBoundaryKeys: fragment.candidateBoundaryKeys,
+    type: fragment.type,
+  }));
+
+  return {
+    badgeLabel: getTopologyStatusLabel(input),
+    headline:
+      input.topologyStatus === "draft-ready"
+        ? "Topology clean and ready for preview"
+        : takeoverDetected
+          ? "Takeover confirmation required before publish"
+          : unresolvedFragments.length > 0
+            ? `${unresolvedFragments.length} fragment menunggu resolusi manual`
+            : "Topology draft sedang diproses",
+    canPreview: input.topologyStatus === "draft-ready" && !takeoverDetected && unresolvedFragments.length === 0,
+    canPublish: false,
+    manualResolutionQueue,
+    informationalRows: autoAssignedFragments.map((fragment) => getFragmentDisplayLabel(fragment)),
+    takeoverDetected,
+    summaryLabel: `${input.summary.fragmentCount} fragment total`,
+    unresolvedLabel: `${input.summary.unresolvedFragmentCount} unresolved`,
+    autoAssignedLabel: `${input.summary.autoAssignedFragmentCount} auto-assigned`,
+    manualAssignmentLabel: `${input.summary.manualAssignmentRequiredCount} manual`,
+  };
+}
+
+export function createBoundaryTopologyPanelModel(input: DraftTopologySummary) {
+  return buildTopologyModel(input);
+}
+
+export function createTakeoverWarningModel(input: DraftTopologySummary) {
+  const takeoverDetected = hasTopologyTakeover(input);
+  const takeoverFragments = input.fragments.filter((fragment) => fragment.type === "takeover-area");
+
+  if (!takeoverDetected) {
+    return {
+      visible: false,
+      title: "",
+      message: "",
+    };
+  }
+
+  return {
+    visible: true,
+    title: "Peringatan Takeover",
+    message: `${takeoverFragments.length} takeover area terdeteksi. Konfirmasi pengambilan wilayah diperlukan sebelum publish.`,
+  };
+}
+
+export function canPreviewBoundaryRevision(input: DraftTopologySummary) {
+  return buildTopologyModel(input).canPreview;
+}
+
+export function canPublishBoundaryRevision(input: DraftTopologySummary, previewReady: boolean) {
+  const takeoverDetected = hasTopologyTakeover(input);
+  const unresolvedFragments = input.fragments.some((fragment) => fragment.status === "unresolved");
+
+  return previewReady && input.topologyStatus === "draft-ready" && !takeoverDetected && !unresolvedFragments;
+}
 
 function isPolygonGeometry(
   geometry: GeoJsonFeatureInput["geometry"],

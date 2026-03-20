@@ -1,18 +1,22 @@
 import type { ChangeEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FeatureGroup, GeoJSON, MapContainer, TileLayer, useMap } from "react-leaflet";
-import { Layers3, Upload } from "lucide-react";
+import { AlertTriangle, Layers3, Upload } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw";
 import "leaflet-draw/dist/leaflet.draw.css";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   BOUNDARY_EDITOR_BASE_MAPS,
   DEFAULT_BOUNDARY_EDITOR_BASE_MAP_KEY,
   countBoundaryGeometryVertices,
+  createBoundaryTopologyPanelModel,
+  createTakeoverWarningModel,
   parseBoundaryUpload,
   simplifyBoundaryEditingGeometry,
+  type DraftTopologySummary,
 } from "@/lib/backoffice/boundary-editor-model";
 import type { RegionBoundaryGeometry } from "@shared/region-boundary-admin";
 import type { GeoJsonFeatureCollection } from "@shared/region-boundary";
@@ -60,6 +64,63 @@ function getGeometryBounds(
   }
 
   return L.latLngBounds(points);
+}
+
+function getFragmentStyle(fragment: DraftTopologySummary["fragments"][number]) {
+  if (fragment.type === "takeover-area") {
+    return {
+      color: "#b91c1c",
+      weight: 3,
+      dashArray: "7 4",
+      fillColor: "#f87171",
+      fillOpacity: fragment.status === "resolved" ? 0.18 : 0.24,
+    };
+  }
+
+  if (fragment.assignmentMode === "auto" && fragment.status === "resolved") {
+    return {
+      color: "#15803d",
+      weight: 2,
+      dashArray: "4 4",
+      fillColor: "#4ade80",
+      fillOpacity: 0.18,
+    };
+  }
+
+  return {
+    color: "#c2410c",
+    weight: 2,
+    dashArray: "6 3",
+    fillColor: "#fb923c",
+    fillOpacity: 0.2,
+  };
+}
+
+function TopologyFragmentLayers(props: {
+  topologyAnalysis: DraftTopologySummary;
+}) {
+  return (
+    <>
+      {props.topologyAnalysis.fragments.map((fragment) => (
+        <GeoJSON
+          key={fragment.fragmentId}
+          data={
+            {
+              type: "Feature",
+              properties: {
+                fragmentId: fragment.fragmentId,
+                fragmentType: fragment.type,
+                assignmentMode: fragment.assignmentMode,
+                status: fragment.status,
+              },
+              geometry: fragment.geometry,
+            } as GeoJSON.Feature
+          }
+          style={getFragmentStyle(fragment)}
+        />
+      ))}
+    </>
+  );
 }
 
 function EditableBoundaryLayer(props: {
@@ -163,10 +224,19 @@ export function BoundaryEditorMap(props: {
   selectedDesaLabel: string;
   geometry: RegionBoundaryGeometry | null;
   onGeometryChange: (geometry: RegionBoundaryGeometry) => void;
+  topologyAnalysis?: DraftTopologySummary | null;
 }) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [baseMapKey, setBaseMapKey] = useState<keyof typeof BOUNDARY_EDITOR_BASE_MAPS>(
     DEFAULT_BOUNDARY_EDITOR_BASE_MAP_KEY,
+  );
+  const topologyModel = useMemo(
+    () => (props.topologyAnalysis ? createBoundaryTopologyPanelModel(props.topologyAnalysis) : null),
+    [props.topologyAnalysis],
+  );
+  const takeoverWarning = useMemo(
+    () => (props.topologyAnalysis ? createTakeoverWarningModel(props.topologyAnalysis) : null),
+    [props.topologyAnalysis],
   );
 
   const selectedFeatureCollection = useMemo(() => {
@@ -189,6 +259,31 @@ export function BoundaryEditorMap(props: {
   const editableVertexCount = countBoundaryGeometryVertices(editableGeometry);
   const originalVertexCount = countBoundaryGeometryVertices(props.geometry);
   const activeBaseMap = BOUNDARY_EDITOR_BASE_MAPS[baseMapKey];
+  const affectedBoundaryKeys = useMemo(() => {
+    const keys = new Set<string>();
+
+    if (props.selectedBoundaryKey) {
+      keys.add(props.selectedBoundaryKey);
+    }
+
+    if (!props.topologyAnalysis) {
+      return keys;
+    }
+
+    for (const fragment of props.topologyAnalysis.fragments) {
+      keys.add(fragment.sourceBoundaryKey);
+
+      if (fragment.assignedBoundaryKey) {
+        keys.add(fragment.assignedBoundaryKey);
+      }
+
+      for (const candidateBoundaryKey of fragment.candidateBoundaryKeys) {
+        keys.add(candidateBoundaryKey);
+      }
+    }
+
+    return keys;
+  }, [props.selectedBoundaryKey, props.topologyAnalysis]);
 
   async function handleUploadChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -250,6 +345,53 @@ export function BoundaryEditorMap(props: {
         </div>
       </div>
 
+      {topologyModel ? (
+        <div className="space-y-3 rounded-xl border border-black/10 bg-white/85 px-4 py-3" data-testid="boundary-editor-topology-panel">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">Topology status</p>
+              <p className="mt-1 font-mono text-sm font-bold text-black/85">{topologyModel.headline}</p>
+            </div>
+            <Badge variant={topologyModel.canPreview ? "default" : "outline"}>{topologyModel.badgeLabel}</Badge>
+          </div>
+          <p className="font-mono text-[11px] text-black/55">
+            {topologyModel.summaryLabel} · {topologyModel.unresolvedLabel} · {topologyModel.autoAssignedLabel} ·{" "}
+            {topologyModel.manualAssignmentLabel}
+          </p>
+          {topologyModel.manualResolutionQueue.length > 0 ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-amber-800">Manual resolution queue</p>
+              <ul className="mt-2 space-y-1 font-mono text-xs text-amber-900">
+                {topologyModel.manualResolutionQueue.map((fragment) => (
+                  <li key={fragment.fragmentId}>
+                    {fragment.fragmentId}: {fragment.candidateBoundaryKeys.join(", ")}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {topologyModel.informationalRows.length > 0 ? (
+            <div className="rounded-lg border border-black/10 bg-[#faf8f2] px-3 py-2">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">Informational rows</p>
+              <ul className="mt-2 space-y-1 font-mono text-xs text-black/65">
+                {topologyModel.informationalRows.map((row) => (
+                  <li key={row}>{row}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {takeoverWarning?.visible ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 font-mono text-xs text-rose-800">
+              <p className="flex items-center gap-2 font-bold uppercase tracking-[0.18em]">
+                <AlertTriangle className="h-4 w-4" />
+                {takeoverWarning.title}
+              </p>
+              <p className="mt-2 leading-6">{takeoverWarning.message}</p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="overflow-hidden rounded-xl border border-black/10" data-testid="boundary-editor-map-live">
         <MapContainer
           center={[-4.5, 104.1]}
@@ -269,6 +411,8 @@ export function BoundaryEditorMap(props: {
                 const isSelected =
                   String((feature?.properties as Record<string, unknown> | undefined)?.__boundaryKey ?? "") ===
                   props.selectedBoundaryKey;
+                const boundaryKey = String((feature?.properties as Record<string, unknown> | undefined)?.__boundaryKey ?? "");
+                const isAffected = affectedBoundaryKeys.has(boundaryKey);
 
                 if (isSelected) {
                   return {
@@ -276,6 +420,15 @@ export function BoundaryEditorMap(props: {
                     weight: 1.2,
                     fillColor: "#f59e0b",
                     fillOpacity: 0.05,
+                  };
+                }
+
+                if (isAffected) {
+                  return {
+                    color: "#c2410c",
+                    weight: 1.15,
+                    fillColor: "#fdba74",
+                    fillOpacity: 0.14,
                   };
                 }
 
@@ -298,6 +451,7 @@ export function BoundaryEditorMap(props: {
               }}
             />
           ) : null}
+          {props.topologyAnalysis ? <TopologyFragmentLayers topologyAnalysis={props.topologyAnalysis} /> : null}
           <EditableBoundaryLayer
             boundary={props.boundary}
             geometry={props.geometry}
