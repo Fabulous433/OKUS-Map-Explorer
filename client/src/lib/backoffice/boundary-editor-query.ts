@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import type {
   RegionBoundaryDraftFeature,
   RegionBoundaryRevision,
+  RegionBoundaryTopologyAnalysis,
 } from "@shared/region-boundary-admin";
 import type { MasterKecamatan, MasterKelurahan } from "@shared/schema";
 
@@ -39,6 +40,28 @@ export type BoundaryEditorDraftResponse = {
   revision: RegionBoundaryRevision;
   features: RegionBoundaryDraftFeature[];
 };
+
+export type BoundaryEditorTopologyResponse = {
+  revision: RegionBoundaryRevision;
+  analysis: RegionBoundaryTopologyAnalysis;
+  features: RegionBoundaryDraftFeature[];
+};
+
+export function createBoundaryEditorDraftQueryKey(kecamatanId?: string) {
+  return [
+    kecamatanId
+      ? `/api/backoffice/region-boundaries/desa/draft?kecamatanId=${encodeURIComponent(kecamatanId)}`
+      : "/api/backoffice/region-boundaries/desa/draft",
+  ] as const;
+}
+
+export function createBoundaryEditorTopologyQueryKey(kecamatanId?: string) {
+  return [
+    kecamatanId
+      ? `/api/backoffice/region-boundaries/desa/draft/topology?kecamatanId=${encodeURIComponent(kecamatanId)}`
+      : "/api/backoffice/region-boundaries/desa/draft/topology",
+  ] as const;
+}
 
 export function useBoundaryEditorRevisionListQuery() {
   return useQuery<RegionBoundaryRevision[]>({
@@ -83,11 +106,14 @@ export function useBoundaryEditorDesaOptionsQuery(kecamatanId?: string) {
 
 export function useBoundaryEditorDraftQuery(kecamatanId?: string) {
   return useQuery<BoundaryEditorDraftResponse>({
-    queryKey: [
-      kecamatanId
-        ? `/api/backoffice/region-boundaries/desa/draft?kecamatanId=${encodeURIComponent(kecamatanId)}`
-        : "/api/backoffice/region-boundaries/desa/draft",
-    ],
+    queryKey: createBoundaryEditorDraftQueryKey(kecamatanId),
+    enabled: Boolean(kecamatanId),
+  });
+}
+
+export function useBoundaryEditorTopologyQuery(kecamatanId?: string) {
+  return useQuery<BoundaryEditorTopologyResponse>({
+    queryKey: createBoundaryEditorTopologyQueryKey(kecamatanId),
     enabled: Boolean(kecamatanId),
   });
 }

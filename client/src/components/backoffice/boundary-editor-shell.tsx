@@ -13,6 +13,7 @@ import type {
   BoundaryEditorDesaOption,
   BoundaryEditorKecamatanOption,
 } from "@/lib/backoffice/boundary-editor-query";
+import { createBoundaryTopologyPanelModel, type DraftTopologySummary } from "@/lib/backoffice/boundary-editor-model";
 import type { RegionBoundaryRevision } from "@shared/region-boundary-admin";
 
 function getRevisionBadgeVariant(status: RegionBoundaryRevision["status"]) {
@@ -33,6 +34,7 @@ export function BoundaryEditorShell(props: {
   kecamatanOptions: BoundaryEditorKecamatanOption[];
   desaOptions: BoundaryEditorDesaOption[];
   revisions: RegionBoundaryRevision[];
+  topologyAnalysis?: DraftTopologySummary | null;
   isLoading?: boolean;
   lastSavedLabel?: string | null;
   mapCanvas?: ReactNode;
@@ -48,6 +50,7 @@ export function BoundaryEditorShell(props: {
     kecamatanOptions,
     desaOptions,
     revisions,
+    topologyAnalysis = null,
     isLoading = false,
     lastSavedLabel = null,
     mapCanvas,
@@ -57,6 +60,7 @@ export function BoundaryEditorShell(props: {
     onSelectBoundaryKey,
     onRollbackRevision,
   } = props;
+  const topologyModel = topologyAnalysis ? createBoundaryTopologyPanelModel(topologyAnalysis) : null;
 
   return (
     <section
@@ -117,6 +121,24 @@ export function BoundaryEditorShell(props: {
               <p className="mt-2 font-mono text-xs text-black/70">
                 {isLoading ? "Memuat draft editor..." : lastSavedLabel ?? "Belum ada perubahan lokal untuk wilayah ini."}
               </p>
+              {topologyAnalysis ? (
+                <div className="mt-3 rounded-md border border-black/10 bg-white p-3 shadow-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-black/50">
+                      Topology Status
+                    </p>
+                    <Badge variant={topologyModel?.badgeLabel === "TOPOLOGY CLEAN" ? "default" : "outline"}>
+                      {topologyModel?.badgeLabel}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 font-mono text-xs font-bold text-black/80">{topologyModel?.headline}</p>
+                  <p className="mt-1 font-mono text-[11px] text-black/60">
+                    {topologyAnalysis.summary.unresolvedFragmentCount} unresolved ·{" "}
+                    {topologyAnalysis.summary.autoAssignedFragmentCount} auto-assigned ·{" "}
+                    {topologyAnalysis.summary.manualAssignmentRequiredCount} manual
+                  </p>
+                </div>
+              ) : null}
             </div>
           </CardContent>
         </Card>
