@@ -311,7 +311,6 @@ async function run() {
       selectedBoundaryKey: "muaradua:batu-belang-jaya",
       desaOptions: [
         { id: "1609040013", boundaryKey: "muaradua:batu-belang-jaya", label: "Batu Belang Jaya" },
-        { id: "1609050012", boundaryKey: "runjungagung:desa-contoh", label: "Desa Contoh" },
       ],
       onSaveDraft: () => undefined,
       onPreviewImpact: () => undefined,
@@ -363,7 +362,6 @@ async function run() {
         kecamatanOptions: [{ id: "1609040", label: "Muaradua" }],
         desaOptions: [
           { id: "1609040013", boundaryKey: "muaradua:batu-belang-jaya", label: "Batu Belang Jaya" },
-          { id: "1609050012", boundaryKey: "runjungagung:desa-contoh", label: "Desa Contoh" },
         ],
         revisions: [],
         isLoading: false,

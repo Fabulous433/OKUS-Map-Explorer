@@ -27,6 +27,30 @@ function getBadgeVariant(label: BoundaryEditorImpactPanelModel["badgeLabel"]) {
   return "secondary";
 }
 
+function formatBoundarySegmentLabel(value: string) {
+  return value
+    .split("-")
+    .filter((segment) => segment.length > 0)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
+function resolveBoundaryLabel(boundaryKey: string, boundaryLabelByKey: Map<string, string>) {
+  const directLabel = boundaryLabelByKey.get(boundaryKey);
+  if (directLabel) {
+    return directLabel;
+  }
+
+  const [kecamatanSegment, desaSegment] = boundaryKey.split(":");
+  if (!desaSegment) {
+    return boundaryKey;
+  }
+
+  const desaLabel = formatBoundarySegmentLabel(desaSegment);
+  const kecamatanLabel = kecamatanSegment ? formatBoundarySegmentLabel(kecamatanSegment) : "";
+  return kecamatanLabel ? `${desaLabel} (${kecamatanLabel})` : desaLabel;
+}
+
 export function BoundaryEditorImpactPanel(props: {
   impactedCount: number;
   sampleMoves: RegionBoundaryImpactMovedItem[];
@@ -127,7 +151,7 @@ export function BoundaryEditorImpactPanel(props: {
                         </p>
                         <p className="mt-1 font-mono text-xs font-bold text-black/85">
                           Kandidat lintas-kecamatan:{" "}
-                          {fragment.candidateBoundaryKeys.map((key) => boundaryLabelByKey.get(key) ?? key).join(" · ")}
+                          {fragment.candidateBoundaryKeys.map((key) => resolveBoundaryLabel(key, boundaryLabelByKey)).join(" · ")}
                         </p>
                       </div>
                       <Badge variant="outline">UNRESOLVED</Badge>
@@ -148,7 +172,7 @@ export function BoundaryEditorImpactPanel(props: {
                         <SelectContent>
                           {fragment.candidateBoundaryKeys.map((key) => (
                             <SelectItem key={key} value={key}>
-                              {boundaryLabelByKey.get(key) ?? key}
+                              {resolveBoundaryLabel(key, boundaryLabelByKey)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -171,7 +195,7 @@ export function BoundaryEditorImpactPanel(props: {
                 <div className="space-y-2">
                   {autoAssignedFragments.map((fragment) => (
                     <div key={fragment.fragmentId} className="rounded-lg border border-black/10 bg-white p-3 font-mono text-xs text-black/75">
-                      {fragment.fragmentId} · {boundaryLabelByKey.get(fragment.assignedBoundaryKey ?? "") ?? fragment.assignedBoundaryKey ?? "n/a"}
+                      {fragment.fragmentId} · {resolveBoundaryLabel(fragment.assignedBoundaryKey ?? "", boundaryLabelByKey)}
                     </div>
                   ))}
                 </div>
@@ -190,9 +214,9 @@ export function BoundaryEditorImpactPanel(props: {
                 <div className="space-y-2">
                   {takeoverFragments.map((fragment) => (
                     <div key={fragment.fragmentId} className="rounded-lg border border-black/10 bg-white p-3 font-mono text-xs text-black/75">
-                      {fragment.fragmentId} · {boundaryLabelByKey.get(fragment.sourceBoundaryKey) ?? fragment.sourceBoundaryKey}
+                      {fragment.fragmentId} · {resolveBoundaryLabel(fragment.sourceBoundaryKey, boundaryLabelByKey)}
                       {" → "}
-                      {boundaryLabelByKey.get(fragment.assignedBoundaryKey ?? "") ?? fragment.assignedBoundaryKey ?? "n/a"}
+                      {resolveBoundaryLabel(fragment.assignedBoundaryKey ?? "", boundaryLabelByKey)}
                     </div>
                   ))}
                 </div>
