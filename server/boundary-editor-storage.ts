@@ -1,10 +1,18 @@
 import { booleanPointInPolygon } from "@turf/boolean-point-in-polygon";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import {
+  regionBoundaryFragmentAssignmentPayloadSchema,
   regionBoundaryDraftFeatureSchema,
   regionBoundaryImpactPreviewSchema,
   regionBoundaryPublishPayloadSchema,
   regionBoundaryRevisionSchema,
+  regionBoundaryTakeoverConfirmationPayloadSchema,
+  regionBoundaryTopologyAnalysisSchema,
+  type RegionBoundaryFragmentAssignmentMode,
+  type RegionBoundaryFragmentStatus,
+  type RegionBoundaryGeometry,
+  type RegionBoundaryTopologyAnalysis,
+  type RegionBoundaryTopologyFragment,
   type RegionBoundaryDraftFeature,
 } from "@shared/region-boundary-admin";
 import {
@@ -14,16 +22,39 @@ import {
   objekPajak,
   regionBoundaryRevision,
   regionBoundaryRevisionFeature,
+  regionBoundaryRevisionFragment,
 } from "@shared/schema";
 import { db, storage } from "./storage";
 import { invalidateActiveRegionBoundaryCache, getActiveRegionBoundary } from "./region-boundaries";
-import { mergePublishedDesaOverrides, type PublishedBoundaryFeature } from "./region-boundary-overrides";
+import {
+  analyzeTopologyDraft,
+  materializeAffectedGeometryPack,
+  type TopologyFragment,
+} from "./region-boundary-topology";
+import { buildDesaBoundaryKey, mergePublishedDesaOverrides, type PublishedBoundaryFeature } from "./region-boundary-overrides";
 
 type SaveDraftBoundaryFeatureInput = RegionBoundaryDraftFeature & {
   actorName: string;
 };
 
 type PreviewBoundaryImpactInput = RegionBoundaryDraftFeature;
+
+type AnalyzeDraftBoundaryTopologyInput = RegionBoundaryDraftFeature & {
+  actorName: string;
+};
+
+type AssignDraftTopologyFragmentInput = {
+  revisionId: number;
+  fragmentId: string;
+  assignedBoundaryKey: string;
+  actorName: string;
+};
+
+type ConfirmDraftTakeoverInput = {
+  revisionId: number;
+  actorName: string;
+  takeoverConfirmedBy: string;
+};
 
 type PublishDraftRevisionInput = {
   revisionId: number;
@@ -49,6 +80,12 @@ type InternalImpactItem = {
 type ImpactComputation = {
   impactedCount: number;
   movedItems: InternalImpactItem[];
+};
+
+type DraftTopologyState = {
+  revision: ReturnType<typeof mapRevisionRow>;
+  analysis: RegionBoundaryTopologyAnalysis;
+  features: RegionBoundaryDraftFeature[];
 };
 
 function normalizeRegionName(value: string) {
@@ -231,6 +268,303 @@ async function getRevisionFeatures(revisionId: number) {
     .orderBy(asc(regionBoundaryRevisionFeature.id));
 }
 
+async function getRevisionFragments(revisionId: number, sourceBoundaryKey?: string) {
+  const conditions = [eq(regionBoundaryRevisionFragment.revisionId, revisionId)];
+  if (sourceBoundaryKey) {
+    conditions.push(eq(regionBoundaryRevisionFragment.sourceBoundaryKey, sourceBoundaryKey));
+  }
+
+  return db
+    .select()
+    .from(regionBoundaryRevisionFragment)
+    .where(and(...conditions))
+    .orderBy(asc(regionBoundaryRevisionFragment.fragmentId));
+}
+
+function mapTopologyFragmentRow(row: typeof regionBoundaryRevisionFragment.$inferSelect): RegionBoundaryTopologyFragment {
+  const status: RegionBoundaryFragmentStatus = row.status === "resolved" ? "resolved" : "unresolved";
+
+  return {
+    fragmentId: row.fragmentId,
+    type: row.type as RegionBoundaryTopologyFragment["type"],
+    sourceBoundaryKey: row.sourceBoundaryKey,
+    candidateBoundaryKeys: Array.isArray(row.candidateBoundaryKeys)
+      ? row.candidateBoundaryKeys.map((value) => String(value))
+      : [],
+    assignedBoundaryKey: row.assignedBoundaryKey,
+    assignmentMode: row.assignmentMode as RegionBoundaryFragmentAssignmentMode | null,
+    status,
+    geometry: row.geometry as RegionBoundaryGeometry,
+    areaSqM: Number(row.areaSqM),
+  };
+}
+
+function toPublicTopologyFragment(fragment: TopologyFragment): RegionBoundaryTopologyFragment {
+  return {
+    fragmentId: `${fragment.sourceBoundaryKey}:${fragment.fragmentId}`,
+    type: fragment.type,
+    sourceBoundaryKey: fragment.sourceBoundaryKey,
+    candidateBoundaryKeys: [...fragment.candidateBoundaryKeys],
+    assignedBoundaryKey: fragment.assignedBoundaryKey,
+    assignmentMode: fragment.assignmentMode as RegionBoundaryFragmentAssignmentMode | null,
+    status: fragment.status === "resolved" ? "resolved" : "unresolved",
+    geometry: fragment.geometry,
+    areaSqM: fragment.areaSqM,
+  };
+}
+
+function summarizeTopologyFragments(fragments: RegionBoundaryTopologyFragment[]) {
+  return {
+    fragmentCount: fragments.length,
+    unresolvedFragmentCount: fragments.filter((fragment) => fragment.status !== "resolved").length,
+    autoAssignedFragmentCount: fragments.filter(
+      (fragment) => fragment.status === "resolved" && fragment.assignmentMode === "auto",
+    ).length,
+    manualAssignmentRequiredCount: fragments.filter((fragment) => fragment.status !== "resolved").length,
+  };
+}
+
+function buildRevisionTopologyStatus(params: {
+  revisionStatus: string;
+  fragments: RegionBoundaryTopologyFragment[];
+  takeoverConfirmedAt: Date | null;
+}) {
+  if (params.revisionStatus === "published") {
+    return "published" as const;
+  }
+
+  if (params.revisionStatus === "superseded") {
+    return "superseded" as const;
+  }
+
+  if (params.fragments.length === 0) {
+    return "draft-editing" as const;
+  }
+
+  const hasTakeover = params.fragments.some((fragment) => fragment.type === "takeover-area");
+  if (hasTakeover && !params.takeoverConfirmedAt) {
+    return "draft-needs-resolution" as const;
+  }
+
+  if (params.fragments.some((fragment) => fragment.status !== "resolved")) {
+    return "draft-needs-resolution" as const;
+  }
+
+  return "draft-ready" as const;
+}
+
+function buildTopologyAnalysis(params: {
+  revision: typeof regionBoundaryRevision.$inferSelect;
+  fragments: RegionBoundaryTopologyFragment[];
+}) {
+  const summary = summarizeTopologyFragments(params.fragments);
+  const requiresTakeoverConfirmation =
+    params.fragments.some((fragment) => fragment.type === "takeover-area") &&
+    !params.revision.takeoverConfirmedAt;
+  const canPublish = buildRevisionTopologyStatus({
+    revisionStatus: params.revision.status,
+    fragments: params.fragments,
+    takeoverConfirmedAt: params.revision.takeoverConfirmedAt,
+  }) === "draft-ready";
+  return {
+    ...regionBoundaryTopologyAnalysisSchema.parse({
+      revisionId: params.revision.id,
+      regionKey: params.revision.regionKey,
+      level: params.revision.level,
+      topologyStatus: buildRevisionTopologyStatus({
+        revisionStatus: params.revision.status,
+        fragments: params.fragments,
+        takeoverConfirmedAt: params.revision.takeoverConfirmedAt,
+      }),
+      summary,
+      fragments: params.fragments,
+    }),
+    requiresTakeoverConfirmation,
+    canPublish,
+  };
+}
+
+async function getScopedActiveDesaFeatures(kecamatanId: string): Promise<PublishedBoundaryFeature[]> {
+  const kecamatan = await getKecamatanName(kecamatanId);
+  const kelurahanLookup = await getKelurahanLookupByKecamatan(kecamatanId);
+  const activeBoundary = await getActiveRegionBoundary("desa", "precise", {
+    kecamatanId,
+    kecamatanName: kecamatan.cpmKecamatan,
+  });
+
+  return activeBoundary.boundary.features
+    .map((feature) => {
+      const namaDesa = String(feature.properties.WADMKD ?? "").trim();
+      const resolvedKelurahan = resolveKelurahanFromFeature(feature, kelurahanLookup);
+      const kelurahanId = resolvedKelurahan.id;
+      if (!kelurahanId) {
+        return null;
+      }
+
+      return {
+        boundaryKey: String(
+          feature.properties.__boundaryKey ??
+            buildDesaBoundaryKey({
+              kecamatanName: String(feature.properties.WADMKC ?? kecamatan.cpmKecamatan),
+              desaName: namaDesa,
+            }),
+        ),
+        kecamatanId,
+        kelurahanId,
+        namaDesa: resolvedKelurahan.name ?? namaDesa,
+        geometry: feature.geometry as PublishedBoundaryFeature["geometry"],
+      } satisfies PublishedBoundaryFeature;
+    })
+    .filter((feature): feature is PublishedBoundaryFeature => feature !== null);
+}
+
+async function getMergedDraftBaseFeatures(revisionId: number, kecamatanId: string) {
+  const baseFeatures = await getScopedActiveDesaFeatures(kecamatanId);
+  const draftFeatures = await getRevisionFeatures(revisionId);
+  const draftOverrideByBoundaryKey = new Map(draftFeatures.map((row) => [row.boundaryKey, toPublishedBoundaryFeature(row)]));
+  const baseFeatureKeys = new Set(baseFeatures.map((feature) => feature.boundaryKey));
+
+  return [
+    ...baseFeatures.map((feature) => draftOverrideByBoundaryKey.get(feature.boundaryKey) ?? feature),
+    ...draftFeatures
+      .map(toPublishedBoundaryFeature)
+      .filter((feature) => !baseFeatureKeys.has(feature.boundaryKey)),
+  ];
+}
+
+function toManagedBoundaryKeys(sourceBoundaryKey: string, fragments: Array<Pick<RegionBoundaryTopologyFragment, "candidateBoundaryKeys" | "assignedBoundaryKey">>) {
+  const boundaryKeys = new Set<string>([sourceBoundaryKey]);
+  for (const fragment of fragments) {
+    for (const candidateBoundaryKey of fragment.candidateBoundaryKeys) {
+      boundaryKeys.add(candidateBoundaryKey);
+    }
+    if (fragment.assignedBoundaryKey) {
+      boundaryKeys.add(fragment.assignedBoundaryKey);
+    }
+  }
+
+  return Array.from(boundaryKeys);
+}
+
+async function replaceRevisionFeaturePack(params: {
+  revisionId: number;
+  sourceBoundaryKey: string;
+  features: PublishedBoundaryFeature[];
+  previousFragments: RegionBoundaryTopologyFragment[];
+  nextFragments: RegionBoundaryTopologyFragment[];
+}) {
+  const boundaryKeysToReplace = Array.from(
+    new Set([
+      ...toManagedBoundaryKeys(params.sourceBoundaryKey, params.previousFragments),
+      ...params.features.map((feature) => feature.boundaryKey),
+      ...toManagedBoundaryKeys(params.sourceBoundaryKey, params.nextFragments),
+    ]),
+  );
+
+  if (boundaryKeysToReplace.length > 0) {
+    await db
+      .delete(regionBoundaryRevisionFeature)
+      .where(
+        and(
+          eq(regionBoundaryRevisionFeature.revisionId, params.revisionId),
+          inArray(regionBoundaryRevisionFeature.boundaryKey, boundaryKeysToReplace),
+        ),
+      );
+  }
+
+  if (params.features.length === 0) {
+    return;
+  }
+
+  const now = new Date();
+  await db.insert(regionBoundaryRevisionFeature).values(
+    params.features.map((feature) => ({
+      revisionId: params.revisionId,
+      boundaryKey: feature.boundaryKey,
+      kecamatanId: feature.kecamatanId,
+      kelurahanId: feature.kelurahanId,
+      namaDesa: feature.namaDesa,
+      geometry: feature.geometry,
+      bounds: computeBoundsFromCoordinates(feature.geometry.coordinates),
+      createdAt: now,
+      updatedAt: now,
+    })),
+  );
+}
+
+async function persistRevisionFragments(params: {
+  revisionId: number;
+  sourceBoundaryKey: string;
+  fragments: RegionBoundaryTopologyFragment[];
+}) {
+  await db
+    .delete(regionBoundaryRevisionFragment)
+    .where(
+      and(
+        eq(regionBoundaryRevisionFragment.revisionId, params.revisionId),
+        eq(regionBoundaryRevisionFragment.sourceBoundaryKey, params.sourceBoundaryKey),
+      ),
+    );
+
+  if (params.fragments.length === 0) {
+    return;
+  }
+
+  await db.insert(regionBoundaryRevisionFragment).values(
+    params.fragments.map((fragment) => ({
+      revisionId: params.revisionId,
+      fragmentId: fragment.fragmentId,
+      type: fragment.type,
+      sourceBoundaryKey: fragment.sourceBoundaryKey,
+      candidateBoundaryKeys: fragment.candidateBoundaryKeys,
+      assignedBoundaryKey: fragment.assignedBoundaryKey,
+      assignmentMode: fragment.assignmentMode,
+      status: fragment.status,
+      geometry: fragment.geometry,
+      areaSqM: String(fragment.areaSqM.toFixed(2)),
+    })),
+  );
+}
+
+async function getDraftTopologyStateBySourceBoundary(revisionId: number, sourceBoundaryKey: string): Promise<DraftTopologyState> {
+  const revision = await getDraftRevisionById(revisionId);
+  if (!revision) {
+    throw new Error("Revision draft topology tidak ditemukan");
+  }
+
+  const fragments = (await getRevisionFragments(revisionId, sourceBoundaryKey)).map(mapTopologyFragmentRow);
+  const sourceFeature = await db
+    .select()
+    .from(regionBoundaryRevisionFeature)
+    .where(
+      and(
+        eq(regionBoundaryRevisionFeature.revisionId, revisionId),
+        eq(regionBoundaryRevisionFeature.boundaryKey, sourceBoundaryKey),
+      ),
+    )
+    .limit(1);
+
+  const kecamatanId = sourceFeature[0]?.kecamatanId;
+  const features = kecamatanId
+    ? (await db
+        .select()
+        .from(regionBoundaryRevisionFeature)
+        .where(
+          and(
+            eq(regionBoundaryRevisionFeature.revisionId, revisionId),
+            eq(regionBoundaryRevisionFeature.kecamatanId, kecamatanId),
+          ),
+        )
+        .orderBy(asc(regionBoundaryRevisionFeature.namaDesa), asc(regionBoundaryRevisionFeature.id))).map(mapDraftFeatureRow)
+    : [];
+
+  return {
+    revision: mapRevisionRow(revision),
+    analysis: buildTopologyAnalysis({ revision, fragments }),
+    features,
+  };
+}
+
 async function computeImpactForOverrides(input: {
   kecamatanId: string;
   overrides: PublishedBoundaryFeature[];
@@ -370,8 +704,6 @@ export async function getDesaDraftByKecamatan(kecamatanId: string, actorName: st
 export async function saveDraftBoundaryFeature(input: SaveDraftBoundaryFeatureInput) {
   const parsed = regionBoundaryDraftFeatureSchema.parse(input);
   const revision = await getOrCreateDesaDraftRevision(input.actorName);
-  const now = new Date();
-  const bounds = computeBoundsFromCoordinates(parsed.geometry.coordinates);
 
   const [existing] = await db
     .select()
@@ -386,38 +718,10 @@ export async function saveDraftBoundaryFeature(input: SaveDraftBoundaryFeatureIn
 
   const beforeData = existing ? mapDraftFeatureRow(existing) : null;
 
-  if (existing) {
-    await db
-      .update(regionBoundaryRevisionFeature)
-      .set({
-        kecamatanId: parsed.kecamatanId,
-        kelurahanId: parsed.kelurahanId,
-        namaDesa: parsed.namaDesa,
-        geometry: parsed.geometry,
-        bounds,
-        updatedAt: now,
-      })
-      .where(eq(regionBoundaryRevisionFeature.id, existing.id));
-  } else {
-    await db.insert(regionBoundaryRevisionFeature).values({
-      revisionId: revision.id,
-      boundaryKey: parsed.boundaryKey,
-      kecamatanId: parsed.kecamatanId,
-      kelurahanId: parsed.kelurahanId,
-      namaDesa: parsed.namaDesa,
-      geometry: parsed.geometry,
-      bounds,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
-
-  await db
-    .update(regionBoundaryRevision)
-    .set({
-      updatedAt: now,
-    })
-    .where(eq(regionBoundaryRevision.id, revision.id));
+  const topologyState = await analyzeDraftBoundaryTopology({
+    ...parsed,
+    actorName: input.actorName,
+  });
 
   await writeAuditEntry({
     entityType: "region_boundary_revision",
@@ -428,12 +732,274 @@ export async function saveDraftBoundaryFeature(input: SaveDraftBoundaryFeatureIn
     afterData: parsed,
     metadata: {
       boundaryKey: parsed.boundaryKey,
+      topologyStatus: topologyState.analysis.topologyStatus,
     },
   });
 
   return {
-    revision: mapRevisionRow((await getDraftRevisionById(revision.id)) ?? revision),
+    ...topologyState,
     feature: parsed,
+  };
+}
+
+export async function analyzeDraftBoundaryTopology(input: AnalyzeDraftBoundaryTopologyInput) {
+  const parsed = regionBoundaryDraftFeatureSchema.parse(input);
+  const revision = await getOrCreateDesaDraftRevision(input.actorName);
+  const now = new Date();
+  invalidateActiveRegionBoundaryCache();
+  const baseFeatures = await getMergedDraftBaseFeatures(revision.id, parsed.kecamatanId);
+  const previousFragments = (await getRevisionFragments(revision.id, parsed.boundaryKey)).map(mapTopologyFragmentRow);
+  const topologyResult = await analyzeTopologyDraft({
+    targetBoundaryKey: parsed.boundaryKey,
+    targetGeometry: parsed.geometry,
+    baseFeatures,
+  });
+  const publicFragments = topologyResult.fragments.map(toPublicTopologyFragment);
+  const materializedPack = materializeAffectedGeometryPack({
+    targetBoundaryKey: parsed.boundaryKey,
+    targetGeometry: parsed.geometry,
+    assignments: topologyResult.fragments,
+    baseFeatures,
+  });
+  const topologySummary = summarizeTopologyFragments(publicFragments);
+  const topologyStatus = buildRevisionTopologyStatus({
+    revisionStatus: revision.status,
+    fragments: publicFragments,
+    takeoverConfirmedAt: null,
+  });
+
+  await persistRevisionFragments({
+    revisionId: revision.id,
+    sourceBoundaryKey: parsed.boundaryKey,
+    fragments: publicFragments,
+  });
+  await replaceRevisionFeaturePack({
+    revisionId: revision.id,
+    sourceBoundaryKey: parsed.boundaryKey,
+    features: materializedPack.features,
+    previousFragments,
+    nextFragments: publicFragments,
+  });
+  await db
+    .update(regionBoundaryRevision)
+    .set({
+      topologyStatus,
+      topologySummary,
+      takeoverConfirmedAt: null,
+      takeoverConfirmedBy: null,
+      updatedAt: now,
+    })
+    .where(eq(regionBoundaryRevision.id, revision.id));
+
+  await writeAuditEntry({
+    entityType: "region_boundary_revision",
+    entityId: String(revision.id),
+    action: "draft_topology_analyze",
+    actorName: input.actorName,
+    afterData: parsed,
+    metadata: {
+      boundaryKey: parsed.boundaryKey,
+      fragmentCount: publicFragments.length,
+      topologyStatus,
+    },
+  });
+
+  return getDraftTopologyStateBySourceBoundary(revision.id, parsed.boundaryKey);
+}
+
+export async function assignDraftTopologyFragment(input: AssignDraftTopologyFragmentInput) {
+  const parsed = regionBoundaryFragmentAssignmentPayloadSchema.parse({
+    revisionId: input.revisionId,
+    fragmentId: input.fragmentId,
+    assignedBoundaryKey: input.assignedBoundaryKey,
+    assignmentMode: "manual",
+  });
+  const revision = await getDraftRevisionById(parsed.revisionId);
+  if (!revision) {
+    throw new Error("Revision draft topology tidak ditemukan");
+  }
+  if (revision.status !== "draft") {
+    throw new Error("Hanya revision draft yang dapat diubah");
+  }
+
+  const [fragmentRow] = await db
+    .select()
+    .from(regionBoundaryRevisionFragment)
+    .where(
+      and(
+        eq(regionBoundaryRevisionFragment.revisionId, parsed.revisionId),
+        eq(regionBoundaryRevisionFragment.fragmentId, parsed.fragmentId),
+      ),
+    )
+    .limit(1);
+  if (!fragmentRow) {
+    throw new Error("Fragment topology draft tidak ditemukan");
+  }
+
+  const candidateBoundaryKeys = Array.isArray(fragmentRow.candidateBoundaryKeys)
+    ? fragmentRow.candidateBoundaryKeys.map((value) => String(value))
+    : [];
+  if (!candidateBoundaryKeys.includes(parsed.assignedBoundaryKey)) {
+    throw new Error("Boundary tujuan assignment tidak termasuk kandidat fragment");
+  }
+
+  const [targetFeatureRow] = await db
+    .select()
+    .from(regionBoundaryRevisionFeature)
+    .where(
+      and(
+        eq(regionBoundaryRevisionFeature.revisionId, parsed.revisionId),
+        eq(regionBoundaryRevisionFeature.boundaryKey, fragmentRow.sourceBoundaryKey),
+      ),
+    )
+    .limit(1);
+  if (!targetFeatureRow) {
+    throw new Error("Feature target draft topology tidak ditemukan");
+  }
+
+  const previousFragments = (await getRevisionFragments(parsed.revisionId, fragmentRow.sourceBoundaryKey)).map(
+    mapTopologyFragmentRow,
+  );
+
+  await db
+    .update(regionBoundaryRevisionFragment)
+    .set({
+      assignedBoundaryKey: parsed.assignedBoundaryKey,
+      assignmentMode: "manual",
+      status: "resolved",
+    })
+    .where(
+      and(
+        eq(regionBoundaryRevisionFragment.revisionId, parsed.revisionId),
+        eq(regionBoundaryRevisionFragment.fragmentId, parsed.fragmentId),
+      ),
+    );
+
+  const nextFragments = (await getRevisionFragments(parsed.revisionId, fragmentRow.sourceBoundaryKey)).map(
+    mapTopologyFragmentRow,
+  );
+  const baseFeatures = await getMergedDraftBaseFeatures(parsed.revisionId, targetFeatureRow.kecamatanId);
+  const materializedPack = materializeAffectedGeometryPack({
+    targetBoundaryKey: fragmentRow.sourceBoundaryKey,
+    targetGeometry: targetFeatureRow.geometry as RegionBoundaryGeometry,
+    assignments: nextFragments as unknown as TopologyFragment[],
+    baseFeatures,
+  });
+  const topologySummary = summarizeTopologyFragments(nextFragments);
+  const topologyStatus = buildRevisionTopologyStatus({
+    revisionStatus: revision.status,
+    fragments: nextFragments,
+    takeoverConfirmedAt: revision.takeoverConfirmedAt,
+  });
+
+  await replaceRevisionFeaturePack({
+    revisionId: parsed.revisionId,
+    sourceBoundaryKey: fragmentRow.sourceBoundaryKey,
+    features: materializedPack.features,
+    previousFragments,
+    nextFragments,
+  });
+  await db
+    .update(regionBoundaryRevision)
+    .set({
+      topologyStatus,
+      topologySummary,
+      updatedAt: new Date(),
+    })
+    .where(eq(regionBoundaryRevision.id, parsed.revisionId));
+
+  await writeAuditEntry({
+    entityType: "region_boundary_revision",
+    entityId: String(parsed.revisionId),
+    action: "draft_topology_assign",
+    actorName: input.actorName,
+    afterData: parsed,
+    metadata: {
+      sourceBoundaryKey: fragmentRow.sourceBoundaryKey,
+    },
+  });
+
+  return getDraftTopologyStateBySourceBoundary(parsed.revisionId, fragmentRow.sourceBoundaryKey);
+}
+
+export async function confirmDraftTakeover(input: ConfirmDraftTakeoverInput) {
+  const parsed = regionBoundaryTakeoverConfirmationPayloadSchema.parse({
+    revisionId: input.revisionId,
+    takeoverConfirmedBy: input.takeoverConfirmedBy,
+  });
+  const revision = await getDraftRevisionById(parsed.revisionId);
+  if (!revision) {
+    throw new Error("Revision draft topology tidak ditemukan");
+  }
+  if (revision.status !== "draft") {
+    throw new Error("Hanya revision draft yang dapat dikonfirmasi");
+  }
+
+  const fragments = (await getRevisionFragments(parsed.revisionId)).map(mapTopologyFragmentRow);
+  const takeoverFragment = fragments.find((fragment) => fragment.type === "takeover-area");
+  if (!takeoverFragment) {
+    throw new Error("Revision draft tidak memiliki takeover yang perlu dikonfirmasi");
+  }
+
+  const now = new Date();
+  const topologyStatus = buildRevisionTopologyStatus({
+    revisionStatus: revision.status,
+    fragments,
+    takeoverConfirmedAt: now,
+  });
+  const topologySummary = summarizeTopologyFragments(fragments);
+
+  await db
+    .update(regionBoundaryRevision)
+    .set({
+      topologyStatus,
+      topologySummary,
+      takeoverConfirmedAt: now,
+      takeoverConfirmedBy: input.actorName,
+      updatedAt: now,
+    })
+    .where(eq(regionBoundaryRevision.id, parsed.revisionId));
+
+  await writeAuditEntry({
+    entityType: "region_boundary_revision",
+    entityId: String(parsed.revisionId),
+    action: "draft_topology_takeover_confirm",
+    actorName: input.actorName,
+    afterData: {
+      takeoverConfirmedBy: input.actorName,
+    },
+    metadata: {
+      sourceBoundaryKey: takeoverFragment.sourceBoundaryKey,
+    },
+  });
+
+  return getDraftTopologyStateBySourceBoundary(parsed.revisionId, takeoverFragment.sourceBoundaryKey);
+}
+
+export async function getDraftTopologyByKecamatan(kecamatanId: string) {
+  const revision = await getOrCreateDesaDraftRevision("system-topology");
+  const featureRows = await db
+    .select()
+    .from(regionBoundaryRevisionFeature)
+    .where(
+      and(
+        eq(regionBoundaryRevisionFeature.revisionId, revision.id),
+        eq(regionBoundaryRevisionFeature.kecamatanId, kecamatanId),
+      ),
+    )
+    .orderBy(asc(regionBoundaryRevisionFeature.namaDesa), asc(regionBoundaryRevisionFeature.id));
+  const sourceBoundaryKeys = featureRows.map((row) => row.boundaryKey);
+  const fragments = sourceBoundaryKeys.length === 0
+    ? []
+    : (await getRevisionFragments(revision.id)).filter((fragment) => sourceBoundaryKeys.includes(fragment.sourceBoundaryKey));
+
+  return {
+    revision: mapRevisionRow(revision),
+    analysis: buildTopologyAnalysis({
+      revision,
+      fragments: fragments.map(mapTopologyFragmentRow),
+    }),
+    features: featureRows.map(mapDraftFeatureRow),
   };
 }
 

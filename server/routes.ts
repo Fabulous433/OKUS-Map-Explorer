@@ -38,7 +38,12 @@ import {
   type WpBadanUsahaInput,
 } from "@shared/schema";
 import { activeRegionDesaQuerySchema } from "@shared/region-boundary";
-import { regionBoundaryDraftFeatureSchema, regionBoundaryPublishPayloadSchema } from "@shared/region-boundary-admin";
+import {
+  regionBoundaryDraftFeatureSchema,
+  regionBoundaryFragmentAssignmentPayloadSchema,
+  regionBoundaryPublishPayloadSchema,
+  regionBoundaryTakeoverConfirmationPayloadSchema,
+} from "@shared/region-boundary-admin";
 import { stringify } from "csv-stringify/sync";
 import { parse } from "csv-parse/sync";
 import multer, { MulterError } from "multer";
@@ -46,6 +51,10 @@ import { ZodError, type ZodIssue } from "zod";
 import { APP_ROLE_OPTIONS, hashPassword, isAppRole, PASSWORD_POLICY, validatePasswordPolicy, verifyPassword, type AppRole, type SessionUser } from "./auth";
 import { LoginSecurityService, resolveLoginClientId } from "./auth-security";
 import {
+  analyzeDraftBoundaryTopology,
+  assignDraftTopologyFragment,
+  confirmDraftTakeover,
+  getDraftTopologyByKecamatan,
   getDesaDraftByKecamatan,
   listBoundaryRevisions,
   previewDraftImpact,
@@ -3189,9 +3198,96 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ...parsed.data,
         actorName: getActorName(req),
       });
-      return res.json(result.feature);
+      return res.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Gagal menyimpan draft boundary";
+      return res.status(400).json({ message });
+    }
+  });
+
+  app.post("/api/backoffice/region-boundaries/desa/draft/analyze", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
+    const parsed = regionBoundaryDraftFeatureSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendZodValidationError(res, parsed.error, "Draft topology boundary tidak valid");
+    }
+
+    try {
+      const result = await analyzeDraftBoundaryTopology({
+        ...parsed.data,
+        actorName: getActorName(req),
+      });
+      return res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal menganalisa topology draft boundary";
+      return res.status(400).json({ message });
+    }
+  });
+
+  app.get("/api/backoffice/region-boundaries/desa/draft/topology", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
+    const queryResult = activeRegionDesaQuerySchema.safeParse({
+      kecamatanId: req.query.kecamatanId,
+    });
+    if (!queryResult.success) {
+      return res.status(400).json({
+        message: "kecamatanId wajib diisi untuk memuat topology draft batas desa/kelurahan",
+      });
+    }
+
+    try {
+      const result = await getDraftTopologyByKecamatan(queryResult.data.kecamatanId);
+      return res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal memuat topology draft boundary";
+      return res.status(400).json({ message });
+    }
+  });
+
+  app.post("/api/backoffice/region-boundaries/desa/draft/fragments/:fragmentId/assign", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
+    const parsed = regionBoundaryFragmentAssignmentPayloadSchema.safeParse({
+      ...req.body,
+      fragmentId: req.params.fragmentId,
+    });
+    if (!parsed.success) {
+      return sendZodValidationError(res, parsed.error, "Payload assignment fragment topology tidak valid");
+    }
+
+    try {
+      const result = await assignDraftTopologyFragment({
+        revisionId: parsed.data.revisionId,
+        fragmentId: parsed.data.fragmentId,
+        assignedBoundaryKey: parsed.data.assignedBoundaryKey,
+        actorName: getActorName(req),
+      });
+      return res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal menetapkan assignment fragment topology";
+      return res.status(400).json({ message });
+    }
+  });
+
+  app.post("/api/backoffice/region-boundaries/desa/draft/takeover/confirm", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
+    const parsed = regionBoundaryTakeoverConfirmationPayloadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendZodValidationError(res, parsed.error, "Payload konfirmasi takeover tidak valid");
+    }
+
+    try {
+      const result = await confirmDraftTakeover({
+        revisionId: parsed.data.revisionId,
+        actorName: getActorName(req),
+        takeoverConfirmedBy: parsed.data.takeoverConfirmedBy,
+      });
+      return res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal mengonfirmasi takeover draft boundary";
       return res.status(400).json({ message });
     }
   });
