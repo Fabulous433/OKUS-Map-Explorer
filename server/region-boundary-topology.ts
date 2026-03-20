@@ -1,12 +1,11 @@
 import { area } from "@turf/area";
 import { booleanIntersects } from "@turf/boolean-intersects";
-import { booleanPointInPolygon } from "@turf/boolean-point-in-polygon";
 import { difference } from "@turf/difference";
 import type { Feature, FeatureCollection, MultiPolygon, Polygon } from "geojson";
 import type { RegionBoundaryGeometry, RegionBoundaryTopologyStatus } from "@shared/region-boundary-admin";
 import type { PublishedBoundaryFeature } from "./region-boundary-overrides";
 
-type TurfGeometryFeature = Feature<Polygon | MultiPolygon, Record<string, unknown>>;
+type TurfFeature = Feature<Polygon | MultiPolygon, Record<string, unknown>>;
 type PolygonFeature = Feature<Polygon, Record<string, unknown>>;
 type TurfFeatureCollection = FeatureCollection<Polygon | MultiPolygon, Record<string, unknown>>;
 
@@ -55,7 +54,7 @@ function cloneValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function toTurfFeature(geometry: RegionBoundaryGeometry): TurfGeometryFeature {
+function toTurfFeature(geometry: RegionBoundaryGeometry): TurfFeature {
   return {
     type: "Feature",
     geometry: cloneValue(geometry) as Polygon | MultiPolygon,
@@ -64,56 +63,27 @@ function toTurfFeature(geometry: RegionBoundaryGeometry): TurfGeometryFeature {
 }
 
 function toPolygonFeatures(geometry: RegionBoundaryGeometry): PolygonFeature[] {
-  const polygons: Polygon["coordinates"][] =
-    geometry.type === "Polygon"
-      ? [cloneValue(geometry.coordinates as Polygon["coordinates"])]
-      : (geometry.coordinates as MultiPolygon["coordinates"]).map((coordinates) =>
-          cloneValue(coordinates),
-        );
+  if (geometry.type === "Polygon") {
+    return [
+      {
+        type: "Feature",
+        geometry: {
+          type: "Polygon",
+          coordinates: cloneValue(geometry.coordinates) as Polygon["coordinates"],
+        },
+        properties: {},
+      },
+    ];
+  }
 
-  return polygons.map((coordinates) => ({
+  return geometry.coordinates.map((coordinates) => ({
     type: "Feature",
     geometry: {
       type: "Polygon",
-      coordinates,
+      coordinates: cloneValue(coordinates) as Polygon["coordinates"],
     },
     properties: {},
   }));
-}
-
-function collectBoundarySamplePoints(coordinates: Polygon["coordinates"]) {
-  const points: Array<[number, number]> = [];
-  const sampleFractions = [0.1, 0.3, 0.5, 0.7, 0.9];
-
-  for (const ring of coordinates) {
-    if (ring.length < 2) {
-      continue;
-    }
-
-    for (let index = 0; index < ring.length - 1; index++) {
-      const start = ring[index];
-      const end = ring[index + 1];
-      if (
-        !start ||
-        !end ||
-        typeof start[0] !== "number" ||
-        typeof start[1] !== "number" ||
-        typeof end[0] !== "number" ||
-        typeof end[1] !== "number"
-      ) {
-        continue;
-      }
-
-      for (const fraction of sampleFractions) {
-        points.push([
-          start[0] + (end[0] - start[0]) * fraction,
-          start[1] + (end[1] - start[1]) * fraction,
-        ]);
-      }
-    }
-  }
-
-  return points;
 }
 
 function uniqueStrings(values: string[]) {
@@ -128,19 +98,24 @@ function splitGeometryFragments(geometry: RegionBoundaryGeometry): PolygonFeatur
   return toPolygonFeatures(geometry);
 }
 
-function isFragmentTouchingNeighbor(fragment: PolygonFeature, neighbor: TurfGeometryFeature) {
-  if (!booleanIntersects(fragment as TurfGeometryFeature, neighbor)) {
-    return false;
-  }
-
-  const samplePoints = collectBoundarySamplePoints(fragment.geometry.coordinates);
-  return samplePoints.some((point) =>
-    booleanPointInPolygon([point[0], point[1]], neighbor as TurfGeometryFeature),
-  );
-}
-
 function findBoundaryKey(feature: PublishedBoundaryFeature) {
   return feature.boundaryKey;
+}
+
+function discoverCandidateBoundaryKeys(params: {
+  fragment: PolygonFeature;
+  neighborFeatures: PublishedBoundaryFeature[];
+}) {
+  const candidateBoundaryKeys: string[] = [];
+
+  for (const neighbor of params.neighborFeatures) {
+    const neighborFeature = toTurfFeature(neighbor.geometry);
+    if (booleanIntersects(params.fragment, neighborFeature)) {
+      candidateBoundaryKeys.push(findBoundaryKey(neighbor));
+    }
+  }
+
+  return uniqueStrings(candidateBoundaryKeys);
 }
 
 function classifyFragment(params: {
@@ -193,30 +168,11 @@ function classifyFragment(params: {
   };
 }
 
-function discoverCandidateBoundaryKeys(params: {
-  fragment: PolygonFeature;
-  neighborFeatures: PublishedBoundaryFeature[];
-}) {
-  const candidateBoundaryKeys: string[] = [];
-
-  for (const neighbor of params.neighborFeatures) {
-    const neighborFeature = toTurfFeature(neighbor.geometry);
-    if (isFragmentTouchingNeighbor(params.fragment, neighborFeature)) {
-      candidateBoundaryKeys.push(findBoundaryKey(neighbor));
-    }
-  }
-
-  return uniqueStrings(candidateBoundaryKeys);
-}
-
-function differenceGeometry(
-  left: TurfGeometryFeature,
-  right: TurfGeometryFeature,
-): RegionBoundaryGeometry | null {
+function differenceGeometry(left: TurfFeature, right: TurfFeature): RegionBoundaryGeometry | null {
   const result = difference({
     type: "FeatureCollection",
     features: [left, right],
-  } satisfies TurfFeatureCollection);
+  } as TurfFeatureCollection);
 
   if (!result) {
     return null;
@@ -237,10 +193,10 @@ function resolveFragmentAssignments(params: {
       sourceBoundaryKey: params.sourceBoundaryKey,
       type: params.fragmentType,
       geometry: fragment.geometry,
-        candidateBoundaryKeys: discoverCandidateBoundaryKeys({
-          fragment,
-          neighborFeatures: params.neighborFeatures,
-        }),
+      candidateBoundaryKeys: discoverCandidateBoundaryKeys({
+        fragment,
+        neighborFeatures: params.neighborFeatures,
+      }),
     }),
   );
 }
@@ -251,9 +207,7 @@ function summarizeAssignments(assignments: TopologyFragment[]): TopologySummary 
   const autoAssignedFragmentCount = assignments.filter(
     (item) => item.status === "resolved" && item.assignmentMode === "auto",
   ).length;
-  const manualAssignmentRequiredCount = assignments.filter(
-    (item) => item.status !== "resolved",
-  ).length;
+  const manualAssignmentRequiredCount = assignments.filter((item) => item.status !== "resolved").length;
 
   return {
     fragmentCount: assignments.length,
@@ -331,7 +285,7 @@ export async function analyzeTopologyDraft(params: BoundaryAnalysisInput): Promi
     !requiresTakeoverConfirmation;
 
   return {
-    revisionId: 0,
+    revisionId: 1,
     regionKey: "okus",
     level: "desa",
     topologyStatus,
