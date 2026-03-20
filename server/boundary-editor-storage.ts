@@ -338,7 +338,7 @@ function buildRevisionTopologyStatus(params: {
   }
 
   if (params.fragments.length === 0) {
-    return "draft-editing" as const;
+    return "draft-ready" as const;
   }
 
   const hasTakeover = params.fragments.some((fragment) => fragment.type === "takeover-area");

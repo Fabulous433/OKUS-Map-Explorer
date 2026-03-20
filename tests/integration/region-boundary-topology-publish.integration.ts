@@ -380,6 +380,45 @@ async function run() {
     const beforePublish = await findContainingDesa(donorSelection.point[0], donorSelection.point[1]);
     assert.equal(beforePublish?.name, donorSelection.containingName, "titik donor harus tetap berada di desa asal sebelum publish");
 
+    const noOpDraft = await analyzeDraftBoundaryTopology({
+      boundaryKey,
+      level: "desa",
+      kecamatanId: kecamatan.cpmKecId,
+      kelurahanId: targetKelurahan.cpmKelId,
+      namaDesa: TARGET_BOUNDARY_NAME,
+      geometry: activeTargetFeature.geometry as never,
+      actorName: "admin",
+    });
+    const noOpRevision = regionBoundaryRevisionSchema.parse(noOpDraft.revision);
+    const noOpAnalysis = regionBoundaryTopologyAnalysisSchema.parse(noOpDraft.analysis);
+    revisionIds.add(noOpRevision.id);
+    assert.equal(noOpAnalysis.summary.fragmentCount, 0);
+    assert.equal(noOpAnalysis.topologyStatus, "draft-ready");
+    assert.equal(noOpRevision.topologyStatus, "draft-ready");
+
+    const noOpPublish = await publishDraftRevision({
+      revisionId: noOpRevision.id,
+      mode: "publish-only",
+      topologyStatus: "draft-ready",
+      actorName: "admin",
+    });
+    assert.equal(noOpPublish.revision.status, "published");
+    assert.equal(noOpPublish.revision.topologyStatus, "published");
+
+    await rollbackPublishedRevision({
+      revisionId: previousPublished.id,
+      actorName: "admin",
+    });
+    await db
+      .update(regionBoundaryRevision)
+      .set({
+        status: "superseded",
+        topologyStatus: "superseded",
+      })
+      .where(eq(regionBoundaryRevision.id, noOpRevision.id));
+    revisionIds.delete(noOpRevision.id);
+    invalidateActiveRegionBoundaryCache();
+
     const unresolvedDraft = await findUnresolvedDraftGeometry({
       targetBoundaryKey: boundaryKey,
       targetFeature: activeTargetFeature,
