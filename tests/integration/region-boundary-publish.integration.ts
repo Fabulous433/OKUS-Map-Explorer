@@ -318,6 +318,16 @@ async function run() {
     );
     assert.equal(saveDraft.response.status, 200, "save draft untuk publish test wajib sukses");
 
+    const confirmTakeover = await server.jsonRequest(
+      "/api/backoffice/region-boundaries/desa/draft/takeover/confirm",
+      "POST",
+      {
+        revisionId: draftRevisionId,
+        takeoverConfirmedBy: "admin",
+      },
+    );
+    assert.equal(confirmTakeover.response.status, 200, "konfirmasi takeover publish test wajib sukses");
+
     const publishResponse = await server.jsonRequest(
       "/api/backoffice/region-boundaries/desa/publish",
       "POST",

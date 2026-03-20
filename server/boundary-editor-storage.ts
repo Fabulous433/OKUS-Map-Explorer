@@ -384,6 +384,37 @@ function buildTopologyAnalysis(params: {
   };
 }
 
+function assertDraftRevisionPublishable(params: {
+  revision: typeof regionBoundaryRevision.$inferSelect;
+  fragments: RegionBoundaryTopologyFragment[];
+}) {
+  if (params.revision.topologyStatus !== "draft-ready") {
+    if (params.fragments.some((fragment) => fragment.status !== "resolved")) {
+      throw new Error("Revision boundary masih memiliki fragment topology yang belum diselesaikan");
+    }
+
+    if (
+      params.fragments.some((fragment) => fragment.type === "takeover-area") &&
+      !params.revision.takeoverConfirmedAt
+    ) {
+      throw new Error("Revision boundary memiliki takeover yang belum dikonfirmasi");
+    }
+
+    throw new Error("Revision boundary belum topology-ready untuk publish");
+  }
+
+  if (params.fragments.some((fragment) => fragment.status !== "resolved")) {
+    throw new Error("Revision boundary masih memiliki fragment topology yang belum diselesaikan");
+  }
+
+  if (
+    params.fragments.some((fragment) => fragment.type === "takeover-area") &&
+    !params.revision.takeoverConfirmedAt
+  ) {
+    throw new Error("Revision boundary memiliki takeover yang belum dikonfirmasi");
+  }
+}
+
 async function getScopedActiveDesaFeatures(kecamatanId: string): Promise<PublishedBoundaryFeature[]> {
   const kecamatan = await getKecamatanName(kecamatanId);
   const kelurahanLookup = await getKelurahanLookupByKecamatan(kecamatanId);
@@ -1057,8 +1088,15 @@ export async function publishDraftRevision(input: PublishDraftRevisionInput) {
     throw new Error("Revision draft belum memiliki feature boundary");
   }
 
+  const revisionFragments = (await getRevisionFragments(revision.id)).map(mapTopologyFragmentRow);
+  assertDraftRevisionPublishable({
+    revision,
+    fragments: revisionFragments,
+  });
+
   const impact = await computeImpactForRevisionFeatures(revisionFeatures.map(toPublishedBoundaryFeature));
   const impactSummary = toPublicImpactSummary(impact);
+  const impactedBoundaryKeys = Array.from(new Set(revisionFeatures.map((feature) => feature.boundaryKey)));
   const now = new Date();
 
   const publishedBefore = await db
@@ -1078,6 +1116,7 @@ export async function publishDraftRevision(input: PublishDraftRevisionInput) {
         .update(regionBoundaryRevision)
         .set({
           status: "superseded",
+          topologyStatus: "superseded",
           updatedAt: now,
         })
         .where(inArray(regionBoundaryRevision.id, publishedBefore.map((item) => item.id)));
@@ -1087,6 +1126,7 @@ export async function publishDraftRevision(input: PublishDraftRevisionInput) {
       .update(regionBoundaryRevision)
       .set({
         status: "published",
+        topologyStatus: "published",
         publishedBy: input.actorName,
         publishedAt: now,
         impactSummary,
@@ -1160,6 +1200,7 @@ export async function publishDraftRevision(input: PublishDraftRevisionInput) {
   return {
     revision: mapRevisionRow(publishedRevision),
     impactSummary,
+    impactedBoundaryKeys,
     reconciledCount: parsed.mode === "publish-and-reconcile" ? impact.movedItems.filter((item) => item.toKelurahanId).length : 0,
   };
 }
@@ -1197,6 +1238,7 @@ export async function rollbackPublishedRevision(input: RollbackPublishedRevision
         .update(regionBoundaryRevision)
         .set({
           status: "superseded",
+          topologyStatus: "superseded",
           updatedAt: now,
         })
         .where(eq(regionBoundaryRevision.id, currentPublished.id));
@@ -1206,6 +1248,7 @@ export async function rollbackPublishedRevision(input: RollbackPublishedRevision
       .update(regionBoundaryRevision)
       .set({
         status: "published",
+        topologyStatus: "published",
         publishedBy: input.actorName,
         publishedAt: now,
         updatedAt: now,

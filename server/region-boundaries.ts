@@ -211,6 +211,18 @@ async function loadPublishedDesaOverrides(): Promise<PublishedBoundaryFeature[]>
     )
     .orderBy(desc(regionBoundaryRevision.publishedAt), desc(regionBoundaryRevision.id), desc(regionBoundaryRevisionFeature.id));
 
+  return collectLatestPublishedBoundaryFeatures(rows);
+}
+
+function collectLatestPublishedBoundaryFeatures(
+  rows: Array<{
+    boundaryKey: string;
+    kecamatanId: string;
+    kelurahanId: string;
+    namaDesa: string;
+    geometry: unknown;
+  }>,
+) {
   const overrideByBoundaryKey = new Map<string, PublishedBoundaryFeature>();
   for (const row of rows) {
     if (!overrideByBoundaryKey.has(row.boundaryKey)) {
