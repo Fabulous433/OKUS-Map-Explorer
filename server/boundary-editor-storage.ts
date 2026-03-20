@@ -28,6 +28,7 @@ type PreviewBoundaryImpactInput = RegionBoundaryDraftFeature;
 type PublishDraftRevisionInput = {
   revisionId: number;
   mode: "publish-only" | "publish-and-reconcile";
+  topologyStatus: "draft-ready";
   actorName: string;
 };
 
@@ -101,6 +102,10 @@ function mapRevisionRow(row: typeof regionBoundaryRevision.$inferSelect) {
     regionKey: row.regionKey,
     level: row.level,
     status: row.status,
+    topologyStatus: row.topologyStatus,
+    topologySummary: row.topologySummary,
+    takeoverConfirmedAt: toIsoString(row.takeoverConfirmedAt),
+    takeoverConfirmedBy: row.takeoverConfirmedBy,
     notes: row.notes,
     createdBy: row.createdBy,
     publishedBy: row.publishedBy,
@@ -471,6 +476,7 @@ export async function publishDraftRevision(input: PublishDraftRevisionInput) {
   const parsed = regionBoundaryPublishPayloadSchema.parse({
     revisionId: input.revisionId,
     mode: input.mode,
+    topologyStatus: input.topologyStatus,
   });
   const revision = await getDraftRevisionById(parsed.revisionId);
   if (!revision) {

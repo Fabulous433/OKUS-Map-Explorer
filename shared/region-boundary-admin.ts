@@ -114,7 +114,7 @@ export const regionBoundaryPublishedRevisionSchema = regionBoundaryRevisionSchem
 export const regionBoundaryPublishPayloadSchema = z.object({
   revisionId: z.number().int().positive(),
   mode: regionBoundaryReconciliationModeSchema,
-  topologyStatus: z.literal("draft-ready").default("draft-ready"),
+  topologyStatus: z.literal("draft-ready"),
 });
 
 export type RegionBoundaryRevisionStatus = z.infer<typeof regionBoundaryRevisionStatusSchema>;

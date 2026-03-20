@@ -99,6 +99,15 @@ async function run() {
     topologyStatus: "draft-ready",
   });
   assert.equal(publishPayload.topologyStatus, "draft-ready");
+
+  assert.equal(
+    regionBoundaryPublishPayloadSchema.safeParse({
+      revisionId: 101,
+      mode: "publish-and-reconcile",
+    }).success,
+    false,
+    "publish payload tanpa topologyStatus harus ditolak",
+  );
 }
 
 run()

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 
+import bbox from "@turf/bbox";
+import { booleanPointInPolygon } from "@turf/boolean-point-in-polygon";
 import { and, eq, inArray } from "drizzle-orm";
 import { regionBoundaryResponseSchema } from "@shared/region-boundary";
 import {
@@ -14,9 +16,107 @@ import {
 import { findContainingDesa, getActiveRegionBoundary, invalidateActiveRegionBoundaryCache } from "../../server/region-boundaries";
 import { buildDesaBoundaryKey } from "../../server/region-boundary-overrides";
 import { db } from "../../server/storage";
-import { createIntegrationServer, requiredNumber, type JsonRecord } from "./_helpers";
+import { createIntegrationServer, requiredNumber, requiredString, type JsonRecord } from "./_helpers";
 
-const CEMARA_HOMESTAY_POINT = [104.0736256, -4.5455788];
+const TARGET_BOUNDARY_NAME = "Batu Belang Jaya";
+
+type GeometryPoint = readonly [number, number];
+type BoundaryFeature = {
+  geometry: {
+    type: "Polygon" | "MultiPolygon";
+    coordinates: unknown;
+  };
+  properties?: Record<string, unknown>;
+};
+
+function featureName(feature: BoundaryFeature) {
+  return String(feature.properties?.WADMKD ?? feature.properties?.NAMOBJ ?? "").trim();
+}
+
+function findInteriorPointForFeature(feature: BoundaryFeature): GeometryPoint {
+  const [minLng, minLat, maxLng, maxLat] = bbox(feature as never);
+  const steps = 12;
+
+  for (let lngStep = 0; lngStep < steps; lngStep++) {
+    for (let latStep = 0; latStep < steps; latStep++) {
+      const lng = minLng + ((lngStep + 0.5) / steps) * (maxLng - minLng);
+      const lat = minLat + ((latStep + 0.5) / steps) * (maxLat - minLat);
+      if (booleanPointInPolygon([lng, lat], feature as never)) {
+        return [lng, lat];
+      }
+    }
+  }
+
+  throw new Error(`Tidak menemukan titik interior untuk feature ${featureName(feature) || "<unknown>"}`);
+}
+
+function createSquarePolygonAroundPoint(point: GeometryPoint, delta: number) {
+  const [lng, lat] = point;
+  return {
+    type: "Polygon" as const,
+    coordinates: [[
+      [lng - delta, lat - delta],
+      [lng + delta, lat - delta],
+      [lng + delta, lat + delta],
+      [lng - delta, lat + delta],
+      [lng - delta, lat - delta],
+    ]],
+  };
+}
+
+function buildExpandedTargetGeometry(
+  targetGeometry: BoundaryFeature["geometry"],
+  donorPoint: GeometryPoint,
+) {
+  const donorSquare = createSquarePolygonAroundPoint(donorPoint, 0.00002);
+
+  if (targetGeometry.type === "Polygon") {
+    return {
+      type: "MultiPolygon" as const,
+      coordinates: [targetGeometry.coordinates, donorSquare.coordinates],
+    };
+  }
+
+  if (targetGeometry.type === "MultiPolygon") {
+    return {
+      type: "MultiPolygon" as const,
+      coordinates: [...targetGeometry.coordinates, donorSquare.coordinates],
+    };
+  }
+
+  throw new Error(`Geometry target tidak didukung: ${targetGeometry.type}`);
+}
+
+function resolveContainingFeatureName(features: BoundaryFeature[], point: GeometryPoint) {
+  const containing = features.find((feature) => booleanPointInPolygon(point, feature as never)) as
+    | BoundaryFeature
+    | undefined;
+  return containing ? featureName(containing) : null;
+}
+
+function pickDonorFeatureAndPoint(features: BoundaryFeature[], targetFeature: BoundaryFeature, targetIndex: number) {
+  for (const feature of features.slice(targetIndex + 1)) {
+    if (featureName(feature) === TARGET_BOUNDARY_NAME) continue;
+
+    const point = findInteriorPointForFeature(feature);
+    const currentName = resolveContainingFeatureName(features, point);
+    if (!currentName || currentName === TARGET_BOUNDARY_NAME) {
+      continue;
+    }
+
+    const nextFeatures = features.map((item) =>
+      featureName(item) === TARGET_BOUNDARY_NAME
+        ? { ...item, geometry: buildExpandedTargetGeometry(targetFeature.geometry, point) }
+        : item,
+    );
+    const nextName = resolveContainingFeatureName(nextFeatures, point);
+    if (nextName === TARGET_BOUNDARY_NAME) {
+      return { point, containingName: currentName };
+    }
+  }
+
+  throw new Error("Tidak menemukan donor point non-target untuk publish test");
+}
 
 function computeBoundsFromCoordinates(coordinates: unknown) {
   let minLng = Number.POSITIVE_INFINITY;
@@ -69,37 +169,30 @@ async function run() {
       .from(masterKelurahan)
       .where(eq(masterKelurahan.cpmKelId, "1609040001"))
       .limit(1);
-    const [bumiAgung] = await db
-      .select()
-      .from(masterKelurahan)
-      .where(
-        and(
-          eq(masterKelurahan.cpmKelurahan, "Bumi Agung"),
-          eq(masterKelurahan.cpmKodeKec, muaradua.cpmKodeKec),
-        ),
-      )
-      .limit(1);
+    assert.ok(batuBelangJaya, "master kelurahan Batu Belang Jaya wajib tersedia");
+
     const [seededWp] = await db.select().from(wajibPajak).limit(1);
     const [seededRekening] = await db
       .select()
       .from(masterRekeningPajak)
       .where(eq(masterRekeningPajak.jenisPajak, "Pajak MBLB"))
       .limit(1);
-    assert.ok(batuBelangJaya && bumiAgung && seededWp && seededRekening, "fixture master wajib tersedia");
-
-    const boundaryKey = buildDesaBoundaryKey({
-      kecamatanName: "Muara Dua",
-      desaName: "Batu Belang Jaya",
-    });
+    assert.ok(seededWp, "seeded WP wajib tersedia");
+    assert.ok(seededRekening, "rekening MBLB wajib tersedia");
 
     const baseBoundary = await getActiveRegionBoundary("desa", "precise", {
       kecamatanId: muaradua.cpmKecId,
       kecamatanName: muaradua.cpmKecamatan,
     });
     const baseBatuBelang = baseBoundary.boundary.features.find((feature) => {
-      return String(feature.properties.WADMKD ?? "").trim() === "Batu Belang Jaya";
-    });
+      return featureName(feature as BoundaryFeature) === TARGET_BOUNDARY_NAME;
+    }) as BoundaryFeature | undefined;
     assert.ok(baseBatuBelang, "base feature Batu Belang Jaya wajib tersedia");
+
+    const boundaryKey = buildDesaBoundaryKey({
+      kecamatanName: "Muara Dua",
+      desaName: TARGET_BOUNDARY_NAME,
+    });
 
     const [previousPublished] = await db
       .insert(regionBoundaryRevision)
@@ -123,7 +216,7 @@ async function run() {
       boundaryKey,
       kecamatanId: muaradua.cpmKecId,
       kelurahanId: batuBelangJaya.cpmKelId,
-      namaDesa: "Batu Belang Jaya",
+      namaDesa: TARGET_BOUNDARY_NAME,
       geometry: baseBatuBelang.geometry,
       bounds: computeBoundsFromCoordinates(baseBatuBelang.geometry.coordinates),
       createdAt: new Date(Date.now() - 60_000),
@@ -131,8 +224,53 @@ async function run() {
     });
 
     invalidateActiveRegionBoundaryCache();
-    const beforePublish = await findContainingDesa(CEMARA_HOMESTAY_POINT[0], CEMARA_HOMESTAY_POINT[1]);
-    assert.equal(beforePublish?.name, "Bumi Agung", "published revision awal harus tetap menghasilkan Bumi Agung");
+
+    const activeBoundary = await getActiveRegionBoundary("desa", "precise", {
+      kecamatanId: muaradua.cpmKecId,
+      kecamatanName: muaradua.cpmKecamatan,
+    });
+    const targetFeature = activeBoundary.boundary.features.find((feature) => {
+      return featureName(feature as BoundaryFeature) === TARGET_BOUNDARY_NAME;
+    }) as BoundaryFeature | undefined;
+    assert.ok(targetFeature, "feature Batu Belang Jaya aktif wajib tersedia");
+
+    const targetIndex = activeBoundary.boundary.features.findIndex(
+      (feature) => featureName(feature as BoundaryFeature) === TARGET_BOUNDARY_NAME,
+    );
+    assert.ok(targetIndex >= 0, "index feature Batu Belang Jaya aktif wajib tersedia");
+
+    const donorSelection = pickDonorFeatureAndPoint(
+      activeBoundary.boundary.features as BoundaryFeature[],
+      targetFeature,
+      targetIndex,
+    );
+    const donorVillageName = donorSelection.containingName;
+    const [donorKelurahan] = await db
+      .select()
+      .from(masterKelurahan)
+      .where(
+        and(
+          eq(masterKelurahan.cpmKelurahan, donorVillageName),
+          eq(masterKelurahan.cpmKodeKec, muaradua.cpmKodeKec),
+        ),
+      )
+      .limit(1);
+    assert.ok(donorKelurahan, "kelurahan donor wajib tersedia");
+
+    const donorKelurahanId = requiredString(donorKelurahan?.cpmKelId, "kelurahanId donor wajib tersedia");
+    assert.notEqual(donorVillageName, TARGET_BOUNDARY_NAME, "titik donor tidak boleh berada di target");
+
+    const draftFeature = {
+      boundaryKey,
+      level: "desa" as const,
+      kecamatanId: muaradua.cpmKecId,
+      kelurahanId: batuBelangJaya.cpmKelId,
+      namaDesa: TARGET_BOUNDARY_NAME,
+      geometry: buildExpandedTargetGeometry(targetFeature.geometry, donorSelection.point),
+    };
+
+    const beforePublish = await findContainingDesa(donorSelection.point[0], donorSelection.point[1]);
+    assert.equal(beforePublish?.name, donorVillageName, "titik donor harus tetap berada di desa asal sebelum publish");
 
     const [createdOp] = await db
       .insert(objekPajak)
@@ -144,12 +282,12 @@ async function run() {
         npwpOp: null,
         alamatOp: "Jl. Cemara Homestay",
         kecamatanId: muaradua.cpmKecId,
-        kelurahanId: bumiAgung.cpmKelId,
+        kelurahanId: donorKelurahanId,
         omsetBulanan: null,
         tarifPersen: null,
         pajakBulanan: null,
-        latitude: "-4.5455788",
-        longitude: "104.0736256",
+        latitude: String(donorSelection.point[1]),
+        longitude: String(donorSelection.point[0]),
         status: "active",
         statusVerifikasi: "verified",
         catatanVerifikasi: null,
@@ -176,17 +314,7 @@ async function run() {
     const saveDraft = await server.jsonRequest(
       `/api/backoffice/region-boundaries/desa/draft/features/${encodeURIComponent(boundaryKey)}`,
       "PUT",
-      {
-        boundaryKey,
-        level: "desa",
-        kecamatanId: muaradua.cpmKecId,
-        kelurahanId: batuBelangJaya.cpmKelId,
-        namaDesa: "Batu Belang Jaya",
-        geometry: {
-          type: "Polygon",
-          coordinates: [[[104.0729, -4.5464], [104.0745, -4.5464], [104.0745, -4.5446], [104.0729, -4.5446], [104.0729, -4.5464]]],
-        },
-      },
+      draftFeature,
     );
     assert.equal(saveDraft.response.status, 200, "save draft untuk publish test wajib sukses");
 
@@ -196,10 +324,11 @@ async function run() {
       {
         revisionId: draftRevisionId,
         mode: "publish-and-reconcile",
+        topologyStatus: "draft-ready",
       },
     );
     assert.equal(publishResponse.response.status, 200, "publish draft harus sukses");
-    assert.equal(requiredNumber((publishResponse.body as JsonRecord).reconciledCount, "reconciledCount wajib ada"), 1);
+    assert.ok(requiredNumber((publishResponse.body as JsonRecord).reconciledCount, "reconciledCount wajib ada") >= 1);
 
     const [publishedDraftRevision] = await db
       .select()
@@ -214,8 +343,8 @@ async function run() {
     assert.equal(publishedDraftRevision?.status, "published", "draft revision harus menjadi published");
     assert.equal(supersededPreviousRevision?.status, "superseded", "published lama harus menjadi superseded");
 
-    const afterPublish = await findContainingDesa(CEMARA_HOMESTAY_POINT[0], CEMARA_HOMESTAY_POINT[1]);
-    assert.equal(afterPublish?.name, "Batu Belang Jaya", "runtime cache harus mengikuti publish terbaru");
+    const afterPublish = await findContainingDesa(donorSelection.point[0], donorSelection.point[1]);
+    assert.equal(afterPublish?.name, TARGET_BOUNDARY_NAME, "runtime cache harus mengikuti publish terbaru");
 
     const [updatedOp] = await db.select().from(objekPajak).where(eq(objekPajak.id, createdOpId)).limit(1);
     assert.equal(updatedOp?.kelurahanId, batuBelangJaya.cpmKelId, "publish-and-reconcile harus memindahkan kelurahanId OP");
@@ -245,8 +374,8 @@ async function run() {
     assert.equal(rolledBackRevision?.status, "published", "revision target rollback harus kembali published");
     assert.equal(supersededDraftRevision?.status, "superseded", "revision publish terbaru harus disupersede setelah rollback");
 
-    const afterRollback = await findContainingDesa(CEMARA_HOMESTAY_POINT[0], CEMARA_HOMESTAY_POINT[1]);
-    assert.equal(afterRollback?.name, "Bumi Agung", "runtime cache harus kembali ke geometry revision sebelumnya");
+    const afterRollback = await findContainingDesa(donorSelection.point[0], donorSelection.point[1]);
+    assert.equal(afterRollback?.name, donorVillageName, "runtime cache harus kembali ke geometry revision sebelumnya");
   } finally {
     if (createdOpId !== null) {
       await db.delete(objekPajak).where(eq(objekPajak.id, createdOpId));

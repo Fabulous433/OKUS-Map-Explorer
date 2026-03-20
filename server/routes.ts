@@ -3225,6 +3225,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const result = await publishDraftRevision({
         revisionId: parsed.data.revisionId,
         mode: parsed.data.mode,
+        topologyStatus: parsed.data.topologyStatus,
         actorName: getActorName(req),
       });
       return res.json(result);
