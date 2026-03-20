@@ -1,5 +1,30 @@
 # Changelog
 
+## Phase 2.16r — Backoffice Desa Boundary Topology Editor
+
+### Added
+- Topology-aware rollout notes and smoke evidence:
+  - [docs/uat/backoffice-boundary-topology-smoke-2026-03-20.md](/D:/Code/OKUS-Map-Explorer/docs/uat/backoffice-boundary-topology-smoke-2026-03-20.md)
+- Regression suites topology-aware baru:
+  - [tests/integration/region-boundary-topology-contract.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/region-boundary-topology-contract.integration.ts)
+  - [tests/integration/region-boundary-topology-analysis.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/region-boundary-topology-analysis.integration.ts)
+  - [tests/integration/region-boundary-topology-resolution-api.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/region-boundary-topology-resolution-api.integration.ts)
+  - [tests/integration/region-boundary-topology-publish.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/region-boundary-topology-publish.integration.ts)
+  - [tests/integration/boundary-editor-topology-model.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/boundary-editor-topology-model.integration.ts)
+  - [tests/integration/backoffice-boundary-topology-resolution.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/backoffice-boundary-topology-resolution.integration.ts)
+
+### Improved
+- Backoffice boundary editor sekarang topology-aware:
+  - fragmen `released-fragment` dengan kandidat tunggal langsung auto-assigned saat save draft
+  - fragmen dengan kandidat > 1 tetap masuk antrian resolusi manual
+  - takeover area memunculkan warning konfirmasi saat save draft
+  - publish guard menahan publish sampai topology clean, takeover sudah dikonfirmasi, dan preview impact sukses
+- Runtime boundary final tetap scoped OKU Selatan desa dan publish/rollback hanya memperbarui paket boundary final, bukan shapefile runtime nasional.
+
+### Notes
+- Smoke evidence 2026-03-20 memvalidasi edit `Bumi Agung`, shrink polygon, auto-assign kandidat tunggal, resolusi manual untuk kandidat ambigu, warning takeover saat ekspansi ke `Batu Belang Jaya`, publish yang hanya menyisakan boundary pack final, dan rollback ke published pack sebelumnya.
+- Spatial guard tetap hijau pada bundle final verifikasi.
+
 ## Phase 2.16q — Backoffice Desa Boundary Editor
 
 ### Added
