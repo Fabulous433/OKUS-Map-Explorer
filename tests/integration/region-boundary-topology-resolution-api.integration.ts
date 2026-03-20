@@ -334,6 +334,7 @@ async function run() {
     const multiCandidateBody = multiCandidateAnalyze.body as JsonRecord;
     const multiCandidateRevision = regionBoundaryRevisionSchema.parse(multiCandidateBody.revision);
     const multiCandidateAnalysis = regionBoundaryTopologyAnalysisSchema.parse(multiCandidateBody.analysis);
+    createdRevisionIds.push(multiCandidateRevision.id);
     assert.ok(multiCandidateRevision.id > 0, "revision multi-candidate harus valid");
     assert.equal(multiCandidateAnalysis.topologyStatus, "draft-needs-resolution");
     assert.equal(multiCandidateAnalysis.summary.manualAssignmentRequiredCount, 1);
@@ -392,6 +393,7 @@ async function run() {
     const takeoverBody = takeoverAnalyze.body as JsonRecord;
     const takeoverRevision = regionBoundaryRevisionSchema.parse(takeoverBody.revision);
     const takeoverAnalysis = regionBoundaryTopologyAnalysisSchema.parse(takeoverBody.analysis);
+    createdRevisionIds.push(takeoverRevision.id);
     assert.equal(takeoverAnalysis.topologyStatus, "draft-needs-resolution");
     assert.equal(takeoverAnalysis.fragments[0]?.type, "takeover-area");
     assert.equal(takeoverAnalysis.fragments[0]?.status, "resolved");

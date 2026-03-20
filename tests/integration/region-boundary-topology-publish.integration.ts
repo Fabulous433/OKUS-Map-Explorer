@@ -25,6 +25,8 @@ import { db } from "../../server/storage";
 import { createIntegrationServer } from "./_helpers";
 
 const TARGET_BOUNDARY_NAME = "Batu Belang Jaya";
+// Keep the synthetic published baseline newer than any test-created revision.
+const SYNTHETIC_PUBLISHED_AT = new Date("2099-03-20T04:00:00.000Z");
 
 type GeometryPoint = readonly [number, number];
 type BoundaryFeature = {
@@ -331,10 +333,10 @@ async function run() {
         notes: "previous published revision",
         createdBy: "integration-test",
         publishedBy: "integration-test",
-        publishedAt: new Date(Date.now() - 60_000),
+        publishedAt: SYNTHETIC_PUBLISHED_AT,
         impactSummary: null,
-        createdAt: new Date(Date.now() - 60_000),
-        updatedAt: new Date(Date.now() - 60_000),
+        createdAt: SYNTHETIC_PUBLISHED_AT,
+        updatedAt: SYNTHETIC_PUBLISHED_AT,
       })
       .returning({ id: regionBoundaryRevision.id });
     revisionIds.add(previousPublished.id);
@@ -347,8 +349,8 @@ async function run() {
       namaDesa: TARGET_BOUNDARY_NAME,
       geometry: baseTargetFeature.geometry,
       bounds: computeBoundsFromCoordinates(baseTargetFeature.geometry.coordinates),
-      createdAt: new Date(Date.now() - 60_000),
-      updatedAt: new Date(Date.now() - 60_000),
+      createdAt: SYNTHETIC_PUBLISHED_AT,
+      updatedAt: SYNTHETIC_PUBLISHED_AT,
     });
 
     invalidateActiveRegionBoundaryCache();
