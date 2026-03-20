@@ -27,6 +27,14 @@ async function loadBoundaryEditorModelModule() {
   }
 }
 
+async function loadBoundaryEditorQueryModule() {
+  try {
+    return await import("../../client/src/lib/backoffice/boundary-editor-query.ts");
+  } catch {
+    return null;
+  }
+}
+
 async function run() {
   (globalThis as { React?: typeof React }).React = React;
 
@@ -38,6 +46,8 @@ async function run() {
 
   const modelModule = await loadBoundaryEditorModelModule();
   assert.ok(modelModule, "model boundary editor harus tersedia");
+  const queryModule = await loadBoundaryEditorQueryModule();
+  assert.ok(queryModule, "query boundary editor harus tersedia");
 
   const { BoundaryEditorShell } = shellModule as {
     BoundaryEditorShell?: (props: Record<string, unknown>) => JSX.Element;
@@ -171,6 +181,31 @@ async function run() {
       previewReady: boolean,
     ) => boolean;
   };
+  const { createBoundaryEditorTopologyCandidateOptions } = queryModule as {
+    createBoundaryEditorTopologyCandidateOptions?: (params: {
+      topologyAnalysis: {
+        fragments: Array<{
+          sourceBoundaryKey: string;
+          candidateBoundaryKeys: string[];
+          assignedBoundaryKey: string | null;
+        }>;
+      } | null;
+      kelurahanItems: Array<{
+        cpmKelId: string;
+        cpmKelurahan: string;
+        cpmKodeKec: string;
+      }>;
+      kecamatanItems: Array<{
+        cpmKecId: string;
+        cpmKecamatan: string;
+        cpmKodeKec: string;
+      }>;
+    }) => Array<{
+      id: string;
+      boundaryKey: string;
+      label: string;
+    }>;
+  };
 
   assert.equal(typeof BoundaryEditorShell, "function", "shell boundary editor wajib diexport");
   assert.equal(typeof BoundaryEditorImpactPanel, "function", "impact panel boundary editor wajib diexport");
@@ -178,6 +213,11 @@ async function run() {
   assert.equal(typeof createTakeoverWarningModel, "function", "helper warning takeover boundary wajib diexport");
   assert.equal(typeof canPreviewBoundaryRevision, "function", "helper preview gate boundary wajib diexport");
   assert.equal(typeof canPublishBoundaryRevision, "function", "helper publish gate boundary wajib diexport");
+  assert.equal(
+    typeof createBoundaryEditorTopologyCandidateOptions,
+    "function",
+    "helper kandidat topology lintas-kecamatan wajib diexport",
+  );
 
   const unresolvedTopology = {
     topologyStatus: "draft-needs-resolution" as const,
@@ -278,6 +318,46 @@ async function run() {
     "publish harus diizinkan setelah topology clean, takeover dikonfirmasi, dan preview sukses",
   );
 
+  const topologyCandidateOptions = createBoundaryEditorTopologyCandidateOptions!({
+    topologyAnalysis: unresolvedTopology,
+    kelurahanItems: [
+      {
+        cpmKelId: "1609040013",
+        cpmKelurahan: "Batu Belang Jaya",
+        cpmKodeKec: "160904",
+      },
+      {
+        cpmKelId: "1609040012",
+        cpmKelurahan: "Bumi Agung",
+        cpmKodeKec: "160904",
+      },
+      {
+        cpmKelId: "1609050012",
+        cpmKelurahan: "Desa Contoh",
+        cpmKodeKec: "160905",
+      },
+    ],
+    kecamatanItems: [
+      {
+        cpmKecId: "1609040",
+        cpmKecamatan: "Muara Dua",
+        cpmKodeKec: "160904",
+      },
+      {
+        cpmKecId: "1609050",
+        cpmKecamatan: "Runjung Agung",
+        cpmKodeKec: "160905",
+      },
+    ],
+  });
+  assert.equal(
+    topologyCandidateOptions.some(
+      (item) => item.boundaryKey === "runjungagung:desa-contoh" && item.label === "Desa Contoh (Runjung Agung)",
+    ),
+    true,
+    "kandidat lintas-kecamatan harus punya label desa + kecamatan yang terbaca",
+  );
+
   const panelMarkup = renderToStaticMarkup(
     createElement(BoundaryEditorImpactPanel as unknown as React.ComponentType<Record<string, unknown>>, {
       impactedCount: 2,
@@ -309,9 +389,7 @@ async function run() {
       ),
       takeoverDonors: unresolvedTopology.fragments.filter((fragment) => fragment.type === "takeover-area"),
       selectedBoundaryKey: "muaradua:batu-belang-jaya",
-      desaOptions: [
-        { id: "1609040013", boundaryKey: "muaradua:batu-belang-jaya", label: "Batu Belang Jaya" },
-      ],
+      desaOptions: topologyCandidateOptions,
       onSaveDraft: () => undefined,
       onPreviewImpact: () => undefined,
       onPublish: () => undefined,
@@ -394,10 +472,7 @@ async function run() {
           ),
           takeoverDonors: unresolvedTopology.fragments.filter((fragment) => fragment.type === "takeover-area"),
           selectedBoundaryKey: "muaradua:batu-belang-jaya",
-          desaOptions: [
-            { id: "1609040013", boundaryKey: "muaradua:batu-belang-jaya", label: "Batu Belang Jaya" },
-            { id: "1609050012", boundaryKey: "runjungagung:desa-contoh", label: "Desa Contoh" },
-          ],
+          desaOptions: topologyCandidateOptions,
           onSaveDraft: () => undefined,
           onPreviewImpact: () => undefined,
           onPublish: () => undefined,

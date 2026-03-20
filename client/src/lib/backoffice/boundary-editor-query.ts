@@ -104,6 +104,17 @@ export function useBoundaryEditorDesaOptionsQuery(kecamatanId?: string) {
   };
 }
 
+export function useBoundaryEditorAllDesaItemsQuery() {
+  const query = useQuery<MasterKelurahan[]>({
+    queryKey: ["/api/master/kelurahan"],
+  });
+
+  return {
+    ...query,
+    items: Array.isArray(query.data) ? query.data : [],
+  };
+}
+
 export function useBoundaryEditorDraftQuery(kecamatanId?: string) {
   return useQuery<BoundaryEditorDraftResponse>({
     queryKey: createBoundaryEditorDraftQueryKey(kecamatanId),
@@ -137,4 +148,52 @@ export function createBoundaryEditorDesaOptions(params: {
       label: item.cpmKelurahan,
     };
   });
+}
+
+export function createBoundaryEditorTopologyCandidateOptions(params: {
+  topologyAnalysis: RegionBoundaryTopologyAnalysis | null | undefined;
+  kelurahanItems: MasterKelurahan[];
+  kecamatanItems: MasterKecamatan[];
+}) {
+  const candidateBoundaryKeys = new Set<string>();
+
+  for (const fragment of params.topologyAnalysis?.fragments ?? []) {
+    candidateBoundaryKeys.add(fragment.sourceBoundaryKey);
+
+    for (const boundaryKey of fragment.candidateBoundaryKeys) {
+      candidateBoundaryKeys.add(boundaryKey);
+    }
+
+    if (fragment.assignedBoundaryKey) {
+      candidateBoundaryKeys.add(fragment.assignedBoundaryKey);
+    }
+  }
+
+  const kecamatanByKode = new Map(
+    params.kecamatanItems.map((item) => [item.cpmKodeKec, item]),
+  );
+
+  const options: BoundaryEditorDesaOption[] = [];
+  for (const kelurahan of params.kelurahanItems) {
+    const kecamatan = kecamatanByKode.get(kelurahan.cpmKodeKec);
+    if (!kecamatan) {
+      continue;
+    }
+
+    const boundaryKey = buildBoundaryEditorDesaKey({
+      kecamatanName: kecamatan.cpmKecamatan,
+      desaName: kelurahan.cpmKelurahan,
+    });
+    if (!candidateBoundaryKeys.has(boundaryKey)) {
+      continue;
+    }
+
+    options.push({
+      id: kelurahan.cpmKelId,
+      boundaryKey,
+      label: `${kelurahan.cpmKelurahan} (${kecamatan.cpmKecamatan})`,
+    });
+  }
+
+  return options;
 }

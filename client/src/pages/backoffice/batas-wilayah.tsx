@@ -6,7 +6,9 @@ import { BoundaryEditorImpactPanel } from "@/components/backoffice/boundary-edit
 import {
   createBoundaryEditorDesaOptions,
   createBoundaryEditorDraftQueryKey,
+  createBoundaryEditorTopologyCandidateOptions,
   createBoundaryEditorTopologyQueryKey,
+  useBoundaryEditorAllDesaItemsQuery,
   useBoundaryEditorDesaOptionsQuery,
   useBoundaryEditorDraftQuery,
   useBoundaryEditorKecamatanOptionsQuery,
@@ -97,6 +99,7 @@ export default function BackofficeBatasWilayah() {
   }, [kecamatanQuery.options, selectedKecamatanId]);
 
   const desaQuery = useBoundaryEditorDesaOptionsQuery(selectedKecamatanId);
+  const allDesaQuery = useBoundaryEditorAllDesaItemsQuery();
   const draftQuery = useBoundaryEditorDraftQuery(selectedKecamatanId);
   const topologyQuery = useBoundaryEditorTopologyQuery(selectedKecamatanId);
   const revisionQuery = useBoundaryEditorRevisionListQuery();
@@ -121,6 +124,13 @@ export default function BackofficeBatasWilayah() {
   }, [desaQuery.items, draftQuery.data?.features, selectedKecamatan?.label]);
   const topologyAnalysis = topologyQuery.data?.analysis ?? null;
   const topologyRevision = topologyQuery.data?.revision ?? draftQuery.data?.revision ?? null;
+  const topologyCandidateOptions = useMemo(() => {
+    return createBoundaryEditorTopologyCandidateOptions({
+      topologyAnalysis,
+      kelurahanItems: allDesaQuery.items,
+      kecamatanItems: kecamatanQuery.data ?? [],
+    });
+  }, [allDesaQuery.items, kecamatanQuery.data, topologyAnalysis]);
 
   const [selectedBoundaryKey, setSelectedBoundaryKey] = useState("");
   const selectedDraftFeature =
@@ -503,6 +513,7 @@ export default function BackofficeBatasWilayah() {
           isLoading={
             kecamatanQuery.isLoading ||
             desaQuery.isLoading ||
+            allDesaQuery.isLoading ||
             draftQuery.isLoading ||
             topologyQuery.isLoading ||
             revisionQuery.isLoading ||
@@ -546,7 +557,7 @@ export default function BackofficeBatasWilayah() {
               topologyAnalysis={topologyAnalysis}
               topologyRevisionId={topologyRevision?.id ?? null}
               takeoverConfirmed={Boolean(topologyRevision?.takeoverConfirmedAt)}
-              desaOptions={desaOptions}
+              desaOptions={[...desaOptions, ...topologyCandidateOptions]}
               onAssignFragment={(fragmentId, assignedBoundaryKey) =>
                 assignFragmentMutation.mutate({ fragmentId, assignedBoundaryKey })
               }
