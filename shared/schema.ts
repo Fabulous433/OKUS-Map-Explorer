@@ -5,6 +5,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   serial,
   text,
   time,
@@ -213,6 +214,10 @@ export const regionBoundaryRevision = pgTable("region_boundary_revision", {
   regionKey: varchar("region_key", { length: 20 }).notNull(),
   level: varchar("level", { length: 20 }).notNull(),
   status: varchar("status", { length: 20 }).notNull().default("draft"),
+  topologyStatus: varchar("topology_status", { length: 40 }).notNull().default("draft-editing"),
+  topologySummary: jsonb("topology_summary"),
+  takeoverConfirmedAt: timestamp("takeover_confirmed_at"),
+  takeoverConfirmedBy: varchar("takeover_confirmed_by", { length: 120 }),
   notes: text("notes"),
   createdBy: varchar("created_by", { length: 120 }).notNull(),
   publishedBy: varchar("published_by", { length: 120 }),
@@ -236,6 +241,27 @@ export const regionBoundaryRevisionFeature = pgTable("region_boundary_revision_f
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+export const regionBoundaryRevisionFragment = pgTable(
+  "region_boundary_revision_fragment",
+  {
+    revisionId: integer("revision_id")
+      .notNull()
+      .references(() => regionBoundaryRevision.id, { onDelete: "cascade" }),
+    fragmentId: varchar("fragment_id", { length: 160 }).notNull(),
+    type: varchar("type", { length: 40 }).notNull(),
+    sourceBoundaryKey: varchar("source_boundary_key", { length: 160 }).notNull(),
+    candidateBoundaryKeys: jsonb("candidate_boundary_keys").notNull(),
+    assignedBoundaryKey: varchar("assigned_boundary_key", { length: 160 }),
+    assignmentMode: varchar("assignment_mode", { length: 20 }),
+    status: varchar("status", { length: 20 }).notNull().default("unresolved"),
+    geometry: jsonb("geometry").notNull(),
+    areaSqM: decimal("area_sq_m", { precision: 18, scale: 2 }).notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.revisionId, table.fragmentId] }),
+  }),
+);
 
 export const entityAttachment = pgTable("entity_attachment", {
   id: varchar("id", { length: 64 }).primaryKey(),
@@ -789,6 +815,7 @@ export type MasterRekeningPajak = typeof masterRekeningPajak.$inferSelect;
 export type AuditLog = typeof auditLog.$inferSelect;
 export type RegionBoundaryRevisionRow = typeof regionBoundaryRevision.$inferSelect;
 export type RegionBoundaryRevisionFeatureRow = typeof regionBoundaryRevisionFeature.$inferSelect;
+export type RegionBoundaryRevisionFragmentRow = typeof regionBoundaryRevisionFragment.$inferSelect;
 export type EntityAttachment = typeof entityAttachment.$inferSelect;
 
 export type MasterKecamatanPayload = z.infer<typeof masterKecamatanPayloadSchema>;

@@ -1,0 +1,7 @@
+- [ ] Task 1: Lock Topology Contract and Persistence Shape
+- [ ] Task 2: Add Topology Analysis Engine and Neighbor Discovery
+- [ ] Task 3: Add Draft Analysis, Fragment Resolution, and Takeover APIs
+- [ ] Task 4: Make Publish Pipeline Topology-Aware
+- [ ] Task 5: Add Frontend Topology Model and Map Warnings
+- [ ] Task 6: Add Resolution UI and Guarded Admin Workflow
+- [ ] Task 7: Docs, Smoke Evidence, and Final Verification
