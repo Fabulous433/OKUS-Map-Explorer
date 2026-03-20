@@ -2,6 +2,7 @@ import { area } from "@turf/area";
 import { difference } from "@turf/difference";
 import { featureCollection } from "@turf/helpers";
 import { intersect } from "@turf/intersect";
+import { union } from "@turf/union";
 import type { Feature, FeatureCollection, MultiPolygon, Polygon } from "geojson";
 import type { RegionBoundaryGeometry, RegionBoundaryTopologyStatus } from "@shared/region-boundary-admin";
 import type { PublishedBoundaryFeature } from "./region-boundary-overrides";
@@ -270,6 +271,15 @@ function differenceGeometry(left: TurfFeature, right: TurfFeature): RegionBounda
   return cloneValue(result.geometry) as RegionBoundaryGeometry;
 }
 
+function unionGeometry(left: RegionBoundaryGeometry, right: RegionBoundaryGeometry): RegionBoundaryGeometry {
+  const result = union(featureCollection([toTurfFeature(left), toTurfFeature(right)]));
+  if (!result) {
+    return cloneValue(left);
+  }
+
+  return cloneValue(result.geometry) as RegionBoundaryGeometry;
+}
+
 function resolveFragmentAssignments(params: {
   sourceBoundaryKey: string;
   fragmentType: TopologyFragmentType;
@@ -363,7 +373,10 @@ export async function analyzeTopologyDraft(params: BoundaryAnalysisInput): Promi
     neighborFeatures,
   });
 
-  const fragments = [...releasedAssignments, ...takeoverAssignments];
+  const fragments = [...releasedAssignments, ...takeoverAssignments].map((fragment, index) => ({
+    ...fragment,
+    fragmentId: `frag-${String(index + 1).padStart(3, "0")}`,
+  }));
   const summary = summarizeAssignments(fragments);
   const requiresTakeoverConfirmation = takeoverAssignments.length > 0;
   const topologyStatus = buildDraftStatus({ summary, requiresTakeoverConfirmation });
@@ -391,14 +404,71 @@ export function materializeAffectedGeometryPack(params: {
   assignments: TopologyFragment[];
   baseFeatures: PublishedBoundaryFeature[];
 }) {
+  const baseFeatureByBoundaryKey = new Map(
+    params.baseFeatures.map((feature) => [
+      feature.boundaryKey,
+      {
+        ...feature,
+        geometry: cloneValue(feature.geometry),
+      },
+    ]),
+  );
+  const targetFeature = baseFeatureByBoundaryKey.get(params.targetBoundaryKey);
+  if (!targetFeature) {
+    throw new Error(`Target boundary ${params.targetBoundaryKey} tidak ditemukan untuk materialisasi geometry pack`);
+  }
+
+  const affectedBoundaryKeys = new Set<string>([params.targetBoundaryKey]);
+  const nextFeatureByBoundaryKey = new Map<string, PublishedBoundaryFeature>();
+  nextFeatureByBoundaryKey.set(params.targetBoundaryKey, {
+    ...targetFeature,
+    geometry: cloneValue(params.targetGeometry),
+  });
+
+  for (const assignment of params.assignments) {
+    if (assignment.type === "released-fragment" && assignment.assignedBoundaryKey && assignment.status === "resolved") {
+      const assignedFeature = baseFeatureByBoundaryKey.get(assignment.assignedBoundaryKey);
+      if (!assignedFeature) {
+        continue;
+      }
+
+      const currentFeature = nextFeatureByBoundaryKey.get(assignment.assignedBoundaryKey) ?? {
+        ...assignedFeature,
+        geometry: cloneValue(assignedFeature.geometry),
+      };
+      currentFeature.geometry = unionGeometry(currentFeature.geometry, assignment.geometry);
+      nextFeatureByBoundaryKey.set(assignment.assignedBoundaryKey, currentFeature);
+      affectedBoundaryKeys.add(assignment.assignedBoundaryKey);
+      continue;
+    }
+
+    if (assignment.type === "takeover-area") {
+      for (const boundaryKey of assignment.candidateBoundaryKeys) {
+        const affectedFeature = baseFeatureByBoundaryKey.get(boundaryKey);
+        if (!affectedFeature) {
+          continue;
+        }
+
+        const currentFeature = nextFeatureByBoundaryKey.get(boundaryKey) ?? {
+          ...affectedFeature,
+          geometry: cloneValue(affectedFeature.geometry),
+        };
+        const nextGeometry = differenceGeometry(toTurfFeature(currentFeature.geometry), toTurfFeature(assignment.geometry));
+        if (nextGeometry) {
+          currentFeature.geometry = nextGeometry;
+        }
+        nextFeatureByBoundaryKey.set(boundaryKey, currentFeature);
+        affectedBoundaryKeys.add(boundaryKey);
+      }
+    }
+  }
+
   return {
     targetBoundaryKey: params.targetBoundaryKey,
     targetGeometry: params.targetGeometry,
     assignments: params.assignments,
-    baseFeatureCount: params.baseFeatures.length,
     requiresTakeoverConfirmation: params.assignments.some((assignment) => assignment.type === "takeover-area"),
-    affectedBoundaryKeys: uniqueStrings(
-      params.assignments.flatMap((assignment) => assignment.candidateBoundaryKeys),
-    ),
+    affectedBoundaryKeys: Array.from(affectedBoundaryKeys),
+    features: Array.from(nextFeatureByBoundaryKey.values()).filter((feature) => affectedBoundaryKeys.has(feature.boundaryKey)),
   };
 }

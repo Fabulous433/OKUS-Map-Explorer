@@ -124,6 +124,7 @@ async function run() {
   const server = await createIntegrationServer();
   let createdOpId: number | null = null;
   let createdRevisionId: number | null = null;
+  let draftRevisionId: number | null = null;
 
   try {
     const [muaradua] = await db
@@ -240,7 +241,6 @@ async function run() {
       })
       .returning({ id: regionBoundaryRevision.id });
     createdRevisionId = createdRevision.id;
-
     const viewerLogin = await server.loginAs("viewer", "viewer123");
     assert.equal(viewerLogin.response.status, 200, "login viewer wajib sukses");
 
@@ -290,10 +290,17 @@ async function run() {
     );
     assert.equal(validSave.response.status, 200, "draft feature valid harus bisa disimpan");
     const savedDraft = validSave.body as JsonRecord;
-    assert.equal(savedDraft.boundaryKey, draftFeature.boundaryKey);
-    assert.equal(savedDraft.kecamatanId, draftFeature.kecamatanId);
-    assert.equal(savedDraft.kelurahanId, draftFeature.kelurahanId);
-    assert.equal((savedDraft.geometry as JsonRecord).type, "MultiPolygon");
+    const savedFeature = savedDraft.feature as JsonRecord;
+    const savedRevision = savedDraft.revision as JsonRecord;
+    const savedAnalysis = savedDraft.analysis as JsonRecord;
+    draftRevisionId = requiredNumber(savedRevision.id, "draft revision id save draft wajib ada");
+    assert.equal(savedFeature.boundaryKey, draftFeature.boundaryKey);
+    assert.equal(savedFeature.kecamatanId, draftFeature.kecamatanId);
+    assert.equal(savedFeature.kelurahanId, draftFeature.kelurahanId);
+    assert.equal((savedFeature.geometry as JsonRecord).type, "MultiPolygon");
+    assert.equal(requiredString(savedRevision.topologyStatus, "topologyStatus save draft wajib ada"), "draft-needs-resolution");
+    assert.ok(Array.isArray(savedAnalysis.fragments), "save draft wajib mengembalikan fragment queue");
+    assert.ok(Array.isArray(savedDraft.features), "save draft wajib mengembalikan feature pack draft");
 
     const previewResponse = await server.jsonRequest(
       "/api/backoffice/region-boundaries/desa/preview-impact",
@@ -312,6 +319,9 @@ async function run() {
     assert.equal(requiredString(movedCreatedOp?.fromKelurahan, "fromKelurahan wajib ada"), donorVillageName);
     assert.equal(requiredString(movedCreatedOp?.toKelurahan, "toKelurahan wajib ada"), TARGET_BOUNDARY_NAME);
   } finally {
+    if (draftRevisionId !== null) {
+      await db.delete(regionBoundaryRevision).where(eq(regionBoundaryRevision.id, draftRevisionId));
+    }
     if (createdRevisionId !== null) {
       await db.delete(regionBoundaryRevision).where(eq(regionBoundaryRevision.id, createdRevisionId));
     }
