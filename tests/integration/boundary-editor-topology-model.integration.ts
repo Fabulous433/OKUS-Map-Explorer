@@ -237,6 +237,50 @@ async function run() {
     "publish harus tetap diblok sebelum preview berhasil dan topology clean",
   );
 
+  const confirmedTakeoverTopology = {
+    topologyStatus: "draft-ready" as const,
+    summary: {
+      fragmentCount: 1,
+      unresolvedFragmentCount: 0,
+      autoAssignedFragmentCount: 0,
+      manualAssignmentRequiredCount: 0,
+    },
+    fragments: [
+      {
+        fragmentId: "frag-101",
+        type: "takeover-area" as const,
+        sourceBoundaryKey: "muaradua:batu-belang-jaya",
+        candidateBoundaryKeys: ["muaradua:bumi-agung"],
+        assignedBoundaryKey: "muaradua:bumi-agung",
+        assignmentMode: "manual" as const,
+        status: "resolved" as const,
+        geometry: {
+          type: "Polygon" as const,
+          coordinates: [[[104.13, -4.5]]],
+        },
+        areaSqM: 450,
+      },
+    ],
+    requiresTakeoverConfirmation: false,
+  };
+
+  const confirmedTakeoverPanel = createBoundaryTopologyPanelModel!(confirmedTakeoverTopology);
+  assert.equal(
+    confirmedTakeoverPanel.canPreview,
+    true,
+    "takeover yang sudah dikonfirmasi tidak boleh lagi memblok preview",
+  );
+  assert.equal(
+    canPublishBoundaryRevision!(confirmedTakeoverTopology, true),
+    true,
+    "takeover yang sudah dikonfirmasi harus bisa dipublish setelah preview sukses",
+  );
+  assert.equal(
+    createTakeoverWarningModel!(confirmedTakeoverTopology).visible,
+    false,
+    "warning takeover hanya boleh tampil saat konfirmasi takeover masih dibutuhkan",
+  );
+
   const cleanTopology = {
     topologyStatus: "draft-ready" as const,
     summary: {

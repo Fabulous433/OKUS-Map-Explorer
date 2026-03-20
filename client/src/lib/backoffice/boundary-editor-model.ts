@@ -63,11 +63,12 @@ function getTopologyStatusLabel(input: DraftTopologySummary) {
   return "SUPERSEDED";
 }
 
-function hasTopologyTakeover(input: DraftTopologySummary) {
-  return (
-    input.requiresTakeoverConfirmation === true ||
-    input.fragments.some((fragment) => fragment.type === "takeover-area")
-  );
+function requiresTakeoverConfirmation(input: DraftTopologySummary) {
+  if (typeof input.requiresTakeoverConfirmation === "boolean") {
+    return input.requiresTakeoverConfirmation;
+  }
+
+  return input.topologyStatus !== "draft-ready" && input.fragments.some((fragment) => fragment.type === "takeover-area");
 }
 
 function getFragmentDisplayLabel(fragment: DraftTopologyFragment) {
@@ -86,7 +87,7 @@ function getFragmentDisplayLabel(fragment: DraftTopologyFragment) {
 }
 
 function buildTopologyModel(input: DraftTopologySummary) {
-  const takeoverDetected = hasTopologyTakeover(input);
+  const takeoverDetected = requiresTakeoverConfirmation(input);
   const unresolvedFragments = input.fragments.filter((fragment) => fragment.status === "unresolved");
   const autoAssignedFragments = input.fragments.filter(
     (fragment) => fragment.status === "resolved" && fragment.assignmentMode === "auto",
@@ -124,7 +125,7 @@ export function createBoundaryTopologyPanelModel(input: DraftTopologySummary) {
 }
 
 export function createTakeoverWarningModel(input: DraftTopologySummary) {
-  const takeoverDetected = hasTopologyTakeover(input);
+  const takeoverDetected = requiresTakeoverConfirmation(input);
   const takeoverFragments = input.fragments.filter((fragment) => fragment.type === "takeover-area");
 
   if (!takeoverDetected) {
@@ -147,7 +148,7 @@ export function canPreviewBoundaryRevision(input: DraftTopologySummary) {
 }
 
 export function canPublishBoundaryRevision(input: DraftTopologySummary, previewReady: boolean) {
-  const takeoverDetected = hasTopologyTakeover(input);
+  const takeoverDetected = requiresTakeoverConfirmation(input);
   const unresolvedFragments = input.fragments.some((fragment) => fragment.status === "unresolved");
 
   return previewReady && input.topologyStatus === "draft-ready" && !takeoverDetected && !unresolvedFragments;
