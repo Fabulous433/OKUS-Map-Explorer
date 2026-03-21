@@ -68,6 +68,7 @@ async function run() {
         unresolvedFragmentCount: number;
         autoAssignedFragmentCount: number;
         manualAssignmentRequiredCount: number;
+        invalidFragmentCount: number;
       };
       fragments: Array<{
         fragmentId: string;
@@ -76,7 +77,7 @@ async function run() {
         candidateBoundaryKeys: string[];
         assignedBoundaryKey: string | null;
         assignmentMode: "auto" | "manual" | null;
-        status: "unresolved" | "resolved";
+        status: "unresolved" | "resolved" | "invalid";
         geometry: {
           type: "Polygon" | "MultiPolygon";
           coordinates: unknown;
@@ -108,6 +109,7 @@ async function run() {
         unresolvedFragmentCount: number;
         autoAssignedFragmentCount: number;
         manualAssignmentRequiredCount: number;
+        invalidFragmentCount: number;
       };
       fragments: Array<{
         fragmentId: string;
@@ -116,7 +118,7 @@ async function run() {
         candidateBoundaryKeys: string[];
         assignedBoundaryKey: string | null;
         assignmentMode: "auto" | "manual" | null;
-        status: "unresolved" | "resolved";
+        status: "unresolved" | "resolved" | "invalid";
         geometry: {
           type: "Polygon" | "MultiPolygon";
           coordinates: unknown;
@@ -136,6 +138,7 @@ async function run() {
         unresolvedFragmentCount: number;
         autoAssignedFragmentCount: number;
         manualAssignmentRequiredCount: number;
+        invalidFragmentCount: number;
       };
       fragments: Array<{
         fragmentId: string;
@@ -144,7 +147,7 @@ async function run() {
         candidateBoundaryKeys: string[];
         assignedBoundaryKey: string | null;
         assignmentMode: "auto" | "manual" | null;
-        status: "unresolved" | "resolved";
+        status: "unresolved" | "resolved" | "invalid";
         geometry: {
           type: "Polygon" | "MultiPolygon";
           coordinates: unknown;
@@ -161,6 +164,7 @@ async function run() {
           unresolvedFragmentCount: number;
           autoAssignedFragmentCount: number;
           manualAssignmentRequiredCount: number;
+          invalidFragmentCount: number;
         };
         fragments: Array<{
           fragmentId: string;
@@ -169,7 +173,7 @@ async function run() {
           candidateBoundaryKeys: string[];
           assignedBoundaryKey: string | null;
           assignmentMode: "auto" | "manual" | null;
-          status: "unresolved" | "resolved";
+          status: "unresolved" | "resolved" | "invalid";
           geometry: {
             type: "Polygon" | "MultiPolygon";
             coordinates: unknown;
@@ -222,10 +226,11 @@ async function run() {
   const unresolvedTopology = {
     topologyStatus: "draft-needs-resolution" as const,
     summary: {
-      fragmentCount: 3,
+      fragmentCount: 4,
       unresolvedFragmentCount: 1,
       autoAssignedFragmentCount: 1,
-      manualAssignmentRequiredCount: 1,
+      manualAssignmentRequiredCount: 2,
+      invalidFragmentCount: 1,
     },
     fragments: [
       {
@@ -257,6 +262,20 @@ async function run() {
         areaSqM: 800,
       },
       {
+        fragmentId: "frag-002b",
+        type: "released-fragment" as const,
+        sourceBoundaryKey: "muaradua:bumi-agung",
+        candidateBoundaryKeys: [],
+        assignedBoundaryKey: null,
+        assignmentMode: null,
+        status: "invalid" as const,
+        geometry: {
+          type: "Polygon" as const,
+          coordinates: [[[104.099, -4.549]]],
+        },
+        areaSqM: 1.7,
+      },
+      {
         fragmentId: "frag-003",
         type: "takeover-area" as const,
         sourceBoundaryKey: "muaradua:batu-belang-jaya",
@@ -281,6 +300,7 @@ async function run() {
       unresolvedFragmentCount: 0,
       autoAssignedFragmentCount: 1,
       manualAssignmentRequiredCount: 0,
+      invalidFragmentCount: 0,
     },
     fragments: [
       {
@@ -303,7 +323,11 @@ async function run() {
 
   const dirtyModel = createBoundaryTopologyPanelModel!(unresolvedTopology);
   assert.equal(dirtyModel.badgeLabel, "NEEDS RESOLUTION", "badge topology harus diturunkan dari status summary");
-  assert.equal(dirtyModel.manualResolutionQueue.length, 1, "queue resolusi manual harus menampung fragment unresolved");
+  assert.equal(
+    dirtyModel.manualResolutionQueue.length,
+    2,
+    "queue resolusi manual harus menampung fragment unresolved dan invalid",
+  );
   assert.equal(dirtyModel.takeoverDetected, true, "takeover harus terdeteksi dari topology summary");
   assert.equal(createTakeoverWarningModel!(unresolvedTopology).visible, true, "warning takeover harus tampil saat perlu konfirmasi");
   assert.equal(canPreviewBoundaryRevision!(unresolvedTopology), false, "preview harus diblok saat topology belum clean");
@@ -395,6 +419,7 @@ async function run() {
       onPublish: () => undefined,
       onConfirmTakeover: () => undefined,
       onAssignFragment: () => undefined,
+      onResetBoundaryDraft: () => undefined,
     }),
   );
 
@@ -417,6 +442,18 @@ async function run() {
   assert.ok(
     panelMarkup.includes("Batu Belang Jaya") && panelMarkup.includes("Desa Contoh"),
     "fragment unresolved harus menampilkan kandidat lintas-kecamatan di selector",
+  );
+  assert.ok(
+    panelMarkup.includes("Revision draft ini mencakup") && panelMarkup.includes("Bumi Agung"),
+    "panel harus menjelaskan bahwa unresolved bisa datang dari desa draft lain dalam revision yang sama",
+  );
+  assert.ok(
+    panelMarkup.includes("Tidak ada kandidat desa terdeteksi"),
+    "fragment invalid harus menampilkan pesan eksplisit saat dropdown tidak tersedia",
+  );
+  assert.ok(
+    panelMarkup.includes("Reset Draft Desa Ini"),
+    "panel harus menyediakan aksi reset draft per desa untuk membersihkan unresolved lama",
   );
   assert.ok(
     panelMarkup.includes("Konfirmasi Pengambilan Wilayah"),
@@ -478,6 +515,7 @@ async function run() {
           onPublish: () => undefined,
           onConfirmTakeover: () => undefined,
           onAssignFragment: () => undefined,
+          onResetBoundaryDraft: () => undefined,
         }),
       },
     ),

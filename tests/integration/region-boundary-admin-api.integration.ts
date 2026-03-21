@@ -228,6 +228,7 @@ async function run() {
           unresolvedFragmentCount: 0,
           autoAssignedFragmentCount: 1,
           manualAssignmentRequiredCount: 0,
+          invalidFragmentCount: 0,
         },
         takeoverConfirmedAt: new Date("2026-03-20T02:00:00.000Z"),
         takeoverConfirmedBy: "admin",
@@ -263,6 +264,7 @@ async function run() {
       unresolvedFragmentCount: 0,
       autoAssignedFragmentCount: 1,
       manualAssignmentRequiredCount: 0,
+      invalidFragmentCount: 0,
     });
     assert.equal(
       requiredString(mappedRevision?.takeoverConfirmedAt, "takeoverConfirmedAt wajib ada"),

@@ -70,18 +70,31 @@ export function BoundaryEditorImpactPanel(props: {
   topologyRevisionId?: number | null;
   takeoverConfirmed?: boolean;
   desaOptions?: BoundaryEditorDesaOption[];
+  selectedBoundaryKey?: string;
   onAssignFragment?: (fragmentId: string, assignedBoundaryKey: string) => void;
   onConfirmTakeover?: () => void;
+  onResetBoundaryDraft?: () => void;
   onSaveDraft?: () => void;
   onPreviewImpact?: () => void;
   onPublish?: () => void;
+  isResetting?: boolean;
 }) {
   const topologyModel = props.topologyAnalysis ? createBoundaryTopologyPanelModel(props.topologyAnalysis) : null;
   const takeoverWarning = props.topologyAnalysis ? createTakeoverWarningModel(props.topologyAnalysis) : null;
   const boundaryLabelByKey = new Map(
     (props.desaOptions ?? []).map((item) => [item.boundaryKey, item.label] as const),
   );
-  const unresolvedFragments = props.topologyAnalysis?.fragments.filter((fragment) => fragment.status === "unresolved") ?? [];
+  const sourceDraftBoundaryKeys = Array.from(
+    new Set((props.topologyAnalysis?.fragments ?? []).map((fragment) => fragment.sourceBoundaryKey)),
+  );
+  const sharedDraftLabels = sourceDraftBoundaryKeys.map((boundaryKey) =>
+    resolveBoundaryLabel(boundaryKey, boundaryLabelByKey),
+  );
+  const unresolvedFragments = [...(topologyModel?.manualResolutionQueue ?? [])].sort((left, right) => {
+    const leftPriority = left.sourceBoundaryKey === props.selectedBoundaryKey ? 0 : 1;
+    const rightPriority = right.sourceBoundaryKey === props.selectedBoundaryKey ? 0 : 1;
+    return leftPriority - rightPriority || left.fragmentId.localeCompare(right.fragmentId);
+  });
   const autoAssignedFragments =
     props.topologyAnalysis?.fragments.filter(
       (fragment) => fragment.status === "resolved" && fragment.assignmentMode === "auto",
@@ -118,7 +131,7 @@ export function BoundaryEditorImpactPanel(props: {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-lg border border-black/10 bg-white p-3">
                 <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">Fragment total</p>
                 <p className="mt-2 font-mono text-sm font-bold text-black/85">{topologyModel?.summaryLabel}</p>
@@ -131,6 +144,25 @@ export function BoundaryEditorImpactPanel(props: {
                 <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">Auto-assigned</p>
                 <p className="mt-2 font-mono text-sm font-bold text-black/85">{topologyModel?.autoAssignedLabel}</p>
               </div>
+              <div className="rounded-lg border border-black/10 bg-white p-3">
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">Invalid</p>
+                <p className="mt-2 font-mono text-sm font-bold text-black/85">{topologyModel?.invalidLabel}</p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-black/10 bg-white p-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">Draft scope</p>
+              <p className="mt-2 font-mono text-xs font-bold text-black/80">{topologyModel?.sharedDraftLabel}</p>
+              <p className="mt-2 font-mono text-[11px] leading-6 text-black/65">
+                {sharedDraftLabels.length > 0
+                  ? `Revision draft ini mencakup: ${sharedDraftLabels.join(" · ")}.`
+                  : "Belum ada desa draft lain pada revision aktif."}
+              </p>
+              {props.selectedBoundaryKey && sourceDraftBoundaryKeys.length > 1 ? (
+                <p className="mt-2 font-mono text-[11px] leading-6 text-black/60">
+                  Unresolved dari desa lain tetap memblok publish sampai diselesaikan atau draft desa tersebut direset.
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-3">
@@ -151,32 +183,45 @@ export function BoundaryEditorImpactPanel(props: {
                         </p>
                         <p className="mt-1 font-mono text-xs font-bold text-black/85">
                           Kandidat lintas-kecamatan:{" "}
-                          {fragment.candidateBoundaryKeys.map((key) => resolveBoundaryLabel(key, boundaryLabelByKey)).join(" · ")}
+                          {fragment.candidateBoundaryKeys.length > 0
+                            ? fragment.candidateBoundaryKeys
+                                .map((key) => resolveBoundaryLabel(key, boundaryLabelByKey))
+                                .join(" · ")
+                            : "belum ditemukan"}
+                        </p>
+                        <p className="mt-2 font-mono text-[11px] text-black/60">
+                          Asal draft: {resolveBoundaryLabel(fragment.sourceBoundaryKey, boundaryLabelByKey)}
                         </p>
                       </div>
-                      <Badge variant="outline">UNRESOLVED</Badge>
+                      <Badge variant="outline">{fragment.status === "invalid" ? "INVALID" : "UNRESOLVED"}</Badge>
                     </div>
 
                     <div className="mt-3 space-y-2">
                       <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">
-                        Pilih desa tujuan
+                        {fragment.canAssign ? "Pilih desa tujuan" : "Tindakan diperlukan"}
                       </p>
-                      <Select
-                        value={fragment.assignedBoundaryKey ?? ""}
-                        onValueChange={(value) => props.onAssignFragment?.(fragment.fragmentId, value)}
-                        disabled={!props.onAssignFragment || fragment.candidateBoundaryKeys.length === 0}
-                      >
-                        <SelectTrigger className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 font-mono text-xs font-bold">
-                          <SelectValue placeholder="Pilih desa..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {fragment.candidateBoundaryKeys.map((key) => (
-                            <SelectItem key={key} value={key}>
-                              {resolveBoundaryLabel(key, boundaryLabelByKey)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      {fragment.canAssign ? (
+                        <Select
+                          value={undefined}
+                          onValueChange={(value) => props.onAssignFragment?.(fragment.fragmentId, value)}
+                          disabled={!props.onAssignFragment}
+                        >
+                          <SelectTrigger className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 font-mono text-xs font-bold">
+                            <SelectValue placeholder="Pilih desa..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {fragment.candidateBoundaryKeys.map((key) => (
+                              <SelectItem key={key} value={key}>
+                                {resolveBoundaryLabel(key, boundaryLabelByKey)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="rounded-lg border border-dashed border-red-300 bg-red-50 p-3 font-mono text-xs leading-6 text-red-900">
+                          {fragment.resolutionMessage}
+                        </div>
+                      )}
                     </div>
                   </article>
                 ))
@@ -243,6 +288,26 @@ export function BoundaryEditorImpactPanel(props: {
                     </Button>
                   </div>
                 </div>
+              </div>
+            ) : null}
+
+            {props.onResetBoundaryDraft && props.selectedBoundaryKey ? (
+              <div className="rounded-lg border border-black/10 bg-white p-3">
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">Isolasi draft</p>
+                <p className="mt-2 font-mono text-xs leading-6 text-black/65">
+                  Reset desa aktif untuk membuang draft dan fragment topology milik desa yang sedang dipilih,
+                  tanpa menghapus draft desa lain pada revision yang sama.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-3 justify-start font-mono text-xs font-bold"
+                  onClick={props.onResetBoundaryDraft}
+                  disabled={props.isResetting}
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  {props.isResetting ? "Mereset Draft..." : "Reset Draft Desa Ini"}
+                </Button>
               </div>
             ) : null}
           </CardContent>

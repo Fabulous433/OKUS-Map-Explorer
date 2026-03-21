@@ -12,7 +12,7 @@ import {
   regionBoundaryRevisionFeature,
   regionBoundaryRevisionFragment,
 } from "@shared/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { invalidateActiveRegionBoundaryCache } from "../../server/region-boundaries";
 import { buildDesaBoundaryKey } from "../../server/region-boundary-overrides";
 import { db } from "../../server/storage";
@@ -131,25 +131,45 @@ async function run() {
       .where(eq(masterKecamatan.cpmKecamatan, "Muaradua"))
       .limit(1);
     assert.ok(muaradua, "master kecamatan Muaradua wajib tersedia");
+    const [runjungAgung] = await db
+      .select()
+      .from(masterKecamatan)
+      .where(eq(masterKecamatan.cpmKecamatan, "Runjung Agung"))
+      .limit(1);
+    assert.ok(runjungAgung, "master kecamatan Runjung Agung wajib tersedia");
 
-    const desaNames = ["Bumi Agung", "Batu Belang Jaya", "Suka Banjar", "Sukaraja II"] as const;
-    const desaRows = await db
+    const muaraduaDesaNames = ["Bumi Agung", "Batu Belang Jaya", "Suka Banjar", "Sukaraja II"] as const;
+    const muaraduaDesaRows = await db
       .select()
       .from(masterKelurahan)
       .where(
         and(
           eq(masterKelurahan.cpmKodeKec, muaradua.cpmKodeKec),
-          inArray(masterKelurahan.cpmKelurahan, [...desaNames]),
+          inArray(masterKelurahan.cpmKelurahan, [...muaraduaDesaNames]),
         ),
       );
-    assert.equal(desaRows.length, desaNames.length, "seluruh desa synthetic topology wajib tersedia di master");
+    assert.equal(
+      muaraduaDesaRows.length,
+      muaraduaDesaNames.length,
+      "seluruh desa synthetic topology wajib tersedia di master",
+    );
+    const [runjungAgungDesa] = await db
+      .select()
+      .from(masterKelurahan)
+      .where(eq(masterKelurahan.cpmKodeKec, runjungAgung.cpmKodeKec))
+      .orderBy(asc(masterKelurahan.cpmKelurahan))
+      .limit(1);
+    assert.ok(runjungAgungDesa, "minimal satu desa Runjung Agung wajib tersedia di master");
 
-    const desaByName = new Map(desaRows.map((row) => [row.cpmKelurahan, row]));
+    const desaByName = new Map(muaraduaDesaRows.map((row) => [row.cpmKelurahan, row]));
     const targetDesa = desaByName.get("Bumi Agung");
     const eastDesa = desaByName.get("Batu Belang Jaya");
     const northDesa = desaByName.get("Suka Banjar");
     const northEastDesa = desaByName.get("Sukaraja II");
-    assert.ok(targetDesa && eastDesa && northDesa && northEastDesa, "master desa synthetic wajib lengkap");
+    assert.ok(
+      targetDesa && eastDesa && northDesa && northEastDesa && runjungAgungDesa,
+      "master desa synthetic wajib lengkap",
+    );
 
     const targetBoundaryKey = buildDesaBoundaryKey({
       kecamatanName: muaradua.cpmKecamatan,
@@ -166,6 +186,10 @@ async function run() {
     const northEastBoundaryKey = buildDesaBoundaryKey({
       kecamatanName: muaradua.cpmKecamatan,
       desaName: northEastDesa.cpmKelurahan,
+    });
+    const westBoundaryKey = buildDesaBoundaryKey({
+      kecamatanName: runjungAgung.cpmKecamatan,
+      desaName: runjungAgungDesa.cpmKelurahan,
     });
 
     const [syntheticPublishedRevision] = await db
@@ -216,13 +240,20 @@ async function run() {
         namaDesa: northEastDesa.cpmKelurahan,
         geometry: square(10, 10, 14, 14),
       },
+      {
+        boundaryKey: westBoundaryKey,
+        kelurahanId: runjungAgungDesa.cpmKelId,
+        namaDesa: runjungAgungDesa.cpmKelurahan,
+        geometry: square(-4, 2, 0, 8),
+      },
     ];
 
     await db.insert(regionBoundaryRevisionFeature).values(
       syntheticFeatures.map((feature) => ({
         revisionId: syntheticPublishedRevision.id,
         boundaryKey: feature.boundaryKey,
-        kecamatanId: muaradua.cpmKecId,
+        kecamatanId:
+          feature.boundaryKey === westBoundaryKey ? runjungAgung.cpmKecId : muaradua.cpmKecId,
         kelurahanId: feature.kelurahanId,
         namaDesa: feature.namaDesa,
         geometry: feature.geometry,
@@ -318,6 +349,36 @@ async function run() {
 
     await db.delete(regionBoundaryRevision).where(eq(regionBoundaryRevision.id, singleCandidateRevision.id));
 
+    const crossKecamatanAnalyze = await server.jsonRequest(
+      "/api/backoffice/region-boundaries/desa/draft/analyze",
+      "POST",
+      {
+        boundaryKey: targetBoundaryKey,
+        level: "desa",
+        kecamatanId: muaradua.cpmKecId,
+        kelurahanId: targetDesa.cpmKelId,
+        namaDesa: targetDesa.cpmKelurahan,
+        geometry: square(0.75, 0, 10, 10),
+      },
+    );
+    assert.equal(crossKecamatanAnalyze.response.status, 200, "analyze lintas-kecamatan harus sukses");
+    const crossKecamatanBody = crossKecamatanAnalyze.body as JsonRecord;
+    const crossKecamatanRevision = regionBoundaryRevisionSchema.parse(crossKecamatanBody.revision);
+    const crossKecamatanAnalysis = regionBoundaryTopologyAnalysisSchema.parse(crossKecamatanBody.analysis);
+    createdRevisionIds.push(crossKecamatanRevision.id);
+    assert.equal(
+      crossKecamatanAnalysis.fragments[0]?.candidateBoundaryKeys[0],
+      westBoundaryKey,
+      "topology lintas-kecamatan harus menemukan kandidat desa dari kecamatan lain",
+    );
+    assert.equal(
+      crossKecamatanAnalysis.fragments[0]?.assignedBoundaryKey,
+      westBoundaryKey,
+      "fragment kandidat tunggal lintas-kecamatan harus auto-assign",
+    );
+
+    await db.delete(regionBoundaryRevision).where(eq(regionBoundaryRevision.id, crossKecamatanRevision.id));
+
     const multiCandidateAnalyze = await server.jsonRequest(
       "/api/backoffice/region-boundaries/desa/draft/analyze",
       "POST",
@@ -377,6 +438,42 @@ async function run() {
 
     await db.delete(regionBoundaryRevision).where(eq(regionBoundaryRevision.id, multiCandidateRevision.id));
 
+    const invalidAnalyze = await server.jsonRequest(
+      "/api/backoffice/region-boundaries/desa/draft/analyze",
+      "POST",
+      {
+        boundaryKey: targetBoundaryKey,
+        level: "desa",
+        kecamatanId: muaradua.cpmKecId,
+        kelurahanId: targetDesa.cpmKelId,
+        namaDesa: targetDesa.cpmKelurahan,
+        geometry: polygonWithHole(square(0, 0, 10, 10), square(4, 4, 6, 6)),
+      },
+    );
+    assert.equal(invalidAnalyze.response.status, 200, "analyze invalid fragment harus tetap sukses");
+    const invalidBody = invalidAnalyze.body as JsonRecord;
+    const invalidRevision = regionBoundaryRevisionSchema.parse(invalidBody.revision);
+    const invalidAnalysis = regionBoundaryTopologyAnalysisSchema.parse(invalidBody.analysis);
+    createdRevisionIds.push(invalidRevision.id);
+    assert.equal(invalidAnalysis.topologyStatus, "draft-needs-resolution");
+    assert.equal(
+      invalidAnalysis.summary.invalidFragmentCount,
+      1,
+      "fragment tanpa kandidat harus dihitung sebagai invalid secara eksplisit",
+    );
+    assert.equal(
+      invalidAnalysis.fragments[0]?.status,
+      "invalid",
+      "fragment tanpa kandidat tidak boleh lagi disamarkan sebagai unresolved biasa",
+    );
+    assert.deepEqual(
+      invalidAnalysis.fragments[0]?.candidateBoundaryKeys,
+      [],
+      "fragment invalid harus mengembalikan daftar kandidat kosong",
+    );
+
+    await db.delete(regionBoundaryRevision).where(eq(regionBoundaryRevision.id, invalidRevision.id));
+
     const takeoverAnalyze = await server.jsonRequest(
       "/api/backoffice/region-boundaries/desa/draft/analyze",
       "POST",
@@ -426,6 +523,69 @@ async function run() {
     assert.deepEqual(
       persistedFeatureRows.map((row) => row.boundaryKey).sort(),
       [eastBoundaryKey, targetBoundaryKey].sort(),
+    );
+
+    await db.delete(regionBoundaryRevision).where(eq(regionBoundaryRevision.id, takeoverRevision.id));
+
+    const firstDraftAnalyze = await server.jsonRequest(
+      "/api/backoffice/region-boundaries/desa/draft/analyze",
+      "POST",
+      {
+        boundaryKey: targetBoundaryKey,
+        level: "desa",
+        kecamatanId: muaradua.cpmKecId,
+        kelurahanId: targetDesa.cpmKelId,
+        namaDesa: targetDesa.cpmKelurahan,
+        geometry: polygonWithHole(square(0, 0, 10, 10), square(7.6, 7.6, 10, 10)),
+      },
+    );
+    assert.equal(firstDraftAnalyze.response.status, 200, "draft pertama untuk reset harus sukses");
+    const firstDraftBody = firstDraftAnalyze.body as JsonRecord;
+    const sharedDraftRevision = regionBoundaryRevisionSchema.parse(firstDraftBody.revision);
+    createdRevisionIds.push(sharedDraftRevision.id);
+
+    const secondDraftAnalyze = await server.jsonRequest(
+      "/api/backoffice/region-boundaries/desa/draft/analyze",
+      "POST",
+      {
+        boundaryKey: northBoundaryKey,
+        level: "desa",
+        kecamatanId: muaradua.cpmKecId,
+        kelurahanId: northDesa.cpmKelId,
+        namaDesa: northDesa.cpmKelurahan,
+        geometry: square(2, 10.5, 8, 14),
+      },
+    );
+    assert.equal(secondDraftAnalyze.response.status, 200, "draft kedua untuk reset harus sukses");
+
+    const topologyBeforeReset = await server.requestJson(
+      `/api/backoffice/region-boundaries/desa/draft/topology?kecamatanId=${encodeURIComponent(muaradua.cpmKecId)}`,
+    );
+    assert.equal(topologyBeforeReset.response.status, 200, "topology sebelum reset harus bisa dibaca");
+    const topologyBeforeResetBody = topologyBeforeReset.body as JsonRecord;
+    const topologyBeforeResetAnalysis = regionBoundaryTopologyAnalysisSchema.parse(topologyBeforeResetBody.analysis);
+    assert.equal(
+      new Set(topologyBeforeResetAnalysis.fragments.map((fragment) => fragment.sourceBoundaryKey)).has(northBoundaryKey),
+      true,
+      "revision draft gabungan harus memuat fragment dari desa kedua sebelum reset",
+    );
+
+    const resetDraft = await server.requestJson(
+      `/api/backoffice/region-boundaries/desa/draft/features/${encodeURIComponent(northBoundaryKey)}`,
+      { method: "DELETE" },
+    );
+    assert.equal(resetDraft.response.status, 200, "reset draft per desa harus tersedia untuk admin");
+
+    const topologyAfterReset = await server.requestJson(
+      `/api/backoffice/region-boundaries/desa/draft/topology?kecamatanId=${encodeURIComponent(muaradua.cpmKecId)}`,
+    );
+    assert.equal(topologyAfterReset.response.status, 200, "topology sesudah reset harus bisa dibaca");
+    const topologyAfterResetBody = topologyAfterReset.body as JsonRecord;
+    const topologyAfterResetAnalysis = regionBoundaryTopologyAnalysisSchema.parse(topologyAfterResetBody.analysis);
+    assert.equal(
+      new Set(topologyAfterResetAnalysis.fragments.map((fragment) => fragment.sourceBoundaryKey)).has(northBoundaryKey),
+      false,
+      "reset draft per desa harus menghapus fragment milik desa yang direset dari revision aktif",
     );
   } finally {
     await deleteDraftRevisions(createdRevisionIds);

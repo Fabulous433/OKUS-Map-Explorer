@@ -452,6 +452,35 @@ export default function BackofficeBatasWilayah() {
     },
   });
 
+  const resetBoundaryDraftMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedBoundaryKey) {
+        throw new Error("Pilih desa draft yang ingin direset");
+      }
+
+      const response = await apiRequest(
+        "DELETE",
+        `/api/backoffice/region-boundaries/desa/draft/features/${encodeURIComponent(selectedBoundaryKey)}`,
+      );
+      return response.json();
+    },
+    onSuccess: async () => {
+      await invalidateBoundaryEditorQueries();
+      resetPreviewState();
+      toast({
+        title: "Draft desa direset",
+        description: "Draft boundary untuk desa aktif dibuang dari revision saat ini.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Reset draft gagal",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const rollbackMutation = useMutation({
     mutationFn: async (revisionId: number) => {
       const response = await apiRequest(
@@ -558,13 +587,16 @@ export default function BackofficeBatasWilayah() {
               topologyRevisionId={topologyRevision?.id ?? null}
               takeoverConfirmed={Boolean(topologyRevision?.takeoverConfirmedAt)}
               desaOptions={[...desaOptions, ...topologyCandidateOptions]}
+              selectedBoundaryKey={selectedBoundaryKey}
               onAssignFragment={(fragmentId, assignedBoundaryKey) =>
                 assignFragmentMutation.mutate({ fragmentId, assignedBoundaryKey })
               }
               onConfirmTakeover={() => confirmTakeoverMutation.mutate()}
+              onResetBoundaryDraft={() => resetBoundaryDraftMutation.mutate()}
               onSaveDraft={() => saveDraftMutation.mutate()}
               onPreviewImpact={() => previewMutation.mutate()}
               onPublish={() => publishMutation.mutate()}
+              isResetting={resetBoundaryDraftMutation.isPending}
             />
           }
           rollbackRevisionId={rollbackMutation.variables ?? null}

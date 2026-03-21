@@ -25,6 +25,7 @@ async function run() {
         unresolvedFragmentCount: number;
         autoAssignedFragmentCount: number;
         manualAssignmentRequiredCount: number;
+        invalidFragmentCount: number;
       };
       fragments: Array<{
         fragmentId: string;
@@ -33,7 +34,7 @@ async function run() {
         candidateBoundaryKeys: string[];
         assignedBoundaryKey: string | null;
         assignmentMode: "auto" | "manual" | null;
-        status: "unresolved" | "resolved";
+        status: "unresolved" | "resolved" | "invalid";
         geometry: {
           type: "Polygon" | "MultiPolygon";
           coordinates: unknown;
@@ -50,9 +51,15 @@ async function run() {
         fragmentId: string;
         candidateBoundaryKeys: string[];
         type: "released-fragment" | "takeover-area";
+        sourceBoundaryKey: string;
+        status: "unresolved" | "invalid";
+        canAssign: boolean;
+        resolutionMessage: string;
       }>;
       informationalRows: string[];
       takeoverDetected: boolean;
+      sharedDraftLabel: string;
+      invalidLabel: string;
     };
     createTakeoverWarningModel?: (input: {
       topologyStatus: "draft-editing" | "draft-needs-resolution" | "draft-ready" | "published" | "superseded";
@@ -61,6 +68,7 @@ async function run() {
         unresolvedFragmentCount: number;
         autoAssignedFragmentCount: number;
         manualAssignmentRequiredCount: number;
+        invalidFragmentCount: number;
       };
       fragments: Array<{
         fragmentId: string;
@@ -69,7 +77,7 @@ async function run() {
         candidateBoundaryKeys: string[];
         assignedBoundaryKey: string | null;
         assignmentMode: "auto" | "manual" | null;
-        status: "unresolved" | "resolved";
+        status: "unresolved" | "resolved" | "invalid";
         geometry: {
           type: "Polygon" | "MultiPolygon";
           coordinates: unknown;
@@ -89,6 +97,7 @@ async function run() {
         unresolvedFragmentCount: number;
         autoAssignedFragmentCount: number;
         manualAssignmentRequiredCount: number;
+        invalidFragmentCount: number;
       };
       fragments: Array<{
         fragmentId: string;
@@ -97,7 +106,7 @@ async function run() {
         candidateBoundaryKeys: string[];
         assignedBoundaryKey: string | null;
         assignmentMode: "auto" | "manual" | null;
-        status: "unresolved" | "resolved";
+        status: "unresolved" | "resolved" | "invalid";
         geometry: {
           type: "Polygon" | "MultiPolygon";
           coordinates: unknown;
@@ -114,6 +123,7 @@ async function run() {
           unresolvedFragmentCount: number;
           autoAssignedFragmentCount: number;
           manualAssignmentRequiredCount: number;
+          invalidFragmentCount: number;
         };
         fragments: Array<{
           fragmentId: string;
@@ -122,7 +132,7 @@ async function run() {
           candidateBoundaryKeys: string[];
           assignedBoundaryKey: string | null;
           assignmentMode: "auto" | "manual" | null;
-          status: "unresolved" | "resolved";
+          status: "unresolved" | "resolved" | "invalid";
           geometry: {
             type: "Polygon" | "MultiPolygon";
             coordinates: unknown;
@@ -151,10 +161,11 @@ async function run() {
   const dirtyTopology = {
     topologyStatus: "draft-needs-resolution" as const,
     summary: {
-      fragmentCount: 3,
+      fragmentCount: 4,
       unresolvedFragmentCount: 1,
       autoAssignedFragmentCount: 1,
-      manualAssignmentRequiredCount: 1,
+      manualAssignmentRequiredCount: 2,
+      invalidFragmentCount: 1,
     },
     fragments: [
       {
@@ -186,6 +197,20 @@ async function run() {
         areaSqM: 800,
       },
       {
+        fragmentId: "frag-002b",
+        type: "released-fragment" as const,
+        sourceBoundaryKey: "muaradua:pancur-pungah",
+        candidateBoundaryKeys: [],
+        assignedBoundaryKey: null,
+        assignmentMode: null,
+        status: "invalid" as const,
+        geometry: {
+          type: "Polygon" as const,
+          coordinates: [[[104.105, -4.551]]],
+        },
+        areaSqM: 3.25,
+      },
+      {
         fragmentId: "frag-003",
         type: "takeover-area" as const,
         sourceBoundaryKey: "muaradua:batu-belang-jaya",
@@ -207,21 +232,48 @@ async function run() {
   assert.equal(dirtyPanel.badgeLabel, "NEEDS RESOLUTION", "badge topology harus diturunkan dari status summary");
   assert.equal(dirtyPanel.canPreview, false, "preview harus diblok sampai topology clean");
   assert.equal(dirtyPanel.canPublish, false, "publish harus diblok sampai preview dan topology clean");
-  assert.equal(dirtyPanel.manualResolutionQueue.length, 1, "queue resolusi manual harus berasal dari fragment unresolved");
+  assert.equal(dirtyPanel.manualResolutionQueue.length, 2, "queue resolusi manual harus memuat unresolved dan invalid");
   assert.deepEqual(
     dirtyPanel.manualResolutionQueue[0],
     {
       fragmentId: "frag-001",
       candidateBoundaryKeys: ["muaradua:batu-belang-jaya", "runjungagung:desa-contoh"],
       type: "released-fragment",
+      sourceBoundaryKey: "muaradua:bumi-agung",
+      status: "unresolved",
+      canAssign: true,
+      resolutionMessage: "Pilih salah satu desa kandidat untuk fragmen ini.",
     },
     "fragment unresolved harus masuk antrean resolusi manual secara utuh",
+  );
+  assert.equal(
+    dirtyPanel.manualResolutionQueue[1]?.status,
+    "invalid",
+    "fragment tanpa kandidat harus tetap muncul sebagai invalid, bukan unresolved biasa",
+  );
+  assert.equal(
+    dirtyPanel.manualResolutionQueue[1]?.canAssign,
+    false,
+    "fragment invalid tanpa kandidat tidak boleh membuka selector desa",
+  );
+  assert.ok(
+    dirtyPanel.manualResolutionQueue[1]?.resolutionMessage.includes("Tidak ada kandidat desa"),
+    "fragment invalid harus menjelaskan kenapa dropdown tidak tersedia",
   );
   assert.ok(
     dirtyPanel.informationalRows.some((row) => row.includes("frag-002") && row.includes("auto")),
     "fragment auto-assigned hanya boleh muncul sebagai row informasional",
   );
   assert.equal(dirtyPanel.takeoverDetected, true, "takeover harus terdeteksi dari topology summary");
+  assert.ok(
+    dirtyPanel.sharedDraftLabel.includes("Revision draft ini mencakup"),
+    "panel topology harus menjelaskan bahwa revision draft ini mencakup lebih dari satu desa",
+  );
+  assert.equal(
+    dirtyPanel.invalidLabel,
+    "1 invalid",
+    "summary topology harus menampilkan jumlah fragment invalid secara eksplisit",
+  );
 
   const takeoverWarning = createTakeoverWarningModel!(dirtyTopology);
   assert.equal(takeoverWarning.visible, true, "warning takeover harus tampil saat ada takeover area");
@@ -244,6 +296,7 @@ async function run() {
       unresolvedFragmentCount: 0,
       autoAssignedFragmentCount: 0,
       manualAssignmentRequiredCount: 0,
+      invalidFragmentCount: 0,
     },
     fragments: [
       {
@@ -288,6 +341,7 @@ async function run() {
       unresolvedFragmentCount: 0,
       autoAssignedFragmentCount: 0,
       manualAssignmentRequiredCount: 0,
+      invalidFragmentCount: 0,
     },
     fragments: [],
     requiresTakeoverConfirmation: false,

@@ -59,6 +59,7 @@ import {
   listBoundaryRevisions,
   previewDraftImpact,
   publishDraftRevision,
+  resetDraftBoundaryFeature,
   rollbackPublishedRevision,
   saveDraftBoundaryFeature,
 } from "./boundary-editor-storage";
@@ -3201,6 +3202,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Gagal menyimpan draft boundary";
+      return res.status(400).json({ message });
+    }
+  });
+
+  app.delete("/api/backoffice/region-boundaries/desa/draft/features/:boundaryKey", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
+    const boundaryKey = String(req.params.boundaryKey ?? "").trim();
+    if (!boundaryKey) {
+      return res.status(400).json({ message: "boundaryKey draft boundary tidak valid" });
+    }
+
+    try {
+      const result = await resetDraftBoundaryFeature({
+        boundaryKey,
+        actorName: getActorName(req),
+      });
+      return res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal mereset draft boundary";
       return res.status(400).json({ message });
     }
   });

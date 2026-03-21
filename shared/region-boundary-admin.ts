@@ -12,7 +12,7 @@ export const regionBoundaryTopologyStatusSchema = z.enum([
 ]);
 export const regionBoundaryFragmentTypeSchema = z.enum(["released-fragment", "takeover-area"]);
 export const regionBoundaryFragmentAssignmentModeSchema = z.enum(["auto", "manual"]);
-export const regionBoundaryFragmentStatusSchema = z.enum(["unresolved", "resolved"]);
+export const regionBoundaryFragmentStatusSchema = z.enum(["unresolved", "resolved", "invalid"]);
 
 export const regionBoundaryGeometrySchema = z.object({
   type: z.enum(["Polygon", "MultiPolygon"]),
@@ -52,6 +52,7 @@ export const regionBoundaryTopologySummarySchema = z.object({
   unresolvedFragmentCount: z.number().int().min(0),
   autoAssignedFragmentCount: z.number().int().min(0),
   manualAssignmentRequiredCount: z.number().int().min(0),
+  invalidFragmentCount: z.number().int().min(0).default(0),
 });
 
 export const regionBoundaryTopologyFragmentSchema = z.object({

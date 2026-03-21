@@ -280,10 +280,12 @@ export async function getActiveRegionBoundary(
         ? precision === "light"
           ? bundle.kecamatan.light
           : bundle.kecamatan.precise
-        : filterDesaBoundaryByKecamatan(
-            await getMergedDesaBoundary(precision),
-            String(scope?.kecamatanName ?? "").trim(),
-          );
+        : scope?.kecamatanName
+          ? filterDesaBoundaryByKecamatan(
+              await getMergedDesaBoundary(precision),
+              String(scope.kecamatanName).trim(),
+            )
+          : await getMergedDesaBoundary(precision);
 
   return {
     regionKey: bundle.regionKey,

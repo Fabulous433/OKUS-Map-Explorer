@@ -71,6 +71,14 @@ function requiresTakeoverConfirmation(input: DraftTopologySummary) {
   return input.topologyStatus !== "draft-ready" && input.fragments.some((fragment) => fragment.type === "takeover-area");
 }
 
+function buildInvalidFragmentMessage(fragment: DraftTopologyFragment) {
+  if (fragment.areaSqM <= 50) {
+    return "Tidak ada kandidat desa terdeteksi. Fragmen ini sangat kecil; rapikan geometry atau reset draft desa ini.";
+  }
+
+  return "Tidak ada kandidat desa terdeteksi. Rapikan geometry agar menyentuh desa tujuan atau reset draft desa ini.";
+}
+
 function getFragmentDisplayLabel(fragment: DraftTopologyFragment) {
   const assignmentLabel =
     fragment.assignmentMode === "auto"
@@ -88,14 +96,22 @@ function getFragmentDisplayLabel(fragment: DraftTopologyFragment) {
 
 function buildTopologyModel(input: DraftTopologySummary) {
   const takeoverDetected = requiresTakeoverConfirmation(input);
-  const unresolvedFragments = input.fragments.filter((fragment) => fragment.status === "unresolved");
+  const blockingFragments = input.fragments.filter((fragment) => fragment.status !== "resolved");
   const autoAssignedFragments = input.fragments.filter(
     (fragment) => fragment.status === "resolved" && fragment.assignmentMode === "auto",
   );
-  const manualResolutionQueue = unresolvedFragments.map((fragment) => ({
+  const uniqueSourceBoundaryKeys = Array.from(new Set(input.fragments.map((fragment) => fragment.sourceBoundaryKey)));
+  const manualResolutionQueue = blockingFragments.map((fragment) => ({
     fragmentId: fragment.fragmentId,
     candidateBoundaryKeys: fragment.candidateBoundaryKeys,
     type: fragment.type,
+    sourceBoundaryKey: fragment.sourceBoundaryKey,
+    status: fragment.status,
+    canAssign: fragment.status !== "invalid" && fragment.candidateBoundaryKeys.length > 0,
+    resolutionMessage:
+      fragment.status === "invalid"
+        ? buildInvalidFragmentMessage(fragment)
+        : "Pilih salah satu desa kandidat untuk fragmen ini.",
   }));
 
   return {
@@ -105,10 +121,10 @@ function buildTopologyModel(input: DraftTopologySummary) {
         ? "Topology clean and ready for preview"
         : takeoverDetected
           ? "Takeover confirmation required before publish"
-          : unresolvedFragments.length > 0
-            ? `${unresolvedFragments.length} fragment menunggu resolusi manual`
+          : blockingFragments.length > 0
+            ? `${blockingFragments.length} fragment menunggu resolusi manual`
             : "Topology draft sedang diproses",
-    canPreview: input.topologyStatus === "draft-ready" && !takeoverDetected && unresolvedFragments.length === 0,
+    canPreview: input.topologyStatus === "draft-ready" && !takeoverDetected && blockingFragments.length === 0,
     canPublish: false,
     manualResolutionQueue,
     informationalRows: autoAssignedFragments.map((fragment) => getFragmentDisplayLabel(fragment)),
@@ -117,6 +133,11 @@ function buildTopologyModel(input: DraftTopologySummary) {
     unresolvedLabel: `${input.summary.unresolvedFragmentCount} unresolved`,
     autoAssignedLabel: `${input.summary.autoAssignedFragmentCount} auto-assigned`,
     manualAssignmentLabel: `${input.summary.manualAssignmentRequiredCount} manual`,
+    invalidLabel: `${input.summary.invalidFragmentCount} invalid`,
+    sharedDraftLabel:
+      uniqueSourceBoundaryKeys.length > 1
+        ? `Revision draft ini mencakup ${uniqueSourceBoundaryKeys.length} desa draft.`
+        : "Revision draft ini fokus pada 1 desa.",
   };
 }
 
@@ -149,7 +170,7 @@ export function canPreviewBoundaryRevision(input: DraftTopologySummary) {
 
 export function canPublishBoundaryRevision(input: DraftTopologySummary, previewReady: boolean) {
   const takeoverDetected = requiresTakeoverConfirmation(input);
-  const unresolvedFragments = input.fragments.some((fragment) => fragment.status === "unresolved");
+  const unresolvedFragments = input.fragments.some((fragment) => fragment.status !== "resolved");
 
   return previewReady && input.topologyStatus === "draft-ready" && !takeoverDetected && !unresolvedFragments;
 }
