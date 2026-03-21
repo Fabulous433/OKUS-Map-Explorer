@@ -66,39 +66,52 @@ function getGeometryBounds(
   return L.latLngBounds(points);
 }
 
-function getFragmentStyle(fragment: DraftTopologySummary["fragments"][number]) {
+function getFragmentStyle(
+  fragment: DraftTopologySummary["fragments"][number],
+  highlightedFragmentIds: Set<string>,
+) {
+  const isHighlighted =
+    highlightedFragmentIds.size === 0 || highlightedFragmentIds.has(fragment.fragmentId);
+  const fadedOpacity = isHighlighted ? 1 : 0.35;
+
   if (fragment.type === "takeover-area") {
     return {
       color: "#b91c1c",
-      weight: 3,
+      weight: isHighlighted ? 3.5 : 2,
       dashArray: "7 4",
       fillColor: "#f87171",
-      fillOpacity: fragment.status === "resolved" ? 0.18 : 0.24,
+      fillOpacity: (fragment.status === "resolved" ? 0.18 : 0.24) * fadedOpacity,
+      opacity: fadedOpacity,
     };
   }
 
   if (fragment.assignmentMode === "auto" && fragment.status === "resolved") {
     return {
       color: "#15803d",
-      weight: 2,
+      weight: isHighlighted ? 2.5 : 2,
       dashArray: "4 4",
       fillColor: "#4ade80",
-      fillOpacity: 0.18,
+      fillOpacity: 0.18 * fadedOpacity,
+      opacity: fadedOpacity,
     };
   }
 
   return {
     color: "#c2410c",
-    weight: 2,
+    weight: isHighlighted ? 3 : 2,
     dashArray: "6 3",
     fillColor: "#fb923c",
-    fillOpacity: 0.2,
+    fillOpacity: 0.2 * fadedOpacity,
+    opacity: fadedOpacity,
   };
 }
 
 function TopologyFragmentLayers(props: {
   topologyAnalysis: DraftTopologySummary;
+  highlightFragmentIds?: string[];
 }) {
+  const highlightedFragmentIds = new Set(props.highlightFragmentIds ?? []);
+
   return (
     <>
       {props.topologyAnalysis.fragments.map((fragment) => (
@@ -116,7 +129,7 @@ function TopologyFragmentLayers(props: {
               geometry: fragment.geometry,
             } as GeoJSON.Feature
           }
-          style={getFragmentStyle(fragment)}
+          style={getFragmentStyle(fragment, highlightedFragmentIds)}
         />
       ))}
     </>
@@ -225,6 +238,7 @@ export function BoundaryEditorMap(props: {
   geometry: RegionBoundaryGeometry | null;
   onGeometryChange: (geometry: RegionBoundaryGeometry) => void;
   topologyAnalysis?: DraftTopologySummary | null;
+  highlightFragmentIds?: string[];
 }) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [baseMapKey, setBaseMapKey] = useState<keyof typeof BOUNDARY_EDITOR_BASE_MAPS>(
@@ -362,9 +376,9 @@ export function BoundaryEditorMap(props: {
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-amber-800">Manual resolution queue</p>
               <ul className="mt-2 space-y-1 font-mono text-xs text-amber-900">
-                {topologyModel.manualResolutionQueue.map((fragment) => (
-                  <li key={fragment.fragmentId}>
-                    {fragment.fragmentId}: {fragment.candidateBoundaryKeys.join(", ")}
+                {topologyModel.manualResolutionQueue.map((block) => (
+                  <li key={block.blockId}>
+                    {block.blockId}: {block.candidateBoundaryKeys.join(", ")}
                   </li>
                 ))}
               </ul>
@@ -451,7 +465,12 @@ export function BoundaryEditorMap(props: {
               }}
             />
           ) : null}
-          {props.topologyAnalysis ? <TopologyFragmentLayers topologyAnalysis={props.topologyAnalysis} /> : null}
+          {props.topologyAnalysis ? (
+            <TopologyFragmentLayers
+              topologyAnalysis={props.topologyAnalysis}
+              highlightFragmentIds={props.highlightFragmentIds}
+            />
+          ) : null}
           <EditableBoundaryLayer
             boundary={props.boundary}
             geometry={props.geometry}

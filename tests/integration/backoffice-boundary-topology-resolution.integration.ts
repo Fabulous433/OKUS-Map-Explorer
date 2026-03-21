@@ -57,6 +57,7 @@ async function run() {
   };
   const {
     createBoundaryTopologyPanelModel,
+    createBoundaryResolutionBlocks,
     createTakeoverWarningModel,
     canPreviewBoundaryRevision,
     canPublishBoundaryRevision,
@@ -90,10 +91,16 @@ async function run() {
       headline: string;
       canPreview: boolean;
       canPublish: boolean;
+      resolutionBlockLabel: string;
       manualResolutionQueue: Array<{
-        fragmentId: string;
+        blockId: string;
+        fragmentIds: string[];
         candidateBoundaryKeys: string[];
         type: "released-fragment" | "takeover-area";
+        sourceBoundaryKey: string;
+        status: "unresolved" | "invalid";
+        canAssign: boolean;
+        resolutionMessage: string;
       }>;
       informationalRows: string[];
       takeoverDetected: boolean;
@@ -102,6 +109,31 @@ async function run() {
       autoAssignedLabel: string;
       manualAssignmentLabel: string;
     };
+    createBoundaryResolutionBlocks?: (input: {
+      topologyStatus: "draft-editing" | "draft-needs-resolution" | "draft-ready" | "published" | "superseded";
+      summary: {
+        fragmentCount: number;
+        unresolvedFragmentCount: number;
+        autoAssignedFragmentCount: number;
+        manualAssignmentRequiredCount: number;
+        invalidFragmentCount: number;
+      };
+      fragments: Array<{
+        fragmentId: string;
+        type: "released-fragment" | "takeover-area";
+        sourceBoundaryKey: string;
+        candidateBoundaryKeys: string[];
+        assignedBoundaryKey: string | null;
+        assignmentMode: "auto" | "manual" | null;
+        status: "unresolved" | "resolved" | "invalid";
+        geometry: {
+          type: "Polygon" | "MultiPolygon";
+          coordinates: unknown;
+        };
+        areaSqM: number;
+      }>;
+      requiresTakeoverConfirmation?: boolean;
+    }) => Array<{ blockId: string; fragmentIds: string[] }>;
     createTakeoverWarningModel?: (input: {
       topologyStatus: "draft-editing" | "draft-needs-resolution" | "draft-ready" | "published" | "superseded";
       summary: {
@@ -214,6 +246,7 @@ async function run() {
   assert.equal(typeof BoundaryEditorShell, "function", "shell boundary editor wajib diexport");
   assert.equal(typeof BoundaryEditorImpactPanel, "function", "impact panel boundary editor wajib diexport");
   assert.equal(typeof createBoundaryTopologyPanelModel, "function", "helper topology boundary wajib diexport");
+  assert.equal(typeof createBoundaryResolutionBlocks, "function", "helper blok area wajib diexport");
   assert.equal(typeof createTakeoverWarningModel, "function", "helper warning takeover boundary wajib diexport");
   assert.equal(typeof canPreviewBoundaryRevision, "function", "helper preview gate boundary wajib diexport");
   assert.equal(typeof canPublishBoundaryRevision, "function", "helper publish gate boundary wajib diexport");
@@ -271,9 +304,35 @@ async function run() {
         status: "invalid" as const,
         geometry: {
           type: "Polygon" as const,
-          coordinates: [[[104.099, -4.549]]],
+          coordinates: [[
+            [104.099, -4.549],
+            [104.1, -4.549],
+            [104.1, -4.548],
+            [104.099, -4.548],
+            [104.099, -4.549],
+          ]],
         },
         areaSqM: 1.7,
+      },
+      {
+        fragmentId: "frag-002c",
+        type: "released-fragment" as const,
+        sourceBoundaryKey: "muaradua:bumi-agung",
+        candidateBoundaryKeys: [],
+        assignedBoundaryKey: null,
+        assignmentMode: null,
+        status: "invalid" as const,
+        geometry: {
+          type: "Polygon" as const,
+          coordinates: [[
+            [104.1, -4.549],
+            [104.101, -4.549],
+            [104.101, -4.548],
+            [104.1, -4.548],
+            [104.1, -4.549],
+          ]],
+        },
+        areaSqM: 0.9,
       },
       {
         fragmentId: "frag-003",
@@ -322,7 +381,12 @@ async function run() {
   };
 
   const dirtyModel = createBoundaryTopologyPanelModel!(unresolvedTopology);
-  assert.equal(dirtyModel.badgeLabel, "NEEDS RESOLUTION", "badge topology harus diturunkan dari status summary");
+  assert.equal(dirtyModel.badgeLabel, "PERLU DITUNTASKAN", "badge topology harus diturunkan dari status summary");
+  assert.equal(
+    dirtyModel.resolutionBlockLabel,
+    "2 blok area perlu dituntaskan",
+    "panel topology harus berbicara dalam blok area, bukan fragment per serpihan",
+  );
   assert.equal(
     dirtyModel.manualResolutionQueue.length,
     2,
@@ -340,6 +404,11 @@ async function run() {
     canPublishBoundaryRevision!(cleanTopology, true),
     true,
     "publish harus diizinkan setelah topology clean, takeover dikonfirmasi, dan preview sukses",
+  );
+  assert.equal(
+    createBoundaryResolutionBlocks!(unresolvedTopology)[1]?.fragmentIds.length,
+    2,
+    "fragmen invalid yang saling menempel harus digabung menjadi satu blok area",
   );
 
   const topologyCandidateOptions = createBoundaryEditorTopologyCandidateOptions!({
@@ -407,41 +476,41 @@ async function run() {
       topologyAnalysis: unresolvedTopology,
       topologyRevisionId: 17,
       takeoverConfirmed: false,
-      unresolvedFragments: unresolvedTopology.fragments.filter((fragment) => fragment.status === "unresolved"),
-      autoAssignedFragments: unresolvedTopology.fragments.filter(
-        (fragment) => fragment.status === "resolved" && fragment.assignmentMode === "auto",
-      ),
-      takeoverDonors: unresolvedTopology.fragments.filter((fragment) => fragment.type === "takeover-area"),
       selectedBoundaryKey: "muaradua:batu-belang-jaya",
       desaOptions: topologyCandidateOptions,
       onSaveDraft: () => undefined,
       onPreviewImpact: () => undefined,
       onPublish: () => undefined,
       onConfirmTakeover: () => undefined,
-      onAssignFragment: () => undefined,
+      onAssignFragmentBlock: () => undefined,
       onResetBoundaryDraft: () => undefined,
+      onFocusResolutionBlock: () => undefined,
     }),
   );
 
   assert.ok(
-    panelMarkup.includes("NEEDS RESOLUTION"),
+    panelMarkup.includes("PERLU DITUNTASKAN"),
     "save draft harus menampilkan status topology yang belum clean",
   );
   assert.ok(
-    panelMarkup.includes("Unresolved fragments"),
-    "panel harus menampilkan antrean fragment unresolved",
+    panelMarkup.includes("Selesaikan Perubahan Wilayah"),
+    "panel kanan harus memakai judul yang lebih natural untuk admin",
   );
   assert.ok(
-    panelMarkup.includes("Auto-assigned fragments"),
-    "panel harus menampilkan fragment yang ter-assign otomatis",
+    panelMarkup.includes("Blok area yang perlu diputuskan"),
+    "panel harus menampilkan antrean blok area yang perlu diputuskan",
   );
   assert.ok(
-    panelMarkup.includes("Takeover donors"),
-    "panel harus menampilkan donor takeover",
+    panelMarkup.includes("Blok area otomatis"),
+    "panel harus menampilkan blok area yang diarahkan otomatis",
+  );
+  assert.ok(
+    panelMarkup.includes("Area desa lain yang diambil"),
+    "panel harus menjelaskan area takeover dengan bahasa non-teknis",
   );
   assert.ok(
     panelMarkup.includes("Batu Belang Jaya") && panelMarkup.includes("Desa Contoh"),
-    "fragment unresolved harus menampilkan kandidat lintas-kecamatan di selector",
+    "blok area unresolved harus menampilkan kandidat lintas-kecamatan di selector",
   );
   assert.ok(
     panelMarkup.includes("Revision draft ini mencakup") && panelMarkup.includes("Bumi Agung"),
@@ -454,6 +523,10 @@ async function run() {
   assert.ok(
     panelMarkup.includes("Reset Draft Desa Ini"),
     "panel harus menyediakan aksi reset draft per desa untuk membersihkan unresolved lama",
+  );
+  assert.ok(
+    panelMarkup.includes("Sorot di peta"),
+    "setiap blok area yang perlu diputuskan harus bisa disorot di peta",
   );
   assert.ok(
     panelMarkup.includes("Konfirmasi Pengambilan Wilayah"),
@@ -478,9 +551,10 @@ async function run() {
         desaOptions: [
           { id: "1609040013", boundaryKey: "muaradua:batu-belang-jaya", label: "Batu Belang Jaya" },
         ],
-        revisions: [],
+        revisionHistory: [],
         isLoading: false,
         lastSavedLabel: "Draft tersimpan 08.30 WIB",
+        showDraftStatus: true,
         mapCanvas: createElement("div", { "data-testid": "boundary-editor-map-shell" }, "map"),
         rightPanel: createElement(BoundaryEditorImpactPanel as unknown as React.ComponentType<Record<string, unknown>>, {
           impactedCount: 2,
@@ -503,19 +577,15 @@ async function run() {
           topologyAnalysis: unresolvedTopology,
           topologyRevisionId: 17,
           takeoverConfirmed: false,
-          unresolvedFragments: unresolvedTopology.fragments.filter((fragment) => fragment.status === "unresolved"),
-          autoAssignedFragments: unresolvedTopology.fragments.filter(
-            (fragment) => fragment.status === "resolved" && fragment.assignmentMode === "auto",
-          ),
-          takeoverDonors: unresolvedTopology.fragments.filter((fragment) => fragment.type === "takeover-area"),
           selectedBoundaryKey: "muaradua:batu-belang-jaya",
           desaOptions: topologyCandidateOptions,
           onSaveDraft: () => undefined,
           onPreviewImpact: () => undefined,
           onPublish: () => undefined,
           onConfirmTakeover: () => undefined,
-          onAssignFragment: () => undefined,
+          onAssignFragmentBlock: () => undefined,
           onResetBoundaryDraft: () => undefined,
+          onFocusResolutionBlock: () => undefined,
         }),
       },
     ),

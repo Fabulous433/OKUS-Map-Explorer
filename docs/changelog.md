@@ -1,5 +1,25 @@
 # Changelog
 
+## Phase 2.16s — Boundary Editor Per-Desa History & Block Resolution
+
+### Added
+- Riwayat revisi per desa aktif:
+  - [tests/integration/region-boundary-revision-history-api.integration.ts](/D:/Code/OKUS-Map-Explorer/tests/integration/region-boundary-revision-history-api.integration.ts)
+
+### Improved
+- Riwayat revisi boundary editor sekarang scoped ke desa yang sedang dipilih, bukan daftar global lintas desa.
+- Badge status revisi admin kini memakai label natural berbahasa Indonesia:
+  - `Draf`
+  - `Aktif`
+  - `Arsip`
+- Panel status draf tidak lagi muncul untuk desa yang belum pernah diedit.
+- Panel resolusi topology admin sekarang bekerja dalam `blok area`, bukan menampilkan fragment mesin satu per satu.
+- Setiap blok area yang perlu diputuskan sekarang bisa disorot ke peta sebelum admin memilih desa tujuan.
+
+### Notes
+- Desa terdampak samping tidak lagi mewarisi riwayat revisi jika desa tersebut bukan sumber edit utama.
+- Fragmen yang berdempetan dengan kandidat identik digabung menjadi satu blok kerja untuk mengurangi risiko assignment manual yang saling bertentangan.
+
 ## Phase 2.16r — Backoffice Desa Boundary Topology Editor
 
 ### Added

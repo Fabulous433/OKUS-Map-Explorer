@@ -14,6 +14,7 @@ async function run() {
 
   const {
     createBoundaryTopologyPanelModel,
+    createBoundaryResolutionBlocks,
     createTakeoverWarningModel,
     canPreviewBoundaryRevision,
     canPublishBoundaryRevision,
@@ -47,8 +48,10 @@ async function run() {
       headline: string;
       canPreview: boolean;
       canPublish: boolean;
+      resolutionBlockLabel: string;
       manualResolutionQueue: Array<{
-        fragmentId: string;
+        blockId: string;
+        fragmentIds: string[];
         candidateBoundaryKeys: string[];
         type: "released-fragment" | "takeover-area";
         sourceBoundaryKey: string;
@@ -61,6 +64,37 @@ async function run() {
       sharedDraftLabel: string;
       invalidLabel: string;
     };
+    createBoundaryResolutionBlocks?: (input: {
+      topologyStatus: "draft-editing" | "draft-needs-resolution" | "draft-ready" | "published" | "superseded";
+      summary: {
+        fragmentCount: number;
+        unresolvedFragmentCount: number;
+        autoAssignedFragmentCount: number;
+        manualAssignmentRequiredCount: number;
+        invalidFragmentCount: number;
+      };
+      fragments: Array<{
+        fragmentId: string;
+        type: "released-fragment" | "takeover-area";
+        sourceBoundaryKey: string;
+        candidateBoundaryKeys: string[];
+        assignedBoundaryKey: string | null;
+        assignmentMode: "auto" | "manual" | null;
+        status: "unresolved" | "resolved" | "invalid";
+        geometry: {
+          type: "Polygon" | "MultiPolygon";
+          coordinates: unknown;
+        };
+        areaSqM: number;
+      }>;
+      requiresTakeoverConfirmation?: boolean;
+    }) => Array<{
+      blockId: string;
+      fragmentIds: string[];
+      candidateBoundaryKeys: string[];
+      status: "unresolved" | "invalid";
+      canAssign: boolean;
+    }>;
     createTakeoverWarningModel?: (input: {
       topologyStatus: "draft-editing" | "draft-needs-resolution" | "draft-ready" | "published" | "superseded";
       summary: {
@@ -151,6 +185,11 @@ async function run() {
     "helper panel topology boundary wajib diexport",
   );
   assert.equal(
+    typeof createBoundaryResolutionBlocks,
+    "function",
+    "helper blok area topology boundary wajib diexport",
+  );
+  assert.equal(
     typeof createTakeoverWarningModel,
     "function",
     "helper warning takeover boundary wajib diexport",
@@ -206,9 +245,35 @@ async function run() {
         status: "invalid" as const,
         geometry: {
           type: "Polygon" as const,
-          coordinates: [[[104.105, -4.551]]],
+          coordinates: [[
+            [104.105, -4.551],
+            [104.106, -4.551],
+            [104.106, -4.55],
+            [104.105, -4.55],
+            [104.105, -4.551],
+          ]],
         },
         areaSqM: 3.25,
+      },
+      {
+        fragmentId: "frag-002c",
+        type: "released-fragment" as const,
+        sourceBoundaryKey: "muaradua:pancur-pungah",
+        candidateBoundaryKeys: [],
+        assignedBoundaryKey: null,
+        assignmentMode: null,
+        status: "invalid" as const,
+        geometry: {
+          type: "Polygon" as const,
+          coordinates: [[
+            [104.106, -4.551],
+            [104.107, -4.551],
+            [104.107, -4.55],
+            [104.106, -4.55],
+            [104.106, -4.551],
+          ]],
+        },
+        areaSqM: 2.1,
       },
       {
         fragmentId: "frag-003",
@@ -229,14 +294,29 @@ async function run() {
   };
 
   const dirtyPanel = createBoundaryTopologyPanelModel!(dirtyTopology);
-  assert.equal(dirtyPanel.badgeLabel, "NEEDS RESOLUTION", "badge topology harus diturunkan dari status summary");
-  assert.equal(dirtyPanel.canPreview, false, "preview harus diblok sampai topology clean");
-  assert.equal(dirtyPanel.canPublish, false, "publish harus diblok sampai preview dan topology clean");
+  assert.equal(dirtyPanel.badgeLabel, "PERLU DITUNTASKAN", "badge topology harus diturunkan dari status summary");
+  assert.equal(dirtyPanel.canPreview, false, "preview harus diblok sampai wilayah siap diproses");
+  assert.equal(dirtyPanel.canPublish, false, "publish harus diblok sampai preview dan wilayah siap diproses");
+  assert.equal(
+    dirtyPanel.resolutionBlockLabel,
+    "2 blok area perlu dituntaskan",
+    "ringkasan panel harus menyebut blok area, bukan fragment mentah",
+  );
   assert.equal(dirtyPanel.manualResolutionQueue.length, 2, "queue resolusi manual harus memuat unresolved dan invalid");
   assert.deepEqual(
-    dirtyPanel.manualResolutionQueue[0],
     {
-      fragmentId: "frag-001",
+      blockId: dirtyPanel.manualResolutionQueue[0]?.blockId,
+      fragmentIds: dirtyPanel.manualResolutionQueue[0]?.fragmentIds,
+      candidateBoundaryKeys: dirtyPanel.manualResolutionQueue[0]?.candidateBoundaryKeys,
+      type: dirtyPanel.manualResolutionQueue[0]?.type,
+      sourceBoundaryKey: dirtyPanel.manualResolutionQueue[0]?.sourceBoundaryKey,
+      status: dirtyPanel.manualResolutionQueue[0]?.status,
+      canAssign: dirtyPanel.manualResolutionQueue[0]?.canAssign,
+      resolutionMessage: dirtyPanel.manualResolutionQueue[0]?.resolutionMessage,
+    },
+    {
+      blockId: "muaradua:bumi-agung:block-001",
+      fragmentIds: ["frag-001"],
       candidateBoundaryKeys: ["muaradua:batu-belang-jaya", "runjungagung:desa-contoh"],
       type: "released-fragment",
       sourceBoundaryKey: "muaradua:bumi-agung",
@@ -244,7 +324,7 @@ async function run() {
       canAssign: true,
       resolutionMessage: "Pilih salah satu desa kandidat untuk fragmen ini.",
     },
-    "fragment unresolved harus masuk antrean resolusi manual secara utuh",
+    "blok area unresolved harus mengemas daftar fragment sumber secara utuh",
   );
   assert.equal(
     dirtyPanel.manualResolutionQueue[1]?.status,
@@ -274,6 +354,24 @@ async function run() {
     "1 invalid",
     "summary topology harus menampilkan jumlah fragment invalid secara eksplisit",
   );
+  const groupedBlocks = createBoundaryResolutionBlocks!(dirtyTopology);
+  assert.deepEqual(
+    {
+      blockId: groupedBlocks.find((block) => block.status === "invalid")?.blockId,
+      fragmentIds: groupedBlocks.find((block) => block.status === "invalid")?.fragmentIds,
+      candidateBoundaryKeys: groupedBlocks.find((block) => block.status === "invalid")?.candidateBoundaryKeys,
+      status: groupedBlocks.find((block) => block.status === "invalid")?.status,
+      canAssign: groupedBlocks.find((block) => block.status === "invalid")?.canAssign,
+    },
+    {
+      blockId: "muaradua:pancur-pungah:block-002",
+      fragmentIds: ["frag-002b", "frag-002c"],
+      candidateBoundaryKeys: [],
+      status: "invalid",
+      canAssign: false,
+    },
+    "fragmen invalid yang berdempetan harus digabung menjadi satu blok area agar admin tidak memilih serpihan terpisah",
+  );
 
   const takeoverWarning = createTakeoverWarningModel!(dirtyTopology);
   assert.equal(takeoverWarning.visible, true, "warning takeover harus tampil saat ada takeover area");
@@ -286,7 +384,7 @@ async function run() {
   assert.equal(
     canPublishBoundaryRevision!(dirtyTopology, false),
     false,
-    "publish harus tetap diblok sebelum preview berhasil dan topology clean",
+    "publish harus tetap diblok sebelum preview berhasil dan wilayah siap diproses",
   );
 
   const confirmedTakeoverTopology = {
@@ -348,8 +446,8 @@ async function run() {
   };
 
   const cleanPanel = createBoundaryTopologyPanelModel!(cleanTopology);
-  assert.equal(cleanPanel.badgeLabel, "TOPOLOGY CLEAN", "status badge clean harus berbeda dari mode resolusi");
-  assert.equal(cleanPanel.canPreview, true, "preview harus dibuka ketika topology clean");
+  assert.equal(cleanPanel.badgeLabel, "SIAP DIPROSES", "status badge clean harus berbeda dari mode resolusi");
+  assert.equal(cleanPanel.canPreview, true, "preview harus dibuka ketika wilayah siap diproses");
   assert.equal(cleanPanel.canPublish, false, "publish tetap butuh preview sukses");
   assert.equal(canPreviewBoundaryRevision!(cleanTopology), true, "preview harus diizinkan untuk draft ready yang clean");
   assert.equal(canPublishBoundaryRevision!(cleanTopology, true), true, "publish harus diizinkan setelah preview sukses");

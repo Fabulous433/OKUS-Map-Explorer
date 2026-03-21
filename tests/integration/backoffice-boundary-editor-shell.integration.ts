@@ -57,11 +57,12 @@ async function run() {
       selectedBoundaryKey: string;
       kecamatanOptions: Array<{ id: string; label: string }>;
       desaOptions: Array<{ id: string; boundaryKey: string; label: string }>;
-      revisions: Array<{
+      revisionHistory: Array<{
         id: number;
-        regionKey: string;
-        level: "desa";
+        boundaryKey: string;
+        boundaryName: string;
         status: "draft" | "published" | "superseded";
+        changeType: "perluasan" | "penyusutan" | "penyesuaian";
         notes: string | null;
         createdBy: string;
         publishedBy: string | null;
@@ -80,6 +81,7 @@ async function run() {
       }>;
       isLoading?: boolean;
       lastSavedLabel?: string | null;
+      showDraftStatus?: boolean;
     }) => JSX.Element;
   };
 
@@ -142,12 +144,13 @@ async function run() {
           label: "Bumi Agung",
         },
       ],
-      revisions: [
+      revisionHistory: [
         {
           id: 7,
-          regionKey: "okus",
-          level: "desa",
+          boundaryKey: "muaradua:batu-belang-jaya",
+          boundaryName: "Batu Belang Jaya",
           status: "draft",
+          changeType: "perluasan",
           notes: "Penyesuaian batas Batu Belang Jaya",
           createdBy: "admin",
           publishedBy: null,
@@ -166,20 +169,86 @@ async function run() {
           createdAt: "2026-03-20T08:00:00.000Z",
           updatedAt: "2026-03-20T08:30:00.000Z",
         },
+        {
+          id: 6,
+          boundaryKey: "muaradua:batu-belang-jaya",
+          boundaryName: "Batu Belang Jaya",
+          status: "published",
+          changeType: "penyusutan",
+          notes: "Penyempitan sisi timur",
+          createdBy: "admin",
+          publishedBy: "admin",
+          publishedAt: "2026-03-19T08:30:00.000Z",
+          impactSummary: null,
+          createdAt: "2026-03-19T08:00:00.000Z",
+          updatedAt: "2026-03-19T08:30:00.000Z",
+        },
+        {
+          id: 5,
+          boundaryKey: "muaradua:batu-belang-jaya",
+          boundaryName: "Batu Belang Jaya",
+          status: "superseded",
+          changeType: "penyesuaian",
+          notes: "Geser batas lama",
+          createdBy: "admin",
+          publishedBy: "admin",
+          publishedAt: "2026-03-18T08:30:00.000Z",
+          impactSummary: null,
+          createdAt: "2026-03-18T08:00:00.000Z",
+          updatedAt: "2026-03-18T08:30:00.000Z",
+        },
       ],
       lastSavedLabel: "Draft tersimpan 08.30 WIB",
+      showDraftStatus: true,
     }),
   );
 
   assert.ok(shellMarkup.includes("Pilih Kecamatan"), "desktop shell harus memuat selector kecamatan");
   assert.ok(shellMarkup.includes("Pilih Desa"), "desktop shell harus memuat selector desa");
   assert.ok(shellMarkup.includes("Riwayat Revisi"), "desktop shell harus memuat daftar revisi");
+  assert.ok(shellMarkup.includes("Draf"), "riwayat revisi harus memakai label status Indonesia untuk draft");
+  assert.ok(shellMarkup.includes("Aktif"), "riwayat revisi harus memakai label status Indonesia untuk published");
+  assert.ok(shellMarkup.includes("Arsip"), "riwayat revisi harus memakai label status Indonesia untuk superseded");
+  assert.ok(
+    shellMarkup.includes("Perluasan wilayah") &&
+      shellMarkup.includes("Penyusutan wilayah") &&
+      shellMarkup.includes("Penyesuaian batas"),
+    "riwayat revisi harus menjelaskan jenis perubahan wilayah secara natural",
+  );
+  assert.ok(shellMarkup.includes("Status Draf"), "status draf hanya boleh tampil jika desa aktif memang punya draf");
   assert.ok(shellMarkup.includes("Edit Polygon"), "desktop shell harus memuat aksi edit polygon");
   assert.ok(shellMarkup.includes("Upload GeoJSON"), "desktop shell harus memuat aksi upload GeoJSON");
   assert.ok(shellMarkup.includes("Preview Impact"), "desktop shell harus memuat aksi preview impact");
   assert.ok(shellMarkup.includes("Save Draft"), "desktop shell harus memuat aksi simpan draft");
   assert.ok(shellMarkup.includes("Publish"), "desktop shell harus memuat aksi publish");
   assert.ok(shellMarkup.includes("Rollback"), "desktop shell harus memuat aksi rollback");
+
+  const untouchedShellMarkup = renderToStaticMarkup(
+    createElement(BoundaryEditorShell!, {
+      selectedKecamatanId: "1609050",
+      selectedBoundaryKey: "runjungagung:desa-contoh",
+      kecamatanOptions: [{ id: "1609050", label: "Runjung Agung" }],
+      desaOptions: [
+        {
+          id: "1609050012",
+          boundaryKey: "runjungagung:desa-contoh",
+          label: "Desa Contoh",
+        },
+      ],
+      revisionHistory: [],
+      showDraftStatus: false,
+    }),
+  );
+
+  assert.equal(
+    untouchedShellMarkup.includes("Status Draf"),
+    false,
+    "desa yang belum pernah diedit tidak boleh menampilkan panel status draf",
+  );
+  assert.ok(
+    untouchedShellMarkup.includes("Belum ada riwayat penyesuaian untuk desa ini."),
+    "desa yang belum pernah diedit harus menampilkan empty state riwayat per desa",
+  );
 }
 
 run()

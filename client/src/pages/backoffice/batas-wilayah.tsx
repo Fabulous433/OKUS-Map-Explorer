@@ -12,7 +12,7 @@ import {
   useBoundaryEditorDesaOptionsQuery,
   useBoundaryEditorDraftQuery,
   useBoundaryEditorKecamatanOptionsQuery,
-  useBoundaryEditorRevisionListQuery,
+  useBoundaryEditorRevisionHistoryQuery,
   useBoundaryEditorTopologyQuery,
 } from "@/lib/backoffice/boundary-editor-query";
 import {
@@ -48,7 +48,7 @@ function formatBoundaryEditorSavedLabel(timestamp: string | null | undefined) {
     timeZone: "Asia/Jakarta",
   }).format(new Date(timestamp));
 
-  return `Draft tersimpan ${formatted} WIB`;
+  return `Draf tersimpan ${formatted} WIB`;
 }
 
 export function BoundaryEditorAccessDeniedCard() {
@@ -102,7 +102,6 @@ export default function BackofficeBatasWilayah() {
   const allDesaQuery = useBoundaryEditorAllDesaItemsQuery();
   const draftQuery = useBoundaryEditorDraftQuery(selectedKecamatanId);
   const topologyQuery = useBoundaryEditorTopologyQuery(selectedKecamatanId);
-  const revisionQuery = useBoundaryEditorRevisionListQuery();
   const activeDesaBoundaryQuery = useQuery({
     queryKey: ["active-region-boundary", "boundary-editor", selectedKecamatanId || "none"],
     enabled: Boolean(selectedKecamatanId),
@@ -133,8 +132,10 @@ export default function BackofficeBatasWilayah() {
   }, [allDesaQuery.items, kecamatanQuery.data, topologyAnalysis]);
 
   const [selectedBoundaryKey, setSelectedBoundaryKey] = useState("");
+  const revisionHistoryQuery = useBoundaryEditorRevisionHistoryQuery(selectedBoundaryKey);
   const selectedDraftFeature =
     draftQuery.data?.features.find((feature) => feature.boundaryKey === selectedBoundaryKey) ?? null;
+  const visibleTopologyAnalysis = selectedDraftFeature ? topologyAnalysis : null;
   const selectedBaseFeature = useMemo(
     () => findBoundaryFeatureByKey(activeDesaBoundaryQuery.data?.boundary ?? null, selectedBoundaryKey),
     [activeDesaBoundaryQuery.data?.boundary, selectedBoundaryKey],
@@ -178,7 +179,7 @@ export default function BackofficeBatasWilayah() {
   const hasDraftChanges = !areBoundaryGeometriesEqual(draftGeometry, sourceGeometry);
   const selectedKelurahan =
     desaQuery.items.find((item) => item.cpmKelId === selectedDesaOption?.id) ?? null;
-  const publishedRevisionCount = (revisionQuery.data ?? []).filter(
+  const publishedRevisionCount = (revisionHistoryQuery.data ?? []).filter(
     (item) => item.status === "published",
   ).length;
   const currentDraftPayload =
@@ -197,6 +198,7 @@ export default function BackofficeBatasWilayah() {
   const [publishMode, setPublishMode] = useState<RegionBoundaryReconciliationMode>(
     "publish-and-reconcile",
   );
+  const [focusedResolutionFragmentIds, setFocusedResolutionFragmentIds] = useState<string[]>([]);
 
   const geometryStatusLabel = !selectedBoundaryKey
     ? "Pilih desa/kelurahan untuk membuka boundary"
@@ -208,6 +210,7 @@ export default function BackofficeBatasWilayah() {
           ? "Draft sinkron dengan revisi aktif"
           : "Boundary runtime siap diedit";
   const hasPreviewableDraft = hasDraftChanges || Boolean(selectedDraftFeature);
+  const showDraftStatus = hasDraftChanges || Boolean(selectedDraftFeature);
   const previewReady = Boolean(previewResult) && previewGeometryFingerprint === geometryFingerprint;
   const canPreviewTopology = topologyAnalysis ? canPreviewBoundaryRevision(topologyAnalysis) : false;
   const canPublishTopology = topologyAnalysis ? canPublishBoundaryRevision(topologyAnalysis, previewReady) : false;
@@ -221,6 +224,7 @@ export default function BackofficeBatasWilayah() {
   useEffect(() => {
     setPreviewResult(null);
     setPreviewGeometryFingerprint(null);
+    setFocusedResolutionFragmentIds([]);
   }, [selectedBoundaryKey, selectedKecamatanId]);
 
   async function invalidateBoundaryEditorQueries() {
@@ -232,7 +236,7 @@ export default function BackofficeBatasWilayah() {
         queryKey: createBoundaryEditorTopologyQueryKey(selectedKecamatanId),
       }),
       queryClient.invalidateQueries({
-        queryKey: ["/api/backoffice/region-boundaries/desa/revisions"],
+        queryKey: ["/api/backoffice/region-boundaries/desa/revision-history"],
       }),
       queryClient.invalidateQueries({
         queryKey: ["active-region-boundary", "boundary-editor", selectedKecamatanId || "none"],
@@ -380,7 +384,7 @@ export default function BackofficeBatasWilayah() {
   });
 
   const assignFragmentMutation = useMutation({
-    mutationFn: async (params: { fragmentId: string; assignedBoundaryKey: string }) => {
+    mutationFn: async (params: { fragmentIds: string[]; assignedBoundaryKey: string }) => {
       if (!topologyRevision?.id) {
         throw new Error("Revision draft topology belum tersedia untuk assignment");
       }
@@ -389,24 +393,25 @@ export default function BackofficeBatasWilayah() {
         throw new Error("Topology draft belum tersedia untuk assignment fragment");
       }
 
-      const response = await apiRequest(
-        "POST",
-        `/api/backoffice/region-boundaries/desa/draft/fragments/${encodeURIComponent(params.fragmentId)}/assign`,
-        {
-          revisionId: topologyRevision.id,
-          assignedBoundaryKey: params.assignedBoundaryKey,
-          assignmentMode: "manual",
-        },
-      );
-
-      return response.json();
+      for (const fragmentId of params.fragmentIds) {
+        const response = await apiRequest(
+          "POST",
+          `/api/backoffice/region-boundaries/desa/draft/fragments/${encodeURIComponent(fragmentId)}/assign`,
+          {
+            revisionId: topologyRevision.id,
+            assignedBoundaryKey: params.assignedBoundaryKey,
+            assignmentMode: "manual",
+          },
+        );
+        await response.json();
+      }
     },
     onSuccess: async () => {
       await invalidateBoundaryEditorQueries();
       resetPreviewState();
       toast({
-        title: "Fragment diperbarui",
-        description: "Assignment manual fragment topology berhasil disimpan.",
+        title: "Blok area diperbarui",
+        description: "Keputusan blok area berhasil diterapkan ke semua fragment di dalamnya.",
       });
     },
     onError: (error: Error) => {
@@ -537,18 +542,19 @@ export default function BackofficeBatasWilayah() {
           selectedBoundaryKey={selectedBoundaryKey}
           kecamatanOptions={kecamatanQuery.options}
           desaOptions={desaOptions}
-          revisions={revisionQuery.data ?? []}
-          topologyAnalysis={topologyAnalysis}
+          revisionHistory={revisionHistoryQuery.data ?? []}
+          topologyAnalysis={visibleTopologyAnalysis}
           isLoading={
             kecamatanQuery.isLoading ||
             desaQuery.isLoading ||
             allDesaQuery.isLoading ||
             draftQuery.isLoading ||
             topologyQuery.isLoading ||
-            revisionQuery.isLoading ||
+            revisionHistoryQuery.isLoading ||
             activeDesaBoundaryQuery.isLoading
           }
-          lastSavedLabel={formatBoundaryEditorSavedLabel(draftQuery.data?.revision.updatedAt)}
+          lastSavedLabel={formatBoundaryEditorSavedLabel(selectedDraftFeature?.updatedAt)}
+          showDraftStatus={showDraftStatus}
           mapCanvas={
             <Suspense
               fallback={
@@ -563,7 +569,8 @@ export default function BackofficeBatasWilayah() {
                 selectedDesaLabel={selectedDesaOption?.label ?? selectedDraftFeature?.namaDesa ?? ""}
                 geometry={draftGeometry}
                 onGeometryChange={setDraftGeometry}
-                topologyAnalysis={topologyAnalysis}
+                topologyAnalysis={visibleTopologyAnalysis}
+                highlightFragmentIds={focusedResolutionFragmentIds}
               />
             </Suspense>
           }
@@ -583,14 +590,15 @@ export default function BackofficeBatasWilayah() {
               isSaving={saveDraftMutation.isPending}
               isPreviewing={previewMutation.isPending}
               isPublishing={publishMutation.isPending}
-              topologyAnalysis={topologyAnalysis}
+              topologyAnalysis={visibleTopologyAnalysis}
               topologyRevisionId={topologyRevision?.id ?? null}
               takeoverConfirmed={Boolean(topologyRevision?.takeoverConfirmedAt)}
               desaOptions={[...desaOptions, ...topologyCandidateOptions]}
               selectedBoundaryKey={selectedBoundaryKey}
-              onAssignFragment={(fragmentId, assignedBoundaryKey) =>
-                assignFragmentMutation.mutate({ fragmentId, assignedBoundaryKey })
+              onAssignFragmentBlock={(fragmentIds, assignedBoundaryKey) =>
+                assignFragmentMutation.mutate({ fragmentIds, assignedBoundaryKey })
               }
+              onFocusResolutionBlock={setFocusedResolutionFragmentIds}
               onConfirmTakeover={() => confirmTakeoverMutation.mutate()}
               onResetBoundaryDraft={() => resetBoundaryDraftMutation.mutate()}
               onSaveDraft={() => saveDraftMutation.mutate()}

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const regionBoundaryRevisionStatusSchema = z.enum(["draft", "published", "superseded"]);
+export const regionBoundaryChangeTypeSchema = z.enum(["perluasan", "penyusutan", "penyesuaian"]);
 export const regionBoundaryReconciliationModeSchema = z.enum(["publish-only", "publish-and-reconcile"]);
 export const regionBoundaryLevelAdminSchema = z.literal("desa");
 export const regionBoundaryTopologyStatusSchema = z.enum([
@@ -33,6 +34,8 @@ export const regionBoundaryDraftFeatureSchema = z.object({
   kelurahanId: z.string().trim().min(1),
   namaDesa: z.string().trim().min(1),
   geometry: regionBoundaryGeometrySchema,
+  createdAt: z.string().datetime().optional(),
+  updatedAt: z.string().datetime().optional(),
 });
 
 export const regionBoundaryImpactMovedItemSchema = z.object({
@@ -112,6 +115,21 @@ export const regionBoundaryPublishedRevisionSchema = regionBoundaryRevisionSchem
   publishedAt: z.string().datetime(),
 });
 
+export const regionBoundaryRevisionHistoryItemSchema = z.object({
+  id: z.number().int().positive(),
+  boundaryKey: z.string().trim().min(1),
+  boundaryName: z.string().trim().min(1),
+  status: regionBoundaryRevisionStatusSchema,
+  changeType: regionBoundaryChangeTypeSchema,
+  notes: z.string().trim().min(1).nullable(),
+  createdBy: z.string().trim().min(1),
+  publishedBy: z.string().trim().min(1).nullable(),
+  publishedAt: z.string().datetime().nullable(),
+  impactSummary: regionBoundaryImpactPreviewSchema.nullable(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
 export const regionBoundaryPublishPayloadSchema = z.object({
   revisionId: z.number().int().positive(),
   mode: regionBoundaryReconciliationModeSchema,
@@ -119,6 +137,7 @@ export const regionBoundaryPublishPayloadSchema = z.object({
 });
 
 export type RegionBoundaryRevisionStatus = z.infer<typeof regionBoundaryRevisionStatusSchema>;
+export type RegionBoundaryChangeType = z.infer<typeof regionBoundaryChangeTypeSchema>;
 export type RegionBoundaryReconciliationMode = z.infer<typeof regionBoundaryReconciliationModeSchema>;
 export type RegionBoundaryTopologyStatus = z.infer<typeof regionBoundaryTopologyStatusSchema>;
 export type RegionBoundaryFragmentType = z.infer<typeof regionBoundaryFragmentTypeSchema>;
@@ -136,4 +155,5 @@ export type RegionBoundaryFragmentAssignmentPayload = z.infer<typeof regionBound
 export type RegionBoundaryTakeoverConfirmationPayload = z.infer<typeof regionBoundaryTakeoverConfirmationPayloadSchema>;
 export type RegionBoundaryRevision = z.infer<typeof regionBoundaryRevisionSchema>;
 export type RegionBoundaryPublishedRevision = z.infer<typeof regionBoundaryPublishedRevisionSchema>;
+export type RegionBoundaryRevisionHistoryItem = z.infer<typeof regionBoundaryRevisionHistoryItemSchema>;
 export type RegionBoundaryPublishPayload = z.infer<typeof regionBoundaryPublishPayloadSchema>;

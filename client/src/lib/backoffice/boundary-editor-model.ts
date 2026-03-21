@@ -1,3 +1,4 @@
+import booleanIntersects from "@turf/boolean-intersects";
 import simplify from "@turf/simplify";
 import {
   regionBoundaryDraftFeatureSchema,
@@ -43,24 +44,36 @@ export type DraftTopologySummary = RegionBoundaryTopologyAnalysis & {
 
 type DraftTopologyFragment = RegionBoundaryTopologyFragment;
 
+export type BoundaryResolutionBlock = {
+  blockId: string;
+  fragmentIds: string[];
+  candidateBoundaryKeys: string[];
+  type: DraftTopologyFragment["type"];
+  sourceBoundaryKey: string;
+  status: "unresolved" | "invalid";
+  canAssign: boolean;
+  resolutionMessage: string;
+  areaSqM: number;
+};
+
 function getTopologyStatusLabel(input: DraftTopologySummary) {
   if (input.topologyStatus === "draft-editing") {
-    return "DRAFT EDITING";
+    return "SEDANG DIEDIT";
   }
 
   if (input.topologyStatus === "draft-needs-resolution") {
-    return "NEEDS RESOLUTION";
+    return "PERLU DITUNTASKAN";
   }
 
   if (input.topologyStatus === "draft-ready") {
-    return "TOPOLOGY CLEAN";
+    return "SIAP DIPROSES";
   }
 
   if (input.topologyStatus === "published") {
-    return "PUBLISHED";
+    return "AKTIF";
   }
 
-  return "SUPERSEDED";
+  return "ARSIP";
 }
 
 function requiresTakeoverConfirmation(input: DraftTopologySummary) {
@@ -94,46 +107,118 @@ function getFragmentDisplayLabel(fragment: DraftTopologyFragment) {
   return `${fragment.fragmentId} released ${assignmentLabel} -> ${fragment.assignedBoundaryKey ?? "n/a"}`;
 }
 
+function toGeometryFeature(fragment: DraftTopologyFragment) {
+  return {
+    type: "Feature" as const,
+    properties: {
+      fragmentId: fragment.fragmentId,
+    },
+    geometry: fragment.geometry,
+  };
+}
+
+function getCandidateSignature(fragment: DraftTopologyFragment) {
+  return [...fragment.candidateBoundaryKeys].sort().join("|");
+}
+
+function canMergeResolutionFragment(seed: DraftTopologyFragment, candidate: DraftTopologyFragment) {
+  return (
+    seed.sourceBoundaryKey === candidate.sourceBoundaryKey &&
+    seed.type === candidate.type &&
+    seed.status === candidate.status &&
+    getCandidateSignature(seed) === getCandidateSignature(candidate) &&
+    booleanIntersects(toGeometryFeature(seed) as never, toGeometryFeature(candidate) as never)
+  );
+}
+
+export function createBoundaryResolutionBlocks(input: DraftTopologySummary) {
+  const blockingFragments = input.fragments.filter(
+    (fragment): fragment is DraftTopologyFragment & { status: "unresolved" | "invalid" } =>
+      fragment.status === "unresolved" || fragment.status === "invalid",
+  );
+  const visited = new Set<string>();
+  const blocks: BoundaryResolutionBlock[] = [];
+
+  for (const fragment of blockingFragments) {
+    if (visited.has(fragment.fragmentId)) {
+      continue;
+    }
+
+    const queue = [fragment];
+    const memberFragments: DraftTopologyFragment[] = [];
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current || visited.has(current.fragmentId)) {
+        continue;
+      }
+
+      visited.add(current.fragmentId);
+      memberFragments.push(current);
+
+      for (const candidate of blockingFragments) {
+        if (visited.has(candidate.fragmentId)) {
+          continue;
+        }
+
+        if (canMergeResolutionFragment(current, candidate)) {
+          queue.push(candidate);
+        }
+      }
+    }
+
+    const blockNumber = String(blocks.length + 1).padStart(3, "0");
+    blocks.push({
+      blockId: `${fragment.sourceBoundaryKey}:block-${blockNumber}`,
+      fragmentIds: memberFragments.map((item) => item.fragmentId),
+      candidateBoundaryKeys: [...fragment.candidateBoundaryKeys],
+      type: fragment.type,
+      sourceBoundaryKey: fragment.sourceBoundaryKey,
+      status: fragment.status,
+      canAssign: fragment.status !== "invalid" && fragment.candidateBoundaryKeys.length > 0,
+      resolutionMessage:
+        fragment.status === "invalid"
+          ? buildInvalidFragmentMessage(fragment)
+          : "Pilih salah satu desa kandidat untuk fragmen ini.",
+      areaSqM: memberFragments.reduce((total, item) => total + item.areaSqM, 0),
+    });
+  }
+
+  return blocks;
+}
+
 function buildTopologyModel(input: DraftTopologySummary) {
   const takeoverDetected = requiresTakeoverConfirmation(input);
+  const resolutionBlocks = createBoundaryResolutionBlocks(input);
   const blockingFragments = input.fragments.filter((fragment) => fragment.status !== "resolved");
   const autoAssignedFragments = input.fragments.filter(
     (fragment) => fragment.status === "resolved" && fragment.assignmentMode === "auto",
   );
   const uniqueSourceBoundaryKeys = Array.from(new Set(input.fragments.map((fragment) => fragment.sourceBoundaryKey)));
-  const manualResolutionQueue = blockingFragments.map((fragment) => ({
-    fragmentId: fragment.fragmentId,
-    candidateBoundaryKeys: fragment.candidateBoundaryKeys,
-    type: fragment.type,
-    sourceBoundaryKey: fragment.sourceBoundaryKey,
-    status: fragment.status,
-    canAssign: fragment.status !== "invalid" && fragment.candidateBoundaryKeys.length > 0,
-    resolutionMessage:
-      fragment.status === "invalid"
-        ? buildInvalidFragmentMessage(fragment)
-        : "Pilih salah satu desa kandidat untuk fragmen ini.",
-  }));
+  const invalidBlocks = resolutionBlocks.filter((block) => block.status === "invalid");
+  const unresolvedBlocks = resolutionBlocks.filter((block) => block.status === "unresolved");
 
   return {
     badgeLabel: getTopologyStatusLabel(input),
     headline:
       input.topologyStatus === "draft-ready"
-        ? "Topology clean and ready for preview"
+        ? "Wilayah siap dipreview"
         : takeoverDetected
-          ? "Takeover confirmation required before publish"
-          : blockingFragments.length > 0
-            ? `${blockingFragments.length} fragment menunggu resolusi manual`
-            : "Topology draft sedang diproses",
+          ? "Ada pengambilan area desa lain yang perlu dikonfirmasi"
+          : resolutionBlocks.length > 0
+            ? `${resolutionBlocks.length} blok area menunggu keputusan`
+            : "Draf wilayah sedang diproses",
     canPreview: input.topologyStatus === "draft-ready" && !takeoverDetected && blockingFragments.length === 0,
     canPublish: false,
-    manualResolutionQueue,
+    resolutionBlockLabel: `${resolutionBlocks.length} blok area perlu dituntaskan`,
+    manualResolutionQueue: resolutionBlocks,
     informationalRows: autoAssignedFragments.map((fragment) => getFragmentDisplayLabel(fragment)),
     takeoverDetected,
-    summaryLabel: `${input.summary.fragmentCount} fragment total`,
-    unresolvedLabel: `${input.summary.unresolvedFragmentCount} unresolved`,
-    autoAssignedLabel: `${input.summary.autoAssignedFragmentCount} auto-assigned`,
+    summaryLabel: `${resolutionBlocks.length + autoAssignedFragments.length} blok area total`,
+    unresolvedLabel: `${unresolvedBlocks.length} perlu dipilih`,
+    autoAssignedLabel: `${autoAssignedFragments.length} otomatis`,
     manualAssignmentLabel: `${input.summary.manualAssignmentRequiredCount} manual`,
-    invalidLabel: `${input.summary.invalidFragmentCount} invalid`,
+    invalidLabel: `${invalidBlocks.length} invalid`,
     sharedDraftLabel:
       uniqueSourceBoundaryKeys.length > 1
         ? `Revision draft ini mencakup ${uniqueSourceBoundaryKeys.length} desa draft.`
@@ -159,8 +244,8 @@ export function createTakeoverWarningModel(input: DraftTopologySummary) {
 
   return {
     visible: true,
-    title: "Peringatan Takeover",
-    message: `${takeoverFragments.length} takeover area terdeteksi. Konfirmasi pengambilan wilayah diperlukan sebelum publish.`,
+    title: "Peringatan Pengambilan Wilayah",
+    message: `${takeoverFragments.length} area terdeteksi mengambil wilayah desa lain. Konfirmasi pengambilan wilayah diperlukan sebelum publish.`,
   };
 }
 

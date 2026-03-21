@@ -56,6 +56,7 @@ import {
   confirmDraftTakeover,
   getDraftTopologyByKecamatan,
   getDesaDraftByKecamatan,
+  listBoundaryRevisionHistory,
   listBoundaryRevisions,
   previewDraftImpact,
   publishDraftRevision,
@@ -3196,6 +3197,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!requireRole(req, res, ["admin"])) return;
     const revisions = await listBoundaryRevisions();
     return res.json(revisions);
+  });
+
+  app.get("/api/backoffice/region-boundaries/desa/revision-history", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
+    const boundaryKey = String(req.query.boundaryKey ?? "").trim();
+    if (!boundaryKey) {
+      return res.json([]);
+    }
+
+    try {
+      const historyItems = await listBoundaryRevisionHistory(boundaryKey);
+      return res.json(historyItems);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal memuat riwayat revisi boundary";
+      return res.status(400).json({ message });
+    }
   });
 
   app.get("/api/backoffice/region-boundaries/desa/draft", async (req, res) => {

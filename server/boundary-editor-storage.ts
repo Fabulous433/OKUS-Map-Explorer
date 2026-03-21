@@ -1,6 +1,7 @@
 import { booleanPointInPolygon } from "@turf/boolean-point-in-polygon";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import {
+  regionBoundaryRevisionHistoryItemSchema,
   regionBoundaryFragmentAssignmentPayloadSchema,
   regionBoundaryDraftFeatureSchema,
   regionBoundaryImpactPreviewSchema,
@@ -14,6 +15,7 @@ import {
   type RegionBoundaryTopologyAnalysis,
   type RegionBoundaryTopologyFragment,
   type RegionBoundaryDraftFeature,
+  type RegionBoundaryChangeType,
 } from "@shared/region-boundary-admin";
 import {
   auditLog,
@@ -161,6 +163,47 @@ function mapDraftFeatureRow(row: typeof regionBoundaryRevisionFeature.$inferSele
     kelurahanId: row.kelurahanId,
     namaDesa: row.namaDesa,
     geometry: row.geometry,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  });
+}
+
+function resolveBoundaryHistoryChangeType(
+  fragments: Array<typeof regionBoundaryRevisionFragment.$inferSelect>,
+): RegionBoundaryChangeType {
+  const hasReleased = fragments.some((fragment) => fragment.type === "released-fragment");
+  const hasTakeover = fragments.some((fragment) => fragment.type === "takeover-area");
+
+  if (hasReleased && !hasTakeover) {
+    return "penyusutan";
+  }
+
+  if (hasTakeover && !hasReleased) {
+    return "perluasan";
+  }
+
+  return "penyesuaian";
+}
+
+function mapRevisionHistoryItem(params: {
+  revision: typeof regionBoundaryRevision.$inferSelect;
+  boundaryKey: string;
+  boundaryName: string;
+  sourceFragments: Array<typeof regionBoundaryRevisionFragment.$inferSelect>;
+}) {
+  return regionBoundaryRevisionHistoryItemSchema.parse({
+    id: params.revision.id,
+    boundaryKey: params.boundaryKey,
+    boundaryName: params.boundaryName,
+    status: params.revision.status,
+    changeType: resolveBoundaryHistoryChangeType(params.sourceFragments),
+    notes: params.revision.notes,
+    createdBy: params.revision.createdBy,
+    publishedBy: params.revision.publishedBy,
+    publishedAt: toIsoString(params.revision.publishedAt),
+    impactSummary: params.revision.impactSummary,
+    createdAt: params.revision.createdAt.toISOString(),
+    updatedAt: params.revision.updatedAt.toISOString(),
   });
 }
 
@@ -1138,6 +1181,97 @@ export async function listBoundaryRevisions() {
     .orderBy(desc(regionBoundaryRevision.updatedAt), desc(regionBoundaryRevision.id));
 
   return rows.map(mapRevisionRow);
+}
+
+export async function listBoundaryRevisionHistory(boundaryKey: string) {
+  const normalizedBoundaryKey = boundaryKey.trim();
+  if (!normalizedBoundaryKey) {
+    return [];
+  }
+
+  const rows = await db
+    .select()
+    .from(regionBoundaryRevision)
+    .where(and(eq(regionBoundaryRevision.regionKey, "okus"), eq(regionBoundaryRevision.level, "desa")))
+    .orderBy(desc(regionBoundaryRevision.updatedAt), desc(regionBoundaryRevision.id));
+
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const revisionIds = rows.map((row) => row.id);
+  const [featureRows, fragmentRows] = await Promise.all([
+    db
+      .select()
+      .from(regionBoundaryRevisionFeature)
+      .where(inArray(regionBoundaryRevisionFeature.revisionId, revisionIds))
+      .orderBy(desc(regionBoundaryRevisionFeature.revisionId), asc(regionBoundaryRevisionFeature.id)),
+    db
+      .select()
+      .from(regionBoundaryRevisionFragment)
+      .where(inArray(regionBoundaryRevisionFragment.revisionId, revisionIds))
+      .orderBy(desc(regionBoundaryRevisionFragment.revisionId), asc(regionBoundaryRevisionFragment.fragmentId)),
+  ]);
+
+  const featuresByRevisionId = new Map<number, Array<typeof regionBoundaryRevisionFeature.$inferSelect>>();
+  for (const row of featureRows) {
+    const items = featuresByRevisionId.get(row.revisionId) ?? [];
+    items.push(row);
+    featuresByRevisionId.set(row.revisionId, items);
+  }
+
+  const fragmentsByRevisionId = new Map<number, Array<typeof regionBoundaryRevisionFragment.$inferSelect>>();
+  for (const row of fragmentRows) {
+    const items = fragmentsByRevisionId.get(row.revisionId) ?? [];
+    items.push(row);
+    fragmentsByRevisionId.set(row.revisionId, items);
+  }
+
+  const historyItems = [];
+  for (const revision of rows) {
+    const revisionFeatures = featuresByRevisionId.get(revision.id) ?? [];
+    const revisionFragments = fragmentsByRevisionId.get(revision.id) ?? [];
+    const sourceFragments = revisionFragments.filter(
+      (fragment) => fragment.sourceBoundaryKey === normalizedBoundaryKey,
+    );
+
+    if (sourceFragments.length > 0) {
+      const matchedFeature =
+        revisionFeatures.find((feature) => feature.boundaryKey === normalizedBoundaryKey) ??
+        revisionFeatures[0];
+      if (!matchedFeature) {
+        continue;
+      }
+
+      historyItems.push(
+        mapRevisionHistoryItem({
+          revision,
+          boundaryKey: normalizedBoundaryKey,
+          boundaryName: matchedFeature.namaDesa,
+          sourceFragments,
+        }),
+      );
+      continue;
+    }
+
+    const matchedFeature = revisionFeatures.find((feature) => feature.boundaryKey === normalizedBoundaryKey);
+    if (!matchedFeature) {
+      continue;
+    }
+
+    if (revisionFragments.length === 0 && revisionFeatures.length === 1) {
+      historyItems.push(
+        mapRevisionHistoryItem({
+          revision,
+          boundaryKey: normalizedBoundaryKey,
+          boundaryName: matchedFeature.namaDesa,
+          sourceFragments: [],
+        }),
+      );
+    }
+  }
+
+  return historyItems;
 }
 
 export async function previewDraftImpact(input: PreviewBoundaryImpactInput) {

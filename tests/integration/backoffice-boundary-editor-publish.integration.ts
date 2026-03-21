@@ -45,11 +45,12 @@ async function run() {
       selectedBoundaryKey: string;
       kecamatanOptions: Array<{ id: string; label: string }>;
       desaOptions: Array<{ id: string; boundaryKey: string; label: string }>;
-      revisions: Array<{
+      revisionHistory: Array<{
         id: number;
-        regionKey: string;
-        level: "desa";
+        boundaryKey: string;
+        boundaryName: string;
         status: "draft" | "published" | "superseded";
+        changeType: "perluasan" | "penyusutan" | "penyesuaian";
         notes: string | null;
         createdBy: string;
         publishedBy: string | null;
@@ -145,12 +146,13 @@ async function run() {
       selectedBoundaryKey: "muaradua:batu-belang-jaya",
       kecamatanOptions: [{ id: "1609040", label: "Muaradua" }],
       desaOptions: [{ id: "1609040013", boundaryKey: "muaradua:batu-belang-jaya", label: "Batu Belang Jaya" }],
-      revisions: [
+      revisionHistory: [
         {
           id: 11,
-          regionKey: "okus",
-          level: "desa",
+          boundaryKey: "muaradua:batu-belang-jaya",
+          boundaryName: "Batu Belang Jaya",
           status: "published",
+          changeType: "penyesuaian",
           notes: "Published Maret",
           createdBy: "admin",
           publishedBy: "admin",
@@ -165,7 +167,7 @@ async function run() {
   );
 
   assert.ok(
-    shellMarkup.includes("Rollback Revision"),
+    shellMarkup.includes("Pulihkan Revisi"),
     "published revision di daftar revisi harus menampilkan CTA rollback",
   );
 

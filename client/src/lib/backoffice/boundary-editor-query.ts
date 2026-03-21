@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import type {
   RegionBoundaryDraftFeature,
   RegionBoundaryRevision,
+  RegionBoundaryRevisionHistoryItem,
   RegionBoundaryTopologyAnalysis,
 } from "@shared/region-boundary-admin";
 import type { MasterKecamatan, MasterKelurahan } from "@shared/schema";
@@ -63,9 +64,24 @@ export function createBoundaryEditorTopologyQueryKey(kecamatanId?: string) {
   ] as const;
 }
 
+export function createBoundaryEditorRevisionHistoryQueryKey(boundaryKey?: string) {
+  return [
+    boundaryKey
+      ? `/api/backoffice/region-boundaries/desa/revision-history?boundaryKey=${encodeURIComponent(boundaryKey)}`
+      : "/api/backoffice/region-boundaries/desa/revision-history",
+  ] as const;
+}
+
 export function useBoundaryEditorRevisionListQuery() {
   return useQuery<RegionBoundaryRevision[]>({
     queryKey: ["/api/backoffice/region-boundaries/desa/revisions"],
+  });
+}
+
+export function useBoundaryEditorRevisionHistoryQuery(boundaryKey?: string) {
+  return useQuery<RegionBoundaryRevisionHistoryItem[]>({
+    queryKey: createBoundaryEditorRevisionHistoryQueryKey(boundaryKey),
+    enabled: Boolean(boundaryKey),
   });
 }
 

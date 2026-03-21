@@ -14,18 +14,30 @@ import type {
   BoundaryEditorKecamatanOption,
 } from "@/lib/backoffice/boundary-editor-query";
 import { createBoundaryTopologyPanelModel, type DraftTopologySummary } from "@/lib/backoffice/boundary-editor-model";
-import type { RegionBoundaryRevision } from "@shared/region-boundary-admin";
+import type { RegionBoundaryRevisionHistoryItem } from "@shared/region-boundary-admin";
 
-function getRevisionBadgeVariant(status: RegionBoundaryRevision["status"]) {
+function getRevisionBadgeVariant(status: RegionBoundaryRevisionHistoryItem["status"]) {
   if (status === "published") return "default";
   if (status === "superseded") return "secondary";
   return "outline";
 }
 
-function getRevisionLabel(status: RegionBoundaryRevision["status"]) {
-  if (status === "published") return "Published";
-  if (status === "superseded") return "Superseded";
-  return "Draft";
+function getRevisionLabel(status: RegionBoundaryRevisionHistoryItem["status"]) {
+  if (status === "published") return "Aktif";
+  if (status === "superseded") return "Arsip";
+  return "Draf";
+}
+
+function getRevisionChangeLabel(changeType: RegionBoundaryRevisionHistoryItem["changeType"]) {
+  if (changeType === "perluasan") {
+    return "Perluasan wilayah";
+  }
+
+  if (changeType === "penyusutan") {
+    return "Penyusutan wilayah";
+  }
+
+  return "Penyesuaian batas";
 }
 
 export function BoundaryEditorShell(props: {
@@ -33,10 +45,11 @@ export function BoundaryEditorShell(props: {
   selectedBoundaryKey: string;
   kecamatanOptions: BoundaryEditorKecamatanOption[];
   desaOptions: BoundaryEditorDesaOption[];
-  revisions: RegionBoundaryRevision[];
+  revisionHistory: RegionBoundaryRevisionHistoryItem[];
   topologyAnalysis?: DraftTopologySummary | null;
   isLoading?: boolean;
   lastSavedLabel?: string | null;
+  showDraftStatus?: boolean;
   mapCanvas?: ReactNode;
   rightPanel?: ReactNode;
   rollbackRevisionId?: number | null;
@@ -49,10 +62,11 @@ export function BoundaryEditorShell(props: {
     selectedBoundaryKey,
     kecamatanOptions,
     desaOptions,
-    revisions,
+    revisionHistory,
     topologyAnalysis = null,
     isLoading = false,
     lastSavedLabel = null,
+    showDraftStatus = false,
     mapCanvas,
     rightPanel,
     rollbackRevisionId = null,
@@ -116,30 +130,30 @@ export function BoundaryEditorShell(props: {
               </select>
             </label>
 
-            <div className="rounded-lg border border-dashed border-black/15 bg-[#f6f3ec] p-3">
-              <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em]">Status Draft</p>
-              <p className="mt-2 font-mono text-xs text-black/70">
-                {isLoading ? "Memuat draft editor..." : lastSavedLabel ?? "Belum ada perubahan lokal untuk wilayah ini."}
-              </p>
-              {topologyAnalysis ? (
-                <div className="mt-3 rounded-md border border-black/10 bg-white p-3 shadow-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-black/50">
-                      Topology Status
+            {showDraftStatus ? (
+              <div className="rounded-lg border border-dashed border-black/15 bg-[#f6f3ec] p-3">
+                <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em]">Status Draf</p>
+                <p className="mt-2 font-mono text-xs text-black/70">
+                  {isLoading ? "Memuat draf editor..." : lastSavedLabel ?? "Draf desa ini sedang diproses."}
+                </p>
+                {topologyAnalysis ? (
+                  <div className="mt-3 rounded-md border border-black/10 bg-white p-3 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-black/50">
+                        Status Wilayah
+                      </p>
+                      <Badge variant={topologyModel?.badgeLabel === "SIAP DIPROSES" ? "default" : "outline"}>
+                        {topologyModel?.badgeLabel}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 font-mono text-xs font-bold text-black/80">{topologyModel?.headline}</p>
+                    <p className="mt-1 font-mono text-[11px] text-black/60">
+                      {topologyModel?.resolutionBlockLabel ?? "Belum ada area perubahan yang perlu diselesaikan."}
                     </p>
-                    <Badge variant={topologyModel?.badgeLabel === "TOPOLOGY CLEAN" ? "default" : "outline"}>
-                      {topologyModel?.badgeLabel}
-                    </Badge>
                   </div>
-                  <p className="mt-2 font-mono text-xs font-bold text-black/80">{topologyModel?.headline}</p>
-                  <p className="mt-1 font-mono text-[11px] text-black/60">
-                    {topologyAnalysis.summary.unresolvedFragmentCount} unresolved ·{" "}
-                    {topologyAnalysis.summary.autoAssignedFragmentCount} auto-assigned ·{" "}
-                    {topologyAnalysis.summary.manualAssignmentRequiredCount} manual
-                  </p>
-                </div>
-              ) : null}
-            </div>
+                ) : null}
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -147,16 +161,18 @@ export function BoundaryEditorShell(props: {
           <CardHeader className="pb-4">
             <CardTitle className="font-sans text-lg font-black uppercase">Riwayat Revisi</CardTitle>
             <CardDescription className="font-mono text-[11px]">
-              Published, superseded, dan draft untuk override desa OKU Selatan.
+              Riwayat penyesuaian untuk desa yang sedang dipilih.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {revisions.length === 0 ? (
+            {revisionHistory.length === 0 ? (
               <div className="rounded-lg border border-dashed border-black/15 p-3 font-mono text-xs text-black/60">
-                Belum ada revision boundary untuk ditampilkan.
+                {selectedBoundaryKey
+                  ? "Belum ada riwayat penyesuaian untuk desa ini."
+                  : "Pilih desa untuk melihat riwayat revisi."}
               </div>
             ) : (
-              revisions.map((revision) => (
+              revisionHistory.map((revision) => (
                 <article
                   key={revision.id}
                   className="rounded-lg border border-black/10 bg-white p-3 shadow-card"
@@ -168,7 +184,10 @@ export function BoundaryEditorShell(props: {
                         Revision #{revision.id}
                       </p>
                       <p className="mt-1 font-mono text-xs font-bold text-black/85">
-                        {revision.notes ?? "Boundary editor revision"}
+                        {revision.notes ?? getRevisionChangeLabel(revision.changeType)}
+                      </p>
+                      <p className="mt-2 font-mono text-[11px] text-black/60">
+                        {getRevisionChangeLabel(revision.changeType)}
                       </p>
                     </div>
                     <Badge variant={getRevisionBadgeVariant(revision.status)}>
@@ -189,7 +208,7 @@ export function BoundaryEditorShell(props: {
                       disabled={rollbackRevisionId === revision.id}
                     >
                       <RotateCcw className="mr-2 h-4 w-4" />
-                      {rollbackRevisionId === revision.id ? "Memproses Rollback..." : "Rollback Revision"}
+                      {rollbackRevisionId === revision.id ? "Memproses Rollback..." : "Pulihkan Revisi"}
                     </Button>
                   ) : null}
                 </article>
@@ -288,8 +307,8 @@ export function BoundaryEditorShell(props: {
                 <div className="rounded-lg border border-black/10 bg-white p-3">
                   <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">Preview revisi</p>
                   <p className="mt-2 font-mono text-sm font-bold text-black/85">
-                    {revisions[0]?.impactSummary
-                      ? `${revisions[0].impactSummary.impactedCount} OP potensial pindah desa`
+                    {revisionHistory[0]?.impactSummary
+                      ? `${revisionHistory[0].impactSummary.impactedCount} OP potensial pindah desa`
                       : "Belum ada preview impact"}
                   </p>
                 </div>
