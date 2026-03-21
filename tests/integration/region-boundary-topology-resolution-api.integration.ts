@@ -379,6 +379,43 @@ async function run() {
 
     await db.delete(regionBoundaryRevision).where(eq(regionBoundaryRevision.id, crossKecamatanRevision.id));
 
+    const tinyFragmentAnalyze = await server.jsonRequest(
+      "/api/backoffice/region-boundaries/desa/draft/analyze",
+      "POST",
+      {
+        boundaryKey: targetBoundaryKey,
+        level: "desa",
+        kecamatanId: muaradua.cpmKecId,
+        kelurahanId: targetDesa.cpmKelId,
+        namaDesa: targetDesa.cpmKelurahan,
+        geometry: multiPolygon(
+          square(0, 0, 10, 10),
+          {
+            type: "Polygon",
+            coordinates: [[
+              [10, 5],
+              [10, 5.0000001],
+              [10.0000001, 5.0000001],
+              [10, 5],
+            ]],
+          },
+        ),
+      },
+    );
+    assert.equal(
+      tinyFragmentAnalyze.response.status,
+      200,
+      "fragmen takeover yang lebih kecil dari resolusi penyimpanan harus difilter, bukan memecahkan save draft",
+    );
+    const tinyFragmentBody = tinyFragmentAnalyze.body as JsonRecord;
+    const tinyFragmentRevision = regionBoundaryRevisionSchema.parse(tinyFragmentBody.revision);
+    const tinyFragmentAnalysis = regionBoundaryTopologyAnalysisSchema.parse(tinyFragmentBody.analysis);
+    createdRevisionIds.push(tinyFragmentRevision.id);
+    assert.equal(tinyFragmentAnalysis.summary.fragmentCount, 0);
+    assert.equal(tinyFragmentAnalysis.topologyStatus, "draft-ready");
+
+    await db.delete(regionBoundaryRevision).where(eq(regionBoundaryRevision.id, tinyFragmentRevision.id));
+
     const multiCandidateAnalyze = await server.jsonRequest(
       "/api/backoffice/region-boundaries/desa/draft/analyze",
       "POST",

@@ -52,6 +52,8 @@ type BoundaryAnalysisInput = {
   baseFeatures?: PublishedBoundaryFeature[];
 };
 
+const MIN_PERSISTABLE_FRAGMENT_AREA_SQM = 0.01;
+
 function cloneValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -214,6 +216,7 @@ function classifyFragment(params: {
   type: TopologyFragmentType;
   geometry: RegionBoundaryGeometry;
   candidateBoundaryKeys: string[];
+  areaSqM: number;
 }): TopologyFragment {
   const candidates = uniqueStrings(params.candidateBoundaryKeys);
 
@@ -227,7 +230,7 @@ function classifyFragment(params: {
       assignmentMode: null,
       status: "invalid",
       geometry: params.geometry,
-      areaSqM: geometryArea(params.geometry),
+      areaSqM: params.areaSqM,
     };
   }
 
@@ -241,7 +244,7 @@ function classifyFragment(params: {
       assignmentMode: "auto",
       status: "resolved",
       geometry: params.geometry,
-      areaSqM: geometryArea(params.geometry),
+      areaSqM: params.areaSqM,
     };
   }
 
@@ -254,7 +257,7 @@ function classifyFragment(params: {
     assignmentMode: "manual",
     status: "unresolved",
     geometry: params.geometry,
-    areaSqM: geometryArea(params.geometry),
+    areaSqM: params.areaSqM,
   };
 }
 
@@ -286,18 +289,26 @@ function resolveFragmentAssignments(params: {
   fragments: PolygonFeature[];
   neighborFeatures: PublishedBoundaryFeature[];
 }) {
-  return params.fragments.map((fragment, index) =>
-    classifyFragment({
-      fragmentId: `frag-${String(index + 1).padStart(3, "0")}`,
-      sourceBoundaryKey: params.sourceBoundaryKey,
-      type: params.fragmentType,
-      geometry: fragment.geometry,
-      candidateBoundaryKeys: discoverCandidateBoundaryKeys({
-        fragment,
-        neighborFeatures: params.neighborFeatures,
+  return params.fragments.flatMap((fragment, index) => {
+    const areaSqM = geometryArea(fragment.geometry);
+    if (!Number.isFinite(areaSqM) || areaSqM < MIN_PERSISTABLE_FRAGMENT_AREA_SQM) {
+      return [];
+    }
+
+    return [
+      classifyFragment({
+        fragmentId: `frag-${String(index + 1).padStart(3, "0")}`,
+        sourceBoundaryKey: params.sourceBoundaryKey,
+        type: params.fragmentType,
+        geometry: fragment.geometry,
+        candidateBoundaryKeys: discoverCandidateBoundaryKeys({
+          fragment,
+          neighborFeatures: params.neighborFeatures,
+        }),
+        areaSqM,
       }),
-    }),
-  );
+    ];
+  });
 }
 
 function summarizeAssignments(assignments: TopologyFragment[]): TopologySummary {

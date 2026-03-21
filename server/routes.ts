@@ -812,6 +812,43 @@ function sendZodValidationError(res: Response, error: ZodError, fallbackMessage:
   return res.status(400).json(buildValidationErrorPayload(error, fallbackMessage));
 }
 
+export function normalizeBoundaryDraftMutationError(error: unknown, fallbackMessage: string) {
+  if (error instanceof ZodError) {
+    const hasTinyFragmentIssue = error.issues.some(
+      (issue) =>
+        issue.code === "too_small" &&
+        issue.path.length >= 3 &&
+        issue.path[0] === "fragments" &&
+        issue.path[issue.path.length - 1] === "areaSqM",
+    );
+
+    if (hasTinyFragmentIssue) {
+      return {
+        status: 400,
+        message: "Hasil edit menghasilkan fragmen sangat kecil. Rapikan vertex atau reset draft desa ini, lalu simpan ulang.",
+      };
+    }
+
+    const payload = buildValidationErrorPayload(error, fallbackMessage);
+    return {
+      status: 400,
+      message: payload.message,
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      status: 400,
+      message: error.message,
+    };
+  }
+
+  return {
+    status: 400,
+    message: fallbackMessage,
+  };
+}
+
 function normalizeObjekPajakMutationError(error: unknown): {
   status: number;
   message: string;
@@ -3201,8 +3238,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
       return res.json(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Gagal menyimpan draft boundary";
-      return res.status(400).json({ message });
+      const normalized = normalizeBoundaryDraftMutationError(error, "Gagal menyimpan draft boundary");
+      return res.status(normalized.status).json({ message: normalized.message });
     }
   });
 
@@ -3241,8 +3278,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
       return res.json(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Gagal menganalisa topology draft boundary";
-      return res.status(400).json({ message });
+      const normalized = normalizeBoundaryDraftMutationError(
+        error,
+        "Gagal menganalisa topology draft boundary",
+      );
+      return res.status(normalized.status).json({ message: normalized.message });
     }
   });
 
@@ -3287,8 +3327,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
       return res.json(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Gagal menetapkan assignment fragment topology";
-      return res.status(400).json({ message });
+      const normalized = normalizeBoundaryDraftMutationError(
+        error,
+        "Gagal menetapkan assignment fragment topology",
+      );
+      return res.status(normalized.status).json({ message: normalized.message });
     }
   });
 
@@ -3308,8 +3351,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
       return res.json(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Gagal mengonfirmasi takeover draft boundary";
-      return res.status(400).json({ message });
+      const normalized = normalizeBoundaryDraftMutationError(
+        error,
+        "Gagal mengonfirmasi takeover draft boundary",
+      );
+      return res.status(normalized.status).json({ message: normalized.message });
     }
   });
 
@@ -3325,8 +3371,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const preview = await previewDraftImpact(parsed.data);
       return res.json(preview);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Gagal menghitung preview impact";
-      return res.status(400).json({ message });
+      const normalized = normalizeBoundaryDraftMutationError(error, "Gagal menghitung preview impact");
+      return res.status(normalized.status).json({ message: normalized.message });
     }
   });
 
