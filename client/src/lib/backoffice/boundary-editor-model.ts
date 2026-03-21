@@ -417,6 +417,113 @@ function collectVertexPairs(input: unknown, points: number[][]) {
   }
 }
 
+function isCoordinatePair(input: unknown): input is [number, number] {
+  return (
+    Array.isArray(input) &&
+    input.length >= 2 &&
+    typeof input[0] === "number" &&
+    Number.isFinite(input[0]) &&
+    typeof input[1] === "number" &&
+    Number.isFinite(input[1])
+  );
+}
+
+function areCoordinatePairsEqual(left: [number, number], right: [number, number]) {
+  return left[0] === right[0] && left[1] === right[1];
+}
+
+function normalizeLinearRing(input: unknown) {
+  if (!Array.isArray(input)) {
+    return null;
+  }
+
+  const coordinates: Array<[number, number]> = [];
+  for (const point of input) {
+    if (!isCoordinatePair(point)) {
+      continue;
+    }
+
+    const normalizedPoint: [number, number] = [point[0], point[1]];
+    if (
+      coordinates.length === 0 ||
+      !areCoordinatePairsEqual(coordinates[coordinates.length - 1]!, normalizedPoint)
+    ) {
+      coordinates.push(normalizedPoint);
+    }
+  }
+
+  if (coordinates.length < 3) {
+    return null;
+  }
+
+  const firstPoint = coordinates[0]!;
+  const lastPoint = coordinates[coordinates.length - 1]!;
+  if (!areCoordinatePairsEqual(firstPoint, lastPoint)) {
+    coordinates.push([firstPoint[0], firstPoint[1]]);
+  }
+
+  return coordinates.length >= 4 ? coordinates : null;
+}
+
+function normalizePolygonCoordinates(input: unknown) {
+  if (!Array.isArray(input)) {
+    return null;
+  }
+
+  const rings = input
+    .map((ring) => normalizeLinearRing(ring))
+    .filter((ring): ring is Array<[number, number]> => Boolean(ring));
+
+  if (rings.length === 0) {
+    return null;
+  }
+
+  return rings;
+}
+
+function normalizePolygonGeometryPart(input: unknown) {
+  const coordinates = normalizePolygonCoordinates(input);
+  if (!coordinates) {
+    return null;
+  }
+
+  return {
+    type: "Polygon" as const,
+    coordinates,
+  };
+}
+
+function toPolygonGeometryParts(
+  geometry: RegionBoundaryGeometry | null | undefined,
+): Array<{
+  type: "Polygon";
+  coordinates: Array<Array<[number, number]>>;
+}> {
+  if (!geometry) {
+    return [];
+  }
+
+  if (geometry.type === "Polygon") {
+    const polygon = normalizePolygonGeometryPart(geometry.coordinates);
+    return polygon ? [polygon] : [];
+  }
+
+  if (geometry.type !== "MultiPolygon" || !Array.isArray(geometry.coordinates)) {
+    return [];
+  }
+
+  return geometry.coordinates
+    .map((coordinates) => normalizePolygonGeometryPart(coordinates))
+    .filter(
+      (
+        polygon,
+      ): polygon is {
+        type: "Polygon";
+        coordinates: Array<Array<[number, number]>>;
+      } => Boolean(polygon),
+    );
+}
+
 export function countBoundaryGeometryVertices(geometry: RegionBoundaryGeometry | null | undefined) {
   if (!geometry) {
     return 0;
@@ -498,6 +605,49 @@ export function simplifyBoundaryEditingGeometry(
   return {
     type: simplifiedGeometry.type,
     coordinates: simplifiedGeometry.coordinates,
+  };
+}
+
+export function createEditableBoundaryGeometryParts(
+  geometry: RegionBoundaryGeometry | null | undefined,
+) {
+  const simplifiedGeometry = simplifyBoundaryEditingGeometry(geometry);
+  const simplifiedParts = toPolygonGeometryParts(simplifiedGeometry);
+  if (simplifiedParts.length > 0) {
+    return simplifiedParts;
+  }
+
+  return toPolygonGeometryParts(geometry);
+}
+
+export function mergeEditableBoundaryGeometryParts(
+  parts: Array<{
+    type: "Polygon";
+    coordinates: unknown;
+  }>,
+): RegionBoundaryGeometry | null {
+  const normalizedParts = parts
+    .map((part) => normalizePolygonGeometryPart(part.coordinates))
+    .filter(
+      (
+        polygon,
+      ): polygon is {
+        type: "Polygon";
+        coordinates: Array<Array<[number, number]>>;
+      } => Boolean(polygon),
+    );
+
+  if (normalizedParts.length === 0) {
+    return null;
+  }
+
+  if (normalizedParts.length === 1) {
+    return normalizedParts[0];
+  }
+
+  return {
+    type: "MultiPolygon",
+    coordinates: normalizedParts.map((part) => part.coordinates),
   };
 }
 

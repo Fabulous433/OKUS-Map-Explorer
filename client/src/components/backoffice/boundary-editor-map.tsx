@@ -12,8 +12,10 @@ import {
   BOUNDARY_EDITOR_BASE_MAPS,
   DEFAULT_BOUNDARY_EDITOR_BASE_MAP_KEY,
   countBoundaryGeometryVertices,
+  createEditableBoundaryGeometryParts,
   createBoundaryTopologyPanelModel,
   createTakeoverWarningModel,
+  mergeEditableBoundaryGeometryParts,
   parseBoundaryUpload,
   simplifyBoundaryEditingGeometry,
   type DraftTopologySummary,
@@ -106,6 +108,37 @@ function getFragmentStyle(
   };
 }
 
+function collectPolygonGeometryParts(
+  geometry: GeoJSON.Geometry | null | undefined,
+  parts: Array<{
+    type: "Polygon";
+    coordinates: unknown;
+  }>,
+) {
+  if (!geometry) {
+    return;
+  }
+
+  if (geometry.type === "Polygon") {
+    parts.push({
+      type: "Polygon",
+      coordinates: geometry.coordinates,
+    });
+    return;
+  }
+
+  if (geometry.type !== "MultiPolygon") {
+    return;
+  }
+
+  for (const coordinates of geometry.coordinates) {
+    parts.push({
+      type: "Polygon",
+      coordinates,
+    });
+  }
+}
+
 function TopologyFragmentLayers(props: {
   topologyAnalysis: DraftTopologySummary;
   highlightFragmentIds?: string[];
@@ -143,8 +176,8 @@ function EditableBoundaryLayer(props: {
 }) {
   const map = useMap();
   const featureGroupRef = useRef<L.FeatureGroup | null>(null);
-  const editableGeometry = useMemo(
-    () => simplifyBoundaryEditingGeometry(props.geometry),
+  const editableGeometryParts = useMemo(
+    () => createEditableBoundaryGeometryParts(props.geometry),
     [props.geometry],
   );
 
@@ -156,7 +189,7 @@ function EditableBoundaryLayer(props: {
     const featureGroup = featureGroupRef.current;
     featureGroup.clearLayers();
 
-    if (editableGeometry) {
+    for (const editableGeometry of editableGeometryParts) {
       L.geoJSON(
         {
           type: "Feature",
@@ -176,11 +209,11 @@ function EditableBoundaryLayer(props: {
       });
     }
 
-    const bounds = getGeometryBounds(props.boundary, editableGeometry);
+    const bounds = getGeometryBounds(props.boundary, props.geometry);
     if (bounds.isValid()) {
       map.fitBounds(bounds, { padding: [24, 24] });
     }
-  }, [editableGeometry, map, props.boundary]);
+  }, [editableGeometryParts, map, props.boundary, props.geometry]);
 
   useEffect(() => {
     if (!featureGroupRef.current) {
@@ -203,20 +236,24 @@ function EditableBoundaryLayer(props: {
     });
 
     const handleEdited = (event: L.LeafletEvent & { layers?: L.LayerGroup }) => {
-      event.layers?.eachLayer((layer) => {
+      const nextParts: Array<{
+        type: "Polygon";
+        coordinates: unknown;
+      }> = [];
+
+      featureGroupRef.current?.eachLayer((layer) => {
         if (!("toGeoJSON" in layer) || typeof layer.toGeoJSON !== "function") {
           return;
         }
 
         const nextFeature = layer.toGeoJSON() as GeoJSON.Feature;
-        const geometry = nextFeature.geometry;
-        if (geometry.type === "Polygon" || geometry.type === "MultiPolygon") {
-          props.onGeometryChange({
-            type: geometry.type,
-            coordinates: geometry.coordinates,
-          });
-        }
+        collectPolygonGeometryParts(nextFeature.geometry, nextParts);
       });
+
+      const nextGeometry = mergeEditableBoundaryGeometryParts(nextParts);
+      if (nextGeometry) {
+        props.onGeometryChange(nextGeometry);
+      }
     };
 
     map.addControl(drawControl);

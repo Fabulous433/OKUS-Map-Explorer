@@ -20,6 +20,8 @@ async function run() {
     DEFAULT_BOUNDARY_EDITOR_BASE_MAP_KEY,
     countBoundaryGeometryVertices,
     simplifyBoundaryEditingGeometry,
+    createEditableBoundaryGeometryParts,
+    mergeEditableBoundaryGeometryParts,
   } = boundaryEditorModelModule as {
     parseBoundaryUpload?: (fileText: string) =>
       | {
@@ -85,6 +87,22 @@ async function run() {
       type: "Polygon" | "MultiPolygon";
       coordinates: unknown;
     } | null;
+    createEditableBoundaryGeometryParts?: (geometry: {
+      type: "Polygon" | "MultiPolygon";
+      coordinates: unknown;
+    }) => Array<{
+      type: "Polygon";
+      coordinates: unknown;
+    }>;
+    mergeEditableBoundaryGeometryParts?: (
+      parts: Array<{
+        type: "Polygon";
+        coordinates: unknown;
+      }>,
+    ) => {
+      type: "Polygon" | "MultiPolygon";
+      coordinates: unknown;
+    } | null;
   };
 
   assert.equal(typeof parseBoundaryUpload, "function", "parser upload boundary wajib diexport");
@@ -92,6 +110,16 @@ async function run() {
   assert.equal(typeof createBoundaryImpactPanelModel, "function", "model impact panel boundary wajib diexport");
   assert.equal(typeof countBoundaryGeometryVertices, "function", "counter vertex boundary wajib diexport");
   assert.equal(typeof simplifyBoundaryEditingGeometry, "function", "simplifier geometry editor wajib diexport");
+  assert.equal(
+    typeof createEditableBoundaryGeometryParts,
+    "function",
+    "multipart geometry helper untuk editor leaflet wajib diexport",
+  );
+  assert.equal(
+    typeof mergeEditableBoundaryGeometryParts,
+    "function",
+    "combiner geometry edit leaflet wajib diexport",
+  );
   assert.equal(DEFAULT_BOUNDARY_EDITOR_BASE_MAP_KEY, "esri", "basemap default editor boundary harus ESRI");
   assert.deepEqual(
     Object.keys(BOUNDARY_EDITOR_BASE_MAPS ?? {}),
@@ -330,6 +358,68 @@ async function run() {
   assert.ok(
     countBoundaryGeometryVertices!(simplifiedDenseGeometry!) < countBoundaryGeometryVertices!(denseGeometry),
     "geometry edit yang sangat padat harus disederhanakan agar handle vertex tidak terlalu rapat",
+  );
+
+  const multipartGeometry = {
+    type: "MultiPolygon" as const,
+    coordinates: [
+      [
+        [
+          [104.07, -4.55],
+          [104.08, -4.55],
+          [104.08, -4.54],
+          [104.07, -4.54],
+          [104.07, -4.55],
+        ],
+      ],
+      [
+        [
+          [104.1, -4.57],
+          [104.11, -4.57],
+          [104.11, -4.56],
+          [104.1, -4.56],
+          [104.1, -4.57],
+        ],
+      ],
+    ],
+  };
+
+  const editableParts = createEditableBoundaryGeometryParts!(multipartGeometry);
+  assert.deepEqual(
+    editableParts,
+    [
+      {
+        type: "Polygon",
+        coordinates: [
+          [
+            [104.07, -4.55],
+            [104.08, -4.55],
+            [104.08, -4.54],
+            [104.07, -4.54],
+            [104.07, -4.55],
+          ],
+        ],
+      },
+      {
+        type: "Polygon",
+        coordinates: [
+          [
+            [104.1, -4.57],
+            [104.11, -4.57],
+            [104.11, -4.56],
+            [104.1, -4.56],
+            [104.1, -4.57],
+          ],
+        ],
+      },
+    ],
+    "geometry multipart harus dipecah menjadi beberapa polygon edit-safe agar leaflet draw tidak crash saat edit mode aktif",
+  );
+
+  assert.deepEqual(
+    mergeEditableBoundaryGeometryParts!(editableParts),
+    multipartGeometry,
+    "seluruh polygon part yang diedit terpisah harus digabung kembali menjadi geometry runtime yang utuh saat save draft",
   );
 }
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## Phase 2.16t — Boundary Editor Multipart Edit Safety
+
+### Fixed
+- Edit mode `Leaflet Draw` pada boundary editor tidak lagi crash saat geometry revisi aktif berbentuk `MultiPolygon`.
+- Geometry multipart sekarang dipecah menjadi beberapa polygon edit-safe saat masuk ke canvas, lalu digabung kembali otomatis saat admin menyimpan hasil edit.
+
+### Notes
+- Fix ini menutup runtime overlay `Cannot read properties of null (reading 'lat')` yang muncul ketika admin menekan ikon edit pada boundary multipart hasil revisi topology.
+
 ## Phase 2.16s — Boundary Editor Per-Desa History & Block Resolution
 
 ### Added
