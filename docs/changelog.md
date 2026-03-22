@@ -1,5 +1,11 @@
 # Changelog
 
+## Phase 2.16v — Boundary Editor Active Desa Filtering
+
+### Fixed
+- Notifikasi topology di peta dan panel sekarang hanya menampilkan area yang benar-benar terkait dengan desa yang sedang diedit.
+- Kasus perluasan wilayah tidak lagi diberi instruksi `pilih desa tujuan`; area ekspansi sekarang diperlakukan sebagai penambahan wilayah desa aktif.
+
 ## Phase 2.16u — Boundary Editor Human Map Guidance
 
 ### Improved

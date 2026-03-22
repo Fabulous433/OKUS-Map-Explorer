@@ -22,6 +22,7 @@ async function run() {
     simplifyBoundaryEditingGeometry,
     createEditableBoundaryGeometryParts,
     mergeEditableBoundaryGeometryParts,
+    filterTopologyAnalysisForBoundary,
   } = boundaryEditorModelModule as {
     parseBoundaryUpload?: (fileText: string) =>
       | {
@@ -103,6 +104,42 @@ async function run() {
       type: "Polygon" | "MultiPolygon";
       coordinates: unknown;
     } | null;
+    filterTopologyAnalysisForBoundary?: (input: {
+      revisionId: number;
+      regionKey: string;
+      level: "desa";
+      topologyStatus: "draft-editing" | "draft-needs-resolution" | "draft-ready" | "published" | "superseded";
+      summary: {
+        fragmentCount: number;
+        unresolvedFragmentCount: number;
+        autoAssignedFragmentCount: number;
+        manualAssignmentRequiredCount: number;
+        invalidFragmentCount: number;
+      };
+      fragments: Array<{
+        fragmentId: string;
+        type: "released-fragment" | "takeover-area";
+        sourceBoundaryKey: string;
+        candidateBoundaryKeys: string[];
+        assignedBoundaryKey: string | null;
+        assignmentMode: "auto" | "manual" | null;
+        status: "unresolved" | "resolved" | "invalid";
+        geometry: {
+          type: "Polygon" | "MultiPolygon";
+          coordinates: unknown;
+        };
+        areaSqM: number;
+      }>;
+    }, selectedBoundaryKey?: string) => {
+      fragments: Array<{ fragmentId: string }>;
+      summary: {
+        fragmentCount: number;
+        unresolvedFragmentCount: number;
+        autoAssignedFragmentCount: number;
+        manualAssignmentRequiredCount: number;
+        invalidFragmentCount: number;
+      };
+    };
   };
 
   assert.equal(typeof parseBoundaryUpload, "function", "parser upload boundary wajib diexport");
@@ -119,6 +156,11 @@ async function run() {
     typeof mergeEditableBoundaryGeometryParts,
     "function",
     "combiner geometry edit leaflet wajib diexport",
+  );
+  assert.equal(
+    typeof filterTopologyAnalysisForBoundary,
+    "function",
+    "filter topology per desa aktif wajib diexport",
   );
   assert.equal(DEFAULT_BOUNDARY_EDITOR_BASE_MAP_KEY, "esri", "basemap default editor boundary harus ESRI");
   assert.deepEqual(
@@ -420,6 +462,86 @@ async function run() {
     mergeEditableBoundaryGeometryParts!(editableParts),
     multipartGeometry,
     "seluruh polygon part yang diedit terpisah harus digabung kembali menjadi geometry runtime yang utuh saat save draft",
+  );
+
+  const filteredTopology = filterTopologyAnalysisForBoundary!(
+    {
+      revisionId: 17,
+      regionKey: "okus",
+      level: "desa",
+      topologyStatus: "draft-needs-resolution",
+      summary: {
+        fragmentCount: 4,
+        unresolvedFragmentCount: 2,
+        autoAssignedFragmentCount: 1,
+        manualAssignmentRequiredCount: 1,
+        invalidFragmentCount: 1,
+      },
+      fragments: [
+        {
+          fragmentId: "release-active",
+          type: "released-fragment",
+          sourceBoundaryKey: "muaraduakisam:ulak-agung-ulu",
+          candidateBoundaryKeys: ["muaraduakisam:sugihan"],
+          assignedBoundaryKey: null,
+          assignmentMode: null,
+          status: "unresolved",
+          geometry: multipartGeometry,
+          areaSqM: 100,
+        },
+        {
+          fragmentId: "takeover-active",
+          type: "takeover-area",
+          sourceBoundaryKey: "muaraduakisam:dusun-tengah",
+          candidateBoundaryKeys: ["muaraduakisam:dusun-tengah"],
+          assignedBoundaryKey: "muaraduakisam:ulak-agung-ulu",
+          assignmentMode: "manual",
+          status: "resolved",
+          geometry: multipartGeometry,
+          areaSqM: 90,
+        },
+        {
+          fragmentId: "other-village-invalid",
+          type: "released-fragment",
+          sourceBoundaryKey: "muaraduakisam:desa-lain",
+          candidateBoundaryKeys: [],
+          assignedBoundaryKey: null,
+          assignmentMode: null,
+          status: "invalid",
+          geometry: multipartGeometry,
+          areaSqM: 10,
+        },
+        {
+          fragmentId: "other-village-auto",
+          type: "released-fragment",
+          sourceBoundaryKey: "muaraduakisam:desa-lain",
+          candidateBoundaryKeys: ["muaraduakisam:sugihan"],
+          assignedBoundaryKey: "muaraduakisam:sugihan",
+          assignmentMode: "auto",
+          status: "resolved",
+          geometry: multipartGeometry,
+          areaSqM: 12,
+        },
+      ],
+    },
+    "muaraduakisam:ulak-agung-ulu",
+  );
+
+  assert.deepEqual(
+    filteredTopology.fragments.map((fragment) => fragment.fragmentId),
+    ["release-active", "takeover-active"],
+    "panel dan peta desa aktif hanya boleh menampilkan area topology yang benar-benar terkait dengan desa yang sedang diedit",
+  );
+  assert.deepEqual(
+    filteredTopology.summary,
+    {
+      fragmentCount: 2,
+      unresolvedFragmentCount: 1,
+      autoAssignedFragmentCount: 0,
+      manualAssignmentRequiredCount: 1,
+      invalidFragmentCount: 0,
+    },
+    "summary topology desa aktif harus dihitung ulang setelah area desa lain disaring keluar",
   );
 }
 

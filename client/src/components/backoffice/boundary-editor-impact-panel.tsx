@@ -15,6 +15,7 @@ import {
   createBoundaryResolutionBlocks,
   createBoundaryTopologyPanelModel,
   createTakeoverWarningModel,
+  filterTopologyAnalysisForBoundary,
   type DraftTopologySummary,
 } from "@/lib/backoffice/boundary-editor-model";
 import type { BoundaryEditorDesaOption } from "@/lib/backoffice/boundary-editor-query";
@@ -121,18 +122,26 @@ export function BoundaryEditorImpactPanel(props: {
   onPublish?: () => void;
   isResetting?: boolean;
 }) {
-  const topologyModel = props.topologyAnalysis ? createBoundaryTopologyPanelModel(props.topologyAnalysis) : null;
-  const takeoverWarning = props.topologyAnalysis ? createTakeoverWarningModel(props.topologyAnalysis) : null;
+  const filteredTopologyAnalysis = filterTopologyAnalysisForBoundary(
+    props.topologyAnalysis,
+    props.selectedBoundaryKey,
+  );
+  const topologyModel = filteredTopologyAnalysis
+    ? createBoundaryTopologyPanelModel(filteredTopologyAnalysis)
+    : null;
+  const takeoverWarning = filteredTopologyAnalysis
+    ? createTakeoverWarningModel(filteredTopologyAnalysis)
+    : null;
   const boundaryLabelByKey = new Map(
     (props.desaOptions ?? []).map((item) => [item.boundaryKey, item.label] as const),
   );
   const sourceDraftBoundaryKeys = Array.from(
-    new Set((props.topologyAnalysis?.fragments ?? []).map((fragment) => fragment.sourceBoundaryKey)),
+    new Set((filteredTopologyAnalysis?.fragments ?? []).map((fragment) => fragment.sourceBoundaryKey)),
   );
   const sharedDraftLabels = sourceDraftBoundaryKeys.map((boundaryKey) =>
     resolveBoundaryLabel(boundaryKey, boundaryLabelByKey),
   );
-  const resolutionBlocks = (props.topologyAnalysis ? createBoundaryResolutionBlocks(props.topologyAnalysis) : [])
+  const resolutionBlocks = (filteredTopologyAnalysis ? createBoundaryResolutionBlocks(filteredTopologyAnalysis) : [])
     .slice()
     .sort((left, right) => {
       const leftPriority = left.sourceBoundaryKey === props.selectedBoundaryKey ? 0 : 1;
@@ -140,14 +149,14 @@ export function BoundaryEditorImpactPanel(props: {
       return leftPriority - rightPriority || left.blockId.localeCompare(right.blockId);
     });
   const autoAssignedFragments =
-    props.topologyAnalysis
+    filteredTopologyAnalysis
       ? buildAutoResolutionSummary({
-          topologyAnalysis: props.topologyAnalysis,
+          topologyAnalysis: filteredTopologyAnalysis,
           boundaryLabelByKey,
         })
       : [];
   const takeoverFragments =
-    props.topologyAnalysis?.fragments.filter((fragment) => fragment.type === "takeover-area") ?? [];
+    filteredTopologyAnalysis?.fragments.filter((fragment) => fragment.type === "takeover-area") ?? [];
 
   const model = createBoundaryImpactPanelModel({
     impactedCount: props.impactedCount,
@@ -248,13 +257,23 @@ export function BoundaryEditorImpactPanel(props: {
                           Asal draft: {resolveBoundaryLabel(block.sourceBoundaryKey, boundaryLabelByKey)}
                         </p>
                       </div>
-                      <Badge variant="outline">{block.status === "invalid" ? "RAPIKAN" : "PERLU PILIH"}</Badge>
+                      <Badge variant="outline">
+                        {block.status === "invalid"
+                          ? "RAPIKAN"
+                          : block.type === "takeover-area"
+                            ? "KONFIRMASI"
+                            : "PERLU PILIH"}
+                      </Badge>
                     </div>
 
                     <div className="mt-3 space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">
-                          {block.canAssign ? "Pilih desa tujuan area ini" : "Perbaiki langsung di peta"}
+                          {block.status === "invalid"
+                            ? "Perbaiki langsung di peta"
+                            : block.type === "takeover-area"
+                              ? "Cek dampak perluasan area ini"
+                              : "Pilih desa tujuan area ini"}
                         </p>
                         <Button
                           type="button"

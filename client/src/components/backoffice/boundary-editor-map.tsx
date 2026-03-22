@@ -16,6 +16,7 @@ import {
   createBoundaryResolutionBlocks,
   createBoundaryTopologyPanelModel,
   createTakeoverWarningModel,
+  filterTopologyAnalysisForBoundary,
   mergeEditableBoundaryGeometryParts,
   parseBoundaryUpload,
   simplifyBoundaryEditingGeometry,
@@ -241,7 +242,9 @@ function TopologyResolutionOverlays(props: {
         const title =
           block.status === "invalid"
             ? "Rapikan garis edit di area ini"
-            : "Pilih desa tujuan untuk area ini";
+            : block.type === "takeover-area"
+              ? "Area ini menambah wilayah desa aktif"
+              : "Pilih desa tujuan untuk area ini";
 
         return {
           blockId: block.blockId,
@@ -384,13 +387,17 @@ export function BoundaryEditorMap(props: {
   const [baseMapKey, setBaseMapKey] = useState<keyof typeof BOUNDARY_EDITOR_BASE_MAPS>(
     DEFAULT_BOUNDARY_EDITOR_BASE_MAP_KEY,
   );
+  const filteredTopologyAnalysis = useMemo(
+    () => filterTopologyAnalysisForBoundary(props.topologyAnalysis ?? null, props.selectedBoundaryKey),
+    [props.selectedBoundaryKey, props.topologyAnalysis],
+  );
   const topologyModel = useMemo(
-    () => (props.topologyAnalysis ? createBoundaryTopologyPanelModel(props.topologyAnalysis) : null),
-    [props.topologyAnalysis],
+    () => (filteredTopologyAnalysis ? createBoundaryTopologyPanelModel(filteredTopologyAnalysis) : null),
+    [filteredTopologyAnalysis],
   );
   const takeoverWarning = useMemo(
-    () => (props.topologyAnalysis ? createTakeoverWarningModel(props.topologyAnalysis) : null),
-    [props.topologyAnalysis],
+    () => (filteredTopologyAnalysis ? createTakeoverWarningModel(filteredTopologyAnalysis) : null),
+    [filteredTopologyAnalysis],
   );
 
   const selectedFeatureCollection = useMemo(() => {
@@ -420,11 +427,11 @@ export function BoundaryEditorMap(props: {
       keys.add(props.selectedBoundaryKey);
     }
 
-    if (!props.topologyAnalysis) {
+    if (!filteredTopologyAnalysis) {
       return keys;
     }
 
-    for (const fragment of props.topologyAnalysis.fragments) {
+    for (const fragment of filteredTopologyAnalysis.fragments) {
       keys.add(fragment.sourceBoundaryKey);
 
       if (fragment.assignedBoundaryKey) {
@@ -437,7 +444,7 @@ export function BoundaryEditorMap(props: {
     }
 
     return keys;
-  }, [props.selectedBoundaryKey, props.topologyAnalysis]);
+  }, [filteredTopologyAnalysis, props.selectedBoundaryKey]);
 
   async function handleUploadChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -603,15 +610,15 @@ export function BoundaryEditorMap(props: {
               }}
             />
           ) : null}
-          {props.topologyAnalysis ? (
+          {filteredTopologyAnalysis ? (
             <TopologyFragmentLayers
-              topologyAnalysis={props.topologyAnalysis}
+              topologyAnalysis={filteredTopologyAnalysis}
               highlightFragmentIds={props.highlightFragmentIds}
             />
           ) : null}
-          {props.topologyAnalysis ? (
+          {filteredTopologyAnalysis ? (
             <TopologyResolutionOverlays
-              topologyAnalysis={props.topologyAnalysis}
+              topologyAnalysis={filteredTopologyAnalysis}
               highlightFragmentIds={props.highlightFragmentIds}
             />
           ) : null}

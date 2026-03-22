@@ -476,7 +476,7 @@ async function run() {
       topologyAnalysis: unresolvedTopology,
       topologyRevisionId: 17,
       takeoverConfirmed: false,
-      selectedBoundaryKey: "muaradua:batu-belang-jaya",
+      selectedBoundaryKey: "muaradua:bumi-agung",
       desaOptions: topologyCandidateOptions,
       onSaveDraft: () => undefined,
       onPreviewImpact: () => undefined,
@@ -563,7 +563,7 @@ async function run() {
       BoundaryEditorShell as unknown as React.ComponentType<Record<string, unknown>>,
       {
         selectedKecamatanId: "1609040",
-        selectedBoundaryKey: "muaradua:batu-belang-jaya",
+        selectedBoundaryKey: "muaradua:bumi-agung",
         kecamatanOptions: [{ id: "1609040", label: "Muaradua" }],
         desaOptions: [
           { id: "1609040013", boundaryKey: "muaradua:batu-belang-jaya", label: "Batu Belang Jaya" },

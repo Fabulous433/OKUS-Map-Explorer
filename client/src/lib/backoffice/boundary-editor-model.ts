@@ -56,6 +56,32 @@ export type BoundaryResolutionBlock = {
   areaSqM: number;
 };
 
+function isFragmentRelevantToBoundary(fragment: DraftTopologyFragment, selectedBoundaryKey?: string) {
+  if (!selectedBoundaryKey) {
+    return true;
+  }
+
+  return (
+    fragment.sourceBoundaryKey === selectedBoundaryKey ||
+    fragment.assignedBoundaryKey === selectedBoundaryKey ||
+    fragment.candidateBoundaryKeys.includes(selectedBoundaryKey)
+  );
+}
+
+function summarizeTopologyFragments(fragments: DraftTopologyFragment[]) {
+  return {
+    fragmentCount: fragments.length,
+    unresolvedFragmentCount: fragments.filter((fragment) => fragment.status === "unresolved").length,
+    autoAssignedFragmentCount: fragments.filter(
+      (fragment) => fragment.status === "resolved" && fragment.assignmentMode === "auto",
+    ).length,
+    manualAssignmentRequiredCount: fragments.filter(
+      (fragment) => fragment.status === "unresolved" && fragment.assignmentMode !== "auto",
+    ).length,
+    invalidFragmentCount: fragments.filter((fragment) => fragment.status === "invalid").length,
+  };
+}
+
 function getTopologyStatusLabel(input: DraftTopologySummary) {
   if (input.topologyStatus === "draft-editing") {
     return "SEDANG DIEDIT";
@@ -160,11 +186,16 @@ export function createBoundaryResolutionBlocks(input: DraftTopologySummary) {
       type: fragment.type,
       sourceBoundaryKey: fragment.sourceBoundaryKey,
       status: fragment.status,
-      canAssign: fragment.status !== "invalid" && fragment.candidateBoundaryKeys.length > 0,
+      canAssign:
+        fragment.type !== "takeover-area" &&
+        fragment.status !== "invalid" &&
+        fragment.candidateBoundaryKeys.length > 0,
       resolutionMessage:
         fragment.status === "invalid"
           ? buildInvalidFragmentMessage(fragment)
-          : "Pilih desa yang berbatasan dengan area ini.",
+          : fragment.type === "takeover-area"
+            ? "Area ini akan menambah wilayah desa aktif. Periksa dampaknya di peta lalu lanjutkan lewat konfirmasi pengambilan wilayah."
+            : "Pilih desa yang berbatasan dengan area ini.",
       areaSqM: memberFragments.reduce((total, item) => total + item.areaSqM, 0),
     });
   }
@@ -246,6 +277,29 @@ export function canPublishBoundaryRevision(input: DraftTopologySummary, previewR
   const unresolvedFragments = input.fragments.some((fragment) => fragment.status !== "resolved");
 
   return previewReady && input.topologyStatus === "draft-ready" && !takeoverDetected && !unresolvedFragments;
+}
+
+export function filterTopologyAnalysisForBoundary(
+  input: DraftTopologySummary | null | undefined,
+  selectedBoundaryKey?: string,
+): DraftTopologySummary | null {
+  if (!input) {
+    return null;
+  }
+
+  if (!selectedBoundaryKey) {
+    return input;
+  }
+
+  const filteredFragments = input.fragments.filter((fragment) =>
+    isFragmentRelevantToBoundary(fragment, selectedBoundaryKey),
+  );
+
+  return {
+    ...input,
+    summary: summarizeTopologyFragments(filteredFragments),
+    fragments: filteredFragments,
+  };
 }
 
 function isPolygonGeometry(
