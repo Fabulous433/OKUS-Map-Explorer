@@ -52,6 +52,46 @@ function resolveBoundaryLabel(boundaryKey: string, boundaryLabelByKey: Map<strin
   return kecamatanLabel ? `${desaLabel} (${kecamatanLabel})` : desaLabel;
 }
 
+function buildAutoResolutionSummary(params: {
+  topologyAnalysis: DraftTopologySummary;
+  boundaryLabelByKey: Map<string, string>;
+}) {
+  const summaryByTarget = new Map<
+    string,
+    {
+      assignedBoundaryKey: string;
+      count: number;
+    }
+  >();
+
+  for (const fragment of params.topologyAnalysis.fragments) {
+    if (
+      fragment.status !== "resolved" ||
+      fragment.assignmentMode !== "auto" ||
+      !fragment.assignedBoundaryKey
+    ) {
+      continue;
+    }
+
+    const key = `${fragment.sourceBoundaryKey}->${fragment.assignedBoundaryKey}`;
+    const current = summaryByTarget.get(key);
+    if (current) {
+      current.count += 1;
+      continue;
+    }
+
+    summaryByTarget.set(key, {
+      assignedBoundaryKey: fragment.assignedBoundaryKey,
+      count: 1,
+    });
+  }
+
+  return Array.from(summaryByTarget.values()).map((item) => ({
+    label: resolveBoundaryLabel(item.assignedBoundaryKey, params.boundaryLabelByKey),
+    count: item.count,
+  }));
+}
+
 export function BoundaryEditorImpactPanel(props: {
   impactedCount: number;
   sampleMoves: RegionBoundaryImpactMovedItem[];
@@ -100,9 +140,12 @@ export function BoundaryEditorImpactPanel(props: {
       return leftPriority - rightPriority || left.blockId.localeCompare(right.blockId);
     });
   const autoAssignedFragments =
-    props.topologyAnalysis?.fragments.filter(
-      (fragment) => fragment.status === "resolved" && fragment.assignmentMode === "auto",
-    ) ?? [];
+    props.topologyAnalysis
+      ? buildAutoResolutionSummary({
+          topologyAnalysis: props.topologyAnalysis,
+          boundaryLabelByKey,
+        })
+      : [];
   const takeoverFragments =
     props.topologyAnalysis?.fragments.filter((fragment) => fragment.type === "takeover-area") ?? [];
 
@@ -123,7 +166,7 @@ export function BoundaryEditorImpactPanel(props: {
               <div>
                 <CardTitle className="font-sans text-lg font-black uppercase">Selesaikan Perubahan Wilayah</CardTitle>
                 <CardDescription className="font-mono text-[11px]">
-                  Setelah simpan draf, sistem membagi area perubahan menjadi blok yang perlu diselesaikan.
+                  Setelah simpan draf, area yang perlu dicek akan ditandai langsung di peta.
                 </CardDescription>
                 <p className="mt-1 font-mono text-[11px] text-black/55">
                   Revision #{props.topologyRevisionId ?? "-"}
@@ -170,6 +213,9 @@ export function BoundaryEditorImpactPanel(props: {
             </div>
 
             <div className="space-y-3">
+              <div className="rounded-lg border border-black/10 bg-[#faf8f2] p-3 font-mono text-xs leading-6 text-black/70">
+                Area yang perlu dicek sudah diberi tanda langsung di peta.
+              </div>
               <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-black/50">
                 Blok area yang perlu diputuskan
               </p>
@@ -186,10 +232,12 @@ export function BoundaryEditorImpactPanel(props: {
                           Blok area #{index + 1}
                         </p>
                         <p className="mt-1 font-mono text-[11px] text-black/60">
-                          {block.fragmentIds.length} fragmen mesin digabung menjadi satu blok kerja.
+                          {block.fragmentIds.length > 1
+                            ? "Beberapa potongan kecil di area yang sama sudah digabung."
+                            : "Satu area perubahan perlu dicek."}
                         </p>
                         <p className="mt-2 font-mono text-xs font-bold text-black/85">
-                          Kandidat lintas-kecamatan:{" "}
+                          Desa yang berbatasan dengan area ini:{" "}
                           {block.candidateBoundaryKeys.length > 0
                             ? block.candidateBoundaryKeys
                                 .map((key) => resolveBoundaryLabel(key, boundaryLabelByKey))
@@ -200,13 +248,13 @@ export function BoundaryEditorImpactPanel(props: {
                           Asal draft: {resolveBoundaryLabel(block.sourceBoundaryKey, boundaryLabelByKey)}
                         </p>
                       </div>
-                      <Badge variant="outline">{block.status === "invalid" ? "INVALID" : "PERLU PILIH"}</Badge>
+                      <Badge variant="outline">{block.status === "invalid" ? "RAPIKAN" : "PERLU PILIH"}</Badge>
                     </div>
 
                     <div className="mt-3 space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">
-                          {block.canAssign ? "Pilih desa tujuan" : "Tindakan diperlukan"}
+                          {block.canAssign ? "Pilih desa tujuan area ini" : "Perbaiki langsung di peta"}
                         </p>
                         <Button
                           type="button"
@@ -215,7 +263,7 @@ export function BoundaryEditorImpactPanel(props: {
                           onClick={() => props.onFocusResolutionBlock?.(block.fragmentIds)}
                           disabled={!props.onFocusResolutionBlock}
                         >
-                          Sorot di peta
+                          Lihat di peta
                         </Button>
                       </div>
                       {block.canAssign ? (
@@ -225,7 +273,7 @@ export function BoundaryEditorImpactPanel(props: {
                           disabled={!props.onAssignFragmentBlock}
                         >
                           <SelectTrigger className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 font-mono text-xs font-bold">
-                            <SelectValue placeholder="Pilih desa..." />
+                            <SelectValue placeholder="Pilih desa tujuan area ini..." />
                           </SelectTrigger>
                           <SelectContent>
                             {block.candidateBoundaryKeys.map((key) => (
@@ -248,17 +296,17 @@ export function BoundaryEditorImpactPanel(props: {
 
             <div className="space-y-3">
               <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-black/50">
-                Blok area otomatis
+                Ringkasan perubahan otomatis
               </p>
               {autoAssignedFragments.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-black/15 p-3 font-mono text-xs text-black/60">
-                  Tidak ada blok area otomatis untuk ditinjau.
+                  Belum ada perubahan otomatis yang perlu diringkas.
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {autoAssignedFragments.map((fragment) => (
-                    <div key={fragment.fragmentId} className="rounded-lg border border-black/10 bg-white p-3 font-mono text-xs text-black/75">
-                      {fragment.fragmentId} · {resolveBoundaryLabel(fragment.assignedBoundaryKey ?? "", boundaryLabelByKey)}
+                  {autoAssignedFragments.map((item) => (
+                    <div key={`${item.label}-${item.count}`} className="rounded-lg border border-black/10 bg-white p-3 font-mono text-xs text-black/75">
+                      {item.count} area kecil otomatis diarahkan ke {item.label}
                     </div>
                   ))}
                 </div>

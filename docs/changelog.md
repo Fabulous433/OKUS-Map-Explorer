@@ -1,5 +1,14 @@
 # Changelog
 
+## Phase 2.16u — Boundary Editor Human Map Guidance
+
+### Improved
+- Area topology yang perlu dipilih atau dirapikan sekarang diberi tanda langsung di canvas peta, bukan hanya dijelaskan di panel samping.
+- Bahasa panel admin untuk unresolved dan invalid sekarang lebih manusiawi:
+  - `Ada sisa area kecil yang belum jelas masuk ke desa mana`
+  - `Rapikan garis edit atau batalkan bagian ini`
+- Ringkasan perubahan otomatis tidak lagi menampilkan daftar `frag-001`, `frag-002`, dan seterusnya; daftar sekarang diringkas per desa tujuan.
+
 ## Phase 2.16t — Boundary Editor Multipart Edit Safety
 
 ### Fixed

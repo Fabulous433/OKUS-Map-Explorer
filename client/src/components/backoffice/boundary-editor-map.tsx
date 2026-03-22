@@ -1,6 +1,6 @@
 import type { ChangeEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FeatureGroup, GeoJSON, MapContainer, TileLayer, useMap } from "react-leaflet";
+import { FeatureGroup, GeoJSON, MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
 import { AlertTriangle, Layers3, Upload } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -13,6 +13,7 @@ import {
   DEFAULT_BOUNDARY_EDITOR_BASE_MAP_KEY,
   countBoundaryGeometryVertices,
   createEditableBoundaryGeometryParts,
+  createBoundaryResolutionBlocks,
   createBoundaryTopologyPanelModel,
   createTakeoverWarningModel,
   mergeEditableBoundaryGeometryParts,
@@ -139,6 +140,42 @@ function collectPolygonGeometryParts(
   }
 }
 
+function getGeometryCenter(
+  geometry:
+    | {
+        type: "Polygon" | "MultiPolygon";
+        coordinates: unknown;
+      }
+    | null
+    | undefined,
+) {
+  const points: Array<[number, number]> = [];
+  if (geometry) {
+    collectGeometryCoordinates(geometry.coordinates, points);
+  }
+
+  if (points.length === 0) {
+    return null;
+  }
+
+  const bounds = L.latLngBounds(points);
+  return bounds.isValid() ? bounds.getCenter() : null;
+}
+
+function buildResolutionOverlayIcon(params: { title: string; tone: "warning" | "invalid"; active: boolean }) {
+  const borderColor = params.tone === "invalid" ? "#b91c1c" : "#c2410c";
+  const background = params.tone === "invalid" ? "rgba(254, 226, 226, 0.96)" : "rgba(255, 237, 213, 0.96)";
+  const textColor = params.tone === "invalid" ? "#7f1d1d" : "#9a3412";
+  const ringShadow = params.active ? "0 0 0 3px rgba(249, 115, 22, 0.22)" : "none";
+
+  return L.divIcon({
+    className: "boundary-resolution-overlay-icon",
+    html: `<div style="max-width: 176px; border: 1px solid ${borderColor}; background: ${background}; color: ${textColor}; border-radius: 12px; padding: 8px 10px; box-shadow: ${ringShadow}; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.45; font-weight: 700;">${params.title}</div>`,
+    iconSize: [176, 48],
+    iconAnchor: [88, 24],
+  });
+}
+
 function TopologyFragmentLayers(props: {
   topologyAnalysis: DraftTopologySummary;
   highlightFragmentIds?: string[];
@@ -163,6 +200,72 @@ function TopologyFragmentLayers(props: {
             } as GeoJSON.Feature
           }
           style={getFragmentStyle(fragment, highlightedFragmentIds)}
+        />
+      ))}
+    </>
+  );
+}
+
+function TopologyResolutionOverlays(props: {
+  topologyAnalysis: DraftTopologySummary;
+  highlightFragmentIds?: string[];
+}) {
+  const resolutionBlocks = useMemo(
+    () => createBoundaryResolutionBlocks(props.topologyAnalysis),
+    [props.topologyAnalysis],
+  );
+  const highlightedFragmentIds = new Set(props.highlightFragmentIds ?? []);
+
+  const overlays = useMemo(() => {
+    return resolutionBlocks
+      .map((block) => {
+        const blockFragments = props.topologyAnalysis.fragments.filter((fragment) =>
+          block.fragmentIds.includes(fragment.fragmentId),
+        );
+        const center = getGeometryCenter(
+          blockFragments[0]
+            ? {
+                type: blockFragments[0].geometry.type,
+                coordinates: blockFragments[0].geometry.coordinates,
+              }
+            : null,
+        );
+        if (!center) {
+          return null;
+        }
+
+        const isActive =
+          highlightedFragmentIds.size === 0 ||
+          block.fragmentIds.some((fragmentId) => highlightedFragmentIds.has(fragmentId));
+
+        const title =
+          block.status === "invalid"
+            ? "Rapikan garis edit di area ini"
+            : "Pilih desa tujuan untuk area ini";
+
+        return {
+          blockId: block.blockId,
+          center,
+          title,
+          active: isActive,
+          tone: block.status === "invalid" ? ("invalid" as const) : ("warning" as const),
+        };
+      })
+      .filter((overlay): overlay is NonNullable<typeof overlay> => Boolean(overlay));
+  }, [highlightedFragmentIds, props.topologyAnalysis.fragments, resolutionBlocks]);
+
+  return (
+    <>
+      {overlays.map((overlay) => (
+        <Marker
+          key={overlay.blockId}
+          position={overlay.center}
+          icon={buildResolutionOverlayIcon({
+            title: overlay.title,
+            tone: overlay.tone,
+            active: overlay.active,
+          })}
+          interactive={false}
         />
       ))}
     </>
@@ -411,19 +514,17 @@ export function BoundaryEditorMap(props: {
           </p>
           {topologyModel.manualResolutionQueue.length > 0 ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-amber-800">Manual resolution queue</p>
-              <ul className="mt-2 space-y-1 font-mono text-xs text-amber-900">
-                {topologyModel.manualResolutionQueue.map((block) => (
-                  <li key={block.blockId}>
-                    {block.blockId}: {block.candidateBoundaryKeys.join(", ")}
-                  </li>
-                ))}
-              </ul>
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-amber-800">
+                Tanda langsung di peta
+              </p>
+              <p className="mt-2 font-mono text-xs leading-6 text-amber-900">
+                Area yang masih perlu dipilih atau dirapikan sudah diberi tanda langsung di canvas peta.
+              </p>
             </div>
           ) : null}
           {topologyModel.informationalRows.length > 0 ? (
             <div className="rounded-lg border border-black/10 bg-[#faf8f2] px-3 py-2">
-              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">Informational rows</p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">Ringkasan otomatis</p>
               <ul className="mt-2 space-y-1 font-mono text-xs text-black/65">
                 {topologyModel.informationalRows.map((row) => (
                   <li key={row}>{row}</li>
@@ -504,6 +605,12 @@ export function BoundaryEditorMap(props: {
           ) : null}
           {props.topologyAnalysis ? (
             <TopologyFragmentLayers
+              topologyAnalysis={props.topologyAnalysis}
+              highlightFragmentIds={props.highlightFragmentIds}
+            />
+          ) : null}
+          {props.topologyAnalysis ? (
+            <TopologyResolutionOverlays
               topologyAnalysis={props.topologyAnalysis}
               highlightFragmentIds={props.highlightFragmentIds}
             />

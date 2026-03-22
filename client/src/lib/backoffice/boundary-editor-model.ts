@@ -86,25 +86,10 @@ function requiresTakeoverConfirmation(input: DraftTopologySummary) {
 
 function buildInvalidFragmentMessage(fragment: DraftTopologyFragment) {
   if (fragment.areaSqM <= 50) {
-    return "Tidak ada kandidat desa terdeteksi. Fragmen ini sangat kecil; rapikan geometry atau reset draft desa ini.";
+    return "Ada sisa area kecil yang belum jelas masuk ke desa mana. Rapikan garis edit atau batalkan bagian ini.";
   }
 
-  return "Tidak ada kandidat desa terdeteksi. Rapikan geometry agar menyentuh desa tujuan atau reset draft desa ini.";
-}
-
-function getFragmentDisplayLabel(fragment: DraftTopologyFragment) {
-  const assignmentLabel =
-    fragment.assignmentMode === "auto"
-      ? "auto"
-      : fragment.assignmentMode === "manual"
-        ? "manual"
-        : "unassigned";
-
-  if (fragment.type === "takeover-area") {
-    return `${fragment.fragmentId} takeover ${assignmentLabel} -> ${fragment.assignedBoundaryKey ?? "n/a"}`;
-  }
-
-  return `${fragment.fragmentId} released ${assignmentLabel} -> ${fragment.assignedBoundaryKey ?? "n/a"}`;
+  return "Ada area yang belum jelas harus masuk ke desa mana. Rapikan garis edit di area ini atau batalkan bagian yang salah.";
 }
 
 function toGeometryFeature(fragment: DraftTopologyFragment) {
@@ -179,7 +164,7 @@ export function createBoundaryResolutionBlocks(input: DraftTopologySummary) {
       resolutionMessage:
         fragment.status === "invalid"
           ? buildInvalidFragmentMessage(fragment)
-          : "Pilih salah satu desa kandidat untuk fragmen ini.",
+          : "Pilih desa yang berbatasan dengan area ini.",
       areaSqM: memberFragments.reduce((total, item) => total + item.areaSqM, 0),
     });
   }
@@ -212,7 +197,10 @@ function buildTopologyModel(input: DraftTopologySummary) {
     canPublish: false,
     resolutionBlockLabel: `${resolutionBlocks.length} blok area perlu dituntaskan`,
     manualResolutionQueue: resolutionBlocks,
-    informationalRows: autoAssignedFragments.map((fragment) => getFragmentDisplayLabel(fragment)),
+    informationalRows:
+      autoAssignedFragments.length > 0
+        ? [`${autoAssignedFragments.length} area kecil sudah diarahkan otomatis oleh sistem.`]
+        : [],
     takeoverDetected,
     summaryLabel: `${resolutionBlocks.length + autoAssignedFragments.length} blok area total`,
     unresolvedLabel: `${unresolvedBlocks.length} perlu dipilih`,

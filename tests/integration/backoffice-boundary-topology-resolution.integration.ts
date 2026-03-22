@@ -497,12 +497,16 @@ async function run() {
     "panel kanan harus memakai judul yang lebih natural untuk admin",
   );
   assert.ok(
+    panelMarkup.includes("Area yang perlu dicek sudah diberi tanda langsung di peta."),
+    "panel harus mengarahkan admin untuk melihat area bermasalah langsung di peta",
+  );
+  assert.ok(
     panelMarkup.includes("Blok area yang perlu diputuskan"),
     "panel harus menampilkan antrean blok area yang perlu diputuskan",
   );
   assert.ok(
-    panelMarkup.includes("Blok area otomatis"),
-    "panel harus menampilkan blok area yang diarahkan otomatis",
+    panelMarkup.includes("Ringkasan perubahan otomatis"),
+    "panel harus merangkum perubahan otomatis dengan bahasa yang lebih sederhana",
   );
   assert.ok(
     panelMarkup.includes("Area desa lain yang diambil"),
@@ -517,16 +521,29 @@ async function run() {
     "panel harus menjelaskan bahwa unresolved bisa datang dari desa draft lain dalam revision yang sama",
   );
   assert.ok(
-    panelMarkup.includes("Tidak ada kandidat desa terdeteksi"),
-    "fragment invalid harus menampilkan pesan eksplisit saat dropdown tidak tersedia",
+    panelMarkup.includes("Ada sisa area kecil yang belum jelas masuk ke desa mana"),
+    "area invalid harus dijelaskan dengan bahasa manusiawi, bukan istilah teknis invalid semata",
+  );
+  assert.ok(
+    panelMarkup.includes("Rapikan garis edit atau batalkan bagian ini"),
+    "panel harus memberi tindakan perbaikan yang jelas untuk area invalid",
   );
   assert.ok(
     panelMarkup.includes("Reset Draft Desa Ini"),
     "panel harus menyediakan aksi reset draft per desa untuk membersihkan unresolved lama",
   );
   assert.ok(
-    panelMarkup.includes("Sorot di peta"),
+    panelMarkup.includes("Lihat di peta"),
     "setiap blok area yang perlu diputuskan harus bisa disorot di peta",
+  );
+  assert.ok(
+    panelMarkup.includes("Desa yang berbatasan dengan area ini"),
+    "pilihan desa manual harus dijelaskan sebagai desa yang berbatasan dengan area, bukan kandidat teknis",
+  );
+  assert.equal(
+    panelMarkup.includes("fragmen mesin digabung menjadi satu blok kerja"),
+    false,
+    "panel admin tidak boleh lagi menampilkan kalimat teknis fragmen mesin",
   );
   assert.ok(
     panelMarkup.includes("Konfirmasi Pengambilan Wilayah"),
