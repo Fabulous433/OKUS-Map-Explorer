@@ -63,8 +63,7 @@ function isFragmentRelevantToBoundary(fragment: DraftTopologyFragment, selectedB
 
   return (
     fragment.sourceBoundaryKey === selectedBoundaryKey ||
-    fragment.assignedBoundaryKey === selectedBoundaryKey ||
-    fragment.candidateBoundaryKeys.includes(selectedBoundaryKey)
+    fragment.assignedBoundaryKey === selectedBoundaryKey
   );
 }
 

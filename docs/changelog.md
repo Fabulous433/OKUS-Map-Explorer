@@ -1,5 +1,11 @@
 # Changelog
 
+## Phase 2.16w — Boundary Editor Strict Active Desa Scope
+
+### Fixed
+- Cue topology di peta dan panel tidak lagi ikut menampilkan area tetangga hanya karena desa aktif muncul sebagai kandidat assignment.
+- Edit kecil pada satu desa tidak lagi memunculkan ledakan notifikasi dari area lain yang tidak disentuh.
+
 ## Phase 2.16v — Boundary Editor Active Desa Filtering
 
 ### Fixed

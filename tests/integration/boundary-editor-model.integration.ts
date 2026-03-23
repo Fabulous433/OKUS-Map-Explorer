@@ -522,6 +522,17 @@ async function run() {
           geometry: multipartGeometry,
           areaSqM: 12,
         },
+        {
+          fragmentId: "candidate-only-neighbor",
+          type: "released-fragment",
+          sourceBoundaryKey: "muaraduakisam:desa-tetangga",
+          candidateBoundaryKeys: ["muaraduakisam:ulak-agung-ulu"],
+          assignedBoundaryKey: null,
+          assignmentMode: null,
+          status: "unresolved",
+          geometry: multipartGeometry,
+          areaSqM: 11,
+        },
       ],
     },
     "muaraduakisam:ulak-agung-ulu",
@@ -530,7 +541,7 @@ async function run() {
   assert.deepEqual(
     filteredTopology.fragments.map((fragment) => fragment.fragmentId),
     ["release-active", "takeover-active"],
-    "panel dan peta desa aktif hanya boleh menampilkan area topology yang benar-benar terkait dengan desa yang sedang diedit",
+    "panel dan peta desa aktif tidak boleh ikut menampilkan area tetangga hanya karena desa aktif muncul sebagai kandidat",
   );
   assert.deepEqual(
     filteredTopology.summary,
