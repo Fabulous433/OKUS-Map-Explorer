@@ -67,6 +67,7 @@ async function run() {
       hasPreview: boolean;
       hasDraftChanges: boolean;
       publishedRevisionCount: number;
+      topologyReadyForPublish?: boolean;
     }) => {
       headline: string;
       badgeLabel: string;
@@ -314,6 +315,7 @@ async function run() {
       hasPreview: true,
       hasDraftChanges: true,
       publishedRevisionCount: 3,
+      topologyReadyForPublish: true,
     }),
     {
       headline: "2 OP terdampak",
@@ -324,6 +326,26 @@ async function run() {
       historyLabel: "3 published revision",
     },
     "impact panel model harus menurunkan count, badge, sample row, dan riwayat revision",
+  );
+
+  assert.deepEqual(
+    createBoundaryImpactPanelModel!({
+      impactedCount: 0,
+      sampleMoves: [],
+      hasPreview: true,
+      hasDraftChanges: true,
+      publishedRevisionCount: 3,
+      topologyReadyForPublish: false,
+    }),
+    {
+      headline: "Preview selesai, tetapi revisi belum siap dipublish",
+      badgeLabel: "DRAFT",
+      canPublish: false,
+      canPreview: true,
+      sampleRows: [],
+      historyLabel: "3 published revision",
+    },
+    "impact panel model tidak boleh READY bila revisi global masih tertahan",
   );
 
   const denseGeometry = {

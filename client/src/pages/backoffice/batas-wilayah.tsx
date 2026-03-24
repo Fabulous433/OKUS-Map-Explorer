@@ -212,8 +212,12 @@ export default function BackofficeBatasWilayah() {
   const hasPreviewableDraft = hasDraftChanges || Boolean(selectedDraftFeature);
   const showDraftStatus = hasDraftChanges || Boolean(selectedDraftFeature);
   const previewReady = Boolean(previewResult) && previewGeometryFingerprint === geometryFingerprint;
+  const revisionTopologyReady = topologyRevision?.topologyStatus === "draft-ready";
   const canPreviewTopology = topologyAnalysis ? canPreviewBoundaryRevision(topologyAnalysis) : false;
-  const canPublishTopology = topologyAnalysis ? canPublishBoundaryRevision(topologyAnalysis, previewReady) : false;
+  const canPublishTopology =
+    revisionTopologyReady && topologyAnalysis
+      ? canPublishBoundaryRevision(topologyAnalysis, previewReady, topologyRevision?.topologyStatus)
+      : false;
 
   useEffect(() => {
     if (previewGeometryFingerprint && previewGeometryFingerprint !== geometryFingerprint) {
@@ -592,6 +596,7 @@ export default function BackofficeBatasWilayah() {
               isPublishing={publishMutation.isPending}
               topologyAnalysis={visibleTopologyAnalysis}
               topologyRevisionId={topologyRevision?.id ?? null}
+              revisionTopologyStatus={topologyRevision?.topologyStatus ?? null}
               takeoverConfirmed={Boolean(topologyRevision?.takeoverConfirmedAt)}
               desaOptions={[...desaOptions, ...topologyCandidateOptions]}
               selectedBoundaryKey={selectedBoundaryKey}
