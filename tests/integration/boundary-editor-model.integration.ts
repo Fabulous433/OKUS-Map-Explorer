@@ -23,6 +23,7 @@ async function run() {
     createEditableBoundaryGeometryParts,
     mergeEditableBoundaryGeometryParts,
     filterTopologyAnalysisForBoundary,
+    findBlockingDraftScopeItems,
   } = boundaryEditorModelModule as {
     parseBoundaryUpload?: (fileText: string) =>
       | {
@@ -67,7 +68,6 @@ async function run() {
       hasPreview: boolean;
       hasDraftChanges: boolean;
       publishedRevisionCount: number;
-      topologyReadyForPublish?: boolean;
     }) => {
       headline: string;
       badgeLabel: string;
@@ -141,6 +141,18 @@ async function run() {
         invalidFragmentCount: number;
       };
     };
+    findBlockingDraftScopeItems?: (params: {
+      draftScope: Array<{
+        boundaryKey: string;
+        kecamatanId: string;
+        namaDesa: string;
+      }>;
+      nextBoundaryKey?: string;
+    }) => Array<{
+      boundaryKey: string;
+      kecamatanId: string;
+      namaDesa: string;
+    }>;
   };
 
   assert.equal(typeof parseBoundaryUpload, "function", "parser upload boundary wajib diexport");
@@ -162,6 +174,11 @@ async function run() {
     typeof filterTopologyAnalysisForBoundary,
     "function",
     "filter topology per desa aktif wajib diexport",
+  );
+  assert.equal(
+    typeof findBlockingDraftScopeItems,
+    "function",
+    "helper blocker perpindahan desa saat ada draf lain wajib diexport",
   );
   assert.equal(DEFAULT_BOUNDARY_EDITOR_BASE_MAP_KEY, "esri", "basemap default editor boundary harus ESRI");
   assert.deepEqual(
@@ -315,7 +332,6 @@ async function run() {
       hasPreview: true,
       hasDraftChanges: true,
       publishedRevisionCount: 3,
-      topologyReadyForPublish: true,
     }),
     {
       headline: "2 OP terdampak",
@@ -329,23 +345,44 @@ async function run() {
   );
 
   assert.deepEqual(
-    createBoundaryImpactPanelModel!({
-      impactedCount: 0,
-      sampleMoves: [],
-      hasPreview: true,
-      hasDraftChanges: true,
-      publishedRevisionCount: 3,
-      topologyReadyForPublish: false,
+    findBlockingDraftScopeItems!({
+      draftScope: [
+        {
+          boundaryKey: "muaraduakisam:ulak-agung-ulu",
+          kecamatanId: "1609030",
+          namaDesa: "Ulak Agung Ulu",
+        },
+        {
+          boundaryKey: "kisamilir:pengandonan",
+          kecamatanId: "1609001",
+          namaDesa: "Pengandonan",
+        },
+      ],
+      nextBoundaryKey: "kisamilir:pengandonan",
     }),
-    {
-      headline: "Preview selesai, tetapi revisi belum siap dipublish",
-      badgeLabel: "DRAFT",
-      canPublish: false,
-      canPreview: true,
-      sampleRows: [],
-      historyLabel: "3 published revision",
-    },
-    "impact panel model tidak boleh READY bila revisi global masih tertahan",
+    [
+      {
+        boundaryKey: "muaraduakisam:ulak-agung-ulu",
+        kecamatanId: "1609030",
+        namaDesa: "Ulak Agung Ulu",
+      },
+    ],
+    "saat pindah ke desa baru, helper harus menemukan draf lain yang masih menggantung",
+  );
+
+  assert.deepEqual(
+    findBlockingDraftScopeItems!({
+      draftScope: [
+        {
+          boundaryKey: "muaraduakisam:ulak-agung-ulu",
+          kecamatanId: "1609030",
+          namaDesa: "Ulak Agung Ulu",
+        },
+      ],
+      nextBoundaryKey: "muaraduakisam:ulak-agung-ulu",
+    }),
+    [],
+    "tetap di desa yang sama tidak boleh memicu blocker perpindahan",
   );
 
   const denseGeometry = {

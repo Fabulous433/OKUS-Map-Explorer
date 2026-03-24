@@ -76,7 +76,6 @@ async function run() {
       publishedRevisionCount: number;
       geometryStatusLabel: string;
       publishMode?: "publish-only" | "publish-and-reconcile";
-      revisionTopologyStatus?: "draft-editing" | "draft-needs-resolution" | "draft-ready" | "published" | "superseded" | null;
       saveDisabled?: boolean;
       previewDisabled?: boolean;
       publishDisabled?: boolean;
@@ -139,29 +138,6 @@ async function run() {
   assert.ok(
     draftOnlyPanelMarkup.includes("publish-and-reconcile"),
     "mode rekonsiliasi default harus publish-and-reconcile",
-  );
-
-  const blockedPublishPanelMarkup = renderToStaticMarkup(
-    createElement(BoundaryEditorImpactPanel!, {
-      impactedCount: 0,
-      sampleMoves: [],
-      hasPreview: true,
-      hasDraftChanges: true,
-      publishedRevisionCount: 2,
-      geometryStatusLabel: "Draft sinkron dengan revisi aktif",
-      publishMode: "publish-and-reconcile",
-      revisionTopologyStatus: "draft-needs-resolution",
-      publishDisabled: true,
-    }),
-  );
-
-  assert.ok(
-    blockedPublishPanelMarkup.includes("revisi aktif masih punya area boundary yang belum selesai"),
-    "action dock harus menjelaskan blocker revisi global saat publish masih tertahan",
-  );
-  assert.ok(
-    blockedPublishPanelMarkup.includes("DRAFT") && !blockedPublishPanelMarkup.includes(">READY<"),
-    "badge action dock tidak boleh READY bila revisi global belum topology-ready",
   );
 
   const shellMarkup = renderToStaticMarkup(

@@ -168,6 +168,14 @@ function mapDraftFeatureRow(row: typeof regionBoundaryRevisionFeature.$inferSele
   });
 }
 
+function mapDraftScopeItem(row: typeof regionBoundaryRevisionFeature.$inferSelect) {
+  return {
+    boundaryKey: row.boundaryKey,
+    kecamatanId: row.kecamatanId,
+    namaDesa: row.namaDesa,
+  };
+}
+
 function resolveBoundaryHistoryChangeType(
   fragments: Array<typeof regionBoundaryRevisionFragment.$inferSelect>,
 ): RegionBoundaryChangeType {
@@ -784,20 +792,28 @@ export async function getOrCreateDesaDraftRevision(createdBy: string) {
 
 export async function getDesaDraftByKecamatan(kecamatanId: string, actorName: string) {
   const revision = await getOrCreateDesaDraftRevision(actorName);
-  const features = await db
-    .select()
-    .from(regionBoundaryRevisionFeature)
-    .where(
-      and(
-        eq(regionBoundaryRevisionFeature.revisionId, revision.id),
-        eq(regionBoundaryRevisionFeature.kecamatanId, kecamatanId),
-      ),
-    )
-    .orderBy(asc(regionBoundaryRevisionFeature.namaDesa), asc(regionBoundaryRevisionFeature.id));
+  const [revisionFeatures, kecamatanFeatures] = await Promise.all([
+    db
+      .select()
+      .from(regionBoundaryRevisionFeature)
+      .where(eq(regionBoundaryRevisionFeature.revisionId, revision.id))
+      .orderBy(asc(regionBoundaryRevisionFeature.namaDesa), asc(regionBoundaryRevisionFeature.id)),
+    db
+      .select()
+      .from(regionBoundaryRevisionFeature)
+      .where(
+        and(
+          eq(regionBoundaryRevisionFeature.revisionId, revision.id),
+          eq(regionBoundaryRevisionFeature.kecamatanId, kecamatanId),
+        ),
+      )
+      .orderBy(asc(regionBoundaryRevisionFeature.namaDesa), asc(regionBoundaryRevisionFeature.id)),
+  ]);
 
   return {
     revision: mapRevisionRow(revision),
-    features: features.map(mapDraftFeatureRow),
+    features: kecamatanFeatures.map(mapDraftFeatureRow),
+    scope: revisionFeatures.map(mapDraftScopeItem),
   };
 }
 
@@ -1148,16 +1164,23 @@ export async function confirmDraftTakeover(input: ConfirmDraftTakeoverInput) {
 
 export async function getDraftTopologyByKecamatan(kecamatanId: string) {
   const revision = await getOrCreateDesaDraftRevision("system-topology");
-  const featureRows = await db
-    .select()
-    .from(regionBoundaryRevisionFeature)
-    .where(
-      and(
-        eq(regionBoundaryRevisionFeature.revisionId, revision.id),
-        eq(regionBoundaryRevisionFeature.kecamatanId, kecamatanId),
-      ),
-    )
-    .orderBy(asc(regionBoundaryRevisionFeature.namaDesa), asc(regionBoundaryRevisionFeature.id));
+  const [revisionFeatures, featureRows] = await Promise.all([
+    db
+      .select()
+      .from(regionBoundaryRevisionFeature)
+      .where(eq(regionBoundaryRevisionFeature.revisionId, revision.id))
+      .orderBy(asc(regionBoundaryRevisionFeature.namaDesa), asc(regionBoundaryRevisionFeature.id)),
+    db
+      .select()
+      .from(regionBoundaryRevisionFeature)
+      .where(
+        and(
+          eq(regionBoundaryRevisionFeature.revisionId, revision.id),
+          eq(regionBoundaryRevisionFeature.kecamatanId, kecamatanId),
+        ),
+      )
+      .orderBy(asc(regionBoundaryRevisionFeature.namaDesa), asc(regionBoundaryRevisionFeature.id)),
+  ]);
   const sourceBoundaryKeys = featureRows.map((row) => row.boundaryKey);
   const fragments = sourceBoundaryKeys.length === 0
     ? []
@@ -1170,6 +1193,7 @@ export async function getDraftTopologyByKecamatan(kecamatanId: string) {
       fragments: fragments.map(mapTopologyFragmentRow),
     }),
     features: featureRows.map(mapDraftFeatureRow),
+    scope: revisionFeatures.map(mapDraftScopeItem),
   };
 }
 

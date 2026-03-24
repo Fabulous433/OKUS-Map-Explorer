@@ -56,6 +56,12 @@ export type BoundaryResolutionBlock = {
   areaSqM: number;
 };
 
+export type BoundaryEditorDraftScopeItem = {
+  boundaryKey: string;
+  kecamatanId: string;
+  namaDesa: string;
+};
+
 function isFragmentRelevantToBoundary(fragment: DraftTopologyFragment, selectedBoundaryKey?: string) {
   if (!selectedBoundaryKey) {
     return true;
@@ -271,21 +277,23 @@ export function canPreviewBoundaryRevision(input: DraftTopologySummary) {
   return buildTopologyModel(input).canPreview;
 }
 
-export function canPublishBoundaryRevision(
-  input: DraftTopologySummary,
-  previewReady: boolean,
-  revisionTopologyStatus: DraftTopologySummary["topologyStatus"] = input.topologyStatus,
-) {
+export function canPublishBoundaryRevision(input: DraftTopologySummary, previewReady: boolean) {
   const takeoverDetected = requiresTakeoverConfirmation(input);
   const unresolvedFragments = input.fragments.some((fragment) => fragment.status !== "resolved");
 
-  return (
-    previewReady &&
-    revisionTopologyStatus === "draft-ready" &&
-    input.topologyStatus === "draft-ready" &&
-    !takeoverDetected &&
-    !unresolvedFragments
-  );
+  return previewReady && input.topologyStatus === "draft-ready" && !takeoverDetected && !unresolvedFragments;
+}
+
+export function findBlockingDraftScopeItems(params: {
+  draftScope: BoundaryEditorDraftScopeItem[];
+  nextBoundaryKey?: string;
+}) {
+  const targetBoundaryKey = params.nextBoundaryKey?.trim();
+  if (!targetBoundaryKey) {
+    return [...params.draftScope];
+  }
+
+  return params.draftScope.filter((item) => item.boundaryKey !== targetBoundaryKey);
 }
 
 export function filterTopologyAnalysisForBoundary(
@@ -401,10 +409,8 @@ export function createBoundaryImpactPanelModel(params: {
   hasPreview: boolean;
   hasDraftChanges: boolean;
   publishedRevisionCount: number;
-  topologyReadyForPublish?: boolean;
 }) {
   const historyLabel = `${params.publishedRevisionCount} published revision`;
-  const topologyReadyForPublish = params.topologyReadyForPublish ?? true;
 
   if (!params.hasDraftChanges) {
     return {
@@ -424,19 +430,6 @@ export function createBoundaryImpactPanelModel(params: {
       canPublish: false,
       canPreview: true,
       sampleRows: [],
-      historyLabel,
-    };
-  }
-
-  if (!topologyReadyForPublish) {
-    return {
-      headline: "Preview selesai, tetapi revisi belum siap dipublish",
-      badgeLabel: "DRAFT",
-      canPublish: false,
-      canPreview: true,
-      sampleRows: params.sampleMoves.map(
-        (item) => `${item.namaOp}: ${item.fromKelurahan} -> ${item.toKelurahan}`,
-      ),
       historyLabel,
     };
   }

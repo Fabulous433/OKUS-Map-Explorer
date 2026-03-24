@@ -40,12 +40,22 @@ export type BoundaryEditorDesaOption = {
 export type BoundaryEditorDraftResponse = {
   revision: RegionBoundaryRevision;
   features: RegionBoundaryDraftFeature[];
+  scope: Array<{
+    boundaryKey: string;
+    kecamatanId: string;
+    namaDesa: string;
+  }>;
 };
 
 export type BoundaryEditorTopologyResponse = {
   revision: RegionBoundaryRevision;
   analysis: RegionBoundaryTopologyAnalysis;
   features: RegionBoundaryDraftFeature[];
+  scope: Array<{
+    boundaryKey: string;
+    kecamatanId: string;
+    namaDesa: string;
+  }>;
 };
 
 export function createBoundaryEditorDraftQueryKey(kecamatanId?: string) {

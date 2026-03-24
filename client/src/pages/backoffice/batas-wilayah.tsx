@@ -4,6 +4,16 @@ import BackofficeLayout from "./layout";
 import { BoundaryEditorShell } from "@/components/backoffice/boundary-editor-shell";
 import { BoundaryEditorImpactPanel } from "@/components/backoffice/boundary-editor-impact-panel";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   createBoundaryEditorDesaOptions,
   createBoundaryEditorDraftQueryKey,
   createBoundaryEditorTopologyCandidateOptions,
@@ -21,7 +31,9 @@ import {
   canPreviewBoundaryRevision,
   buildDraftFeaturePayload,
   createBoundaryPublishSuccessDescription,
+  findBlockingDraftScopeItems,
   findBoundaryFeatureByKey,
+  type BoundaryEditorDraftScopeItem,
 } from "@/lib/backoffice/boundary-editor-model";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/lib/auth";
@@ -36,6 +48,14 @@ import type {
 } from "@shared/region-boundary-admin";
 
 const BoundaryEditorMap = lazy(() => import("@/components/backoffice/boundary-editor-map"));
+
+type PendingDraftSwitch = {
+  kind: "kecamatan" | "desa" | "recover";
+  nextKecamatanId: string;
+  nextBoundaryKey: string;
+  targetLabel: string;
+  blockingDrafts: BoundaryEditorDraftScopeItem[];
+};
 
 function formatBoundaryEditorSavedLabel(timestamp: string | null | undefined) {
   if (!timestamp) {
@@ -133,6 +153,9 @@ export default function BackofficeBatasWilayah() {
 
   const [selectedBoundaryKey, setSelectedBoundaryKey] = useState("");
   const revisionHistoryQuery = useBoundaryEditorRevisionHistoryQuery(selectedBoundaryKey);
+  const draftScope = useMemo<BoundaryEditorDraftScopeItem[]>(() => {
+    return draftQuery.data?.scope ?? topologyQuery.data?.scope ?? [];
+  }, [draftQuery.data?.scope, topologyQuery.data?.scope]);
   const selectedDraftFeature =
     draftQuery.data?.features.find((feature) => feature.boundaryKey === selectedBoundaryKey) ?? null;
   const visibleTopologyAnalysis = selectedDraftFeature ? topologyAnalysis : null;
@@ -199,6 +222,7 @@ export default function BackofficeBatasWilayah() {
     "publish-and-reconcile",
   );
   const [focusedResolutionFragmentIds, setFocusedResolutionFragmentIds] = useState<string[]>([]);
+  const [pendingSwitch, setPendingSwitch] = useState<PendingDraftSwitch | null>(null);
 
   const geometryStatusLabel = !selectedBoundaryKey
     ? "Pilih desa/kelurahan untuk membuka boundary"
@@ -212,12 +236,8 @@ export default function BackofficeBatasWilayah() {
   const hasPreviewableDraft = hasDraftChanges || Boolean(selectedDraftFeature);
   const showDraftStatus = hasDraftChanges || Boolean(selectedDraftFeature);
   const previewReady = Boolean(previewResult) && previewGeometryFingerprint === geometryFingerprint;
-  const revisionTopologyReady = topologyRevision?.topologyStatus === "draft-ready";
   const canPreviewTopology = topologyAnalysis ? canPreviewBoundaryRevision(topologyAnalysis) : false;
-  const canPublishTopology =
-    revisionTopologyReady && topologyAnalysis
-      ? canPublishBoundaryRevision(topologyAnalysis, previewReady, topologyRevision?.topologyStatus)
-      : false;
+  const canPublishTopology = topologyAnalysis ? canPublishBoundaryRevision(topologyAnalysis, previewReady) : false;
 
   useEffect(() => {
     if (previewGeometryFingerprint && previewGeometryFingerprint !== geometryFingerprint) {
@@ -265,6 +285,80 @@ export default function BackofficeBatasWilayah() {
   function resetPreviewState() {
     setPreviewResult(null);
     setPreviewGeometryFingerprint(null);
+  }
+
+  function getDraftScopeLabel(item: BoundaryEditorDraftScopeItem) {
+    return item.namaDesa;
+  }
+
+  function queueBoundarySwitch(nextBoundaryKey: string) {
+    if (!nextBoundaryKey || nextBoundaryKey === selectedBoundaryKey) {
+      setSelectedBoundaryKey(nextBoundaryKey);
+      return;
+    }
+
+    if (hasDraftChanges) {
+      toast({
+        title: "Simpan dulu perubahan desa aktif",
+        description: "Simpan draf atau batalkan edit di peta sebelum pindah ke desa lain.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const blockingDrafts = findBlockingDraftScopeItems({
+      draftScope,
+      nextBoundaryKey,
+    });
+    if (blockingDrafts.length === 0) {
+      setSelectedBoundaryKey(nextBoundaryKey);
+      return;
+    }
+
+    const targetLabel =
+      desaOptions.find((item) => item.boundaryKey === nextBoundaryKey)?.label ?? nextBoundaryKey;
+    setPendingSwitch({
+      kind: "desa",
+      nextKecamatanId: selectedKecamatanId,
+      nextBoundaryKey,
+      targetLabel,
+      blockingDrafts,
+    });
+  }
+
+  function queueKecamatanSwitch(nextKecamatanId: string) {
+    if (!nextKecamatanId || nextKecamatanId === selectedKecamatanId) {
+      setSelectedKecamatanId(nextKecamatanId);
+      return;
+    }
+
+    if (hasDraftChanges) {
+      toast({
+        title: "Simpan dulu perubahan desa aktif",
+        description: "Simpan draf atau batalkan edit di peta sebelum pindah kecamatan.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const blockingDrafts = findBlockingDraftScopeItems({
+      draftScope,
+    });
+    if (blockingDrafts.length === 0) {
+      setSelectedKecamatanId(nextKecamatanId);
+      setSelectedBoundaryKey("");
+      return;
+    }
+
+    const targetLabel =
+      kecamatanQuery.options.find((item) => item.id === nextKecamatanId)?.label ?? "kecamatan ini";
+    setPendingSwitch({
+      kind: "kecamatan",
+      nextKecamatanId,
+      nextBoundaryKey: "",
+      targetLabel,
+      blockingDrafts,
+    });
   }
 
   const saveDraftMutation = useMutation({
@@ -490,6 +584,61 @@ export default function BackofficeBatasWilayah() {
     },
   });
 
+  const switchDraftMutation = useMutation({
+    mutationFn: async (params: PendingDraftSwitch) => {
+      for (const draftItem of params.blockingDrafts) {
+        await apiRequest(
+          "DELETE",
+          `/api/backoffice/region-boundaries/desa/draft/features/${encodeURIComponent(draftItem.boundaryKey)}`,
+        );
+      }
+    },
+    onSuccess: async (_, params) => {
+      await invalidateBoundaryEditorQueries();
+      resetPreviewState();
+      setPendingSwitch(null);
+      setSelectedKecamatanId(params.nextKecamatanId);
+      setSelectedBoundaryKey(params.nextBoundaryKey);
+      toast({
+        title: "Draf lama dibersihkan",
+        description:
+          params.kind === "recover"
+            ? "Editor dilanjutkan pada desa aktif dan draf sebelumnya dihapus."
+            : "Perpindahan desa dilanjutkan dan draf sebelumnya dihapus.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Gagal membersihkan draf lama",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (pendingSwitch || !selectedBoundaryKey || draftScope.length === 0) {
+      return;
+    }
+
+    const blockingDrafts = findBlockingDraftScopeItems({
+      draftScope,
+      nextBoundaryKey: selectedBoundaryKey,
+    });
+    if (blockingDrafts.length === 0) {
+      return;
+    }
+
+    const targetLabel = selectedDesaOption?.label ?? selectedDraftFeature?.namaDesa ?? selectedBoundaryKey;
+    setPendingSwitch({
+      kind: "recover",
+      nextKecamatanId: selectedKecamatanId,
+      nextBoundaryKey: selectedBoundaryKey,
+      targetLabel,
+      blockingDrafts,
+    });
+  }, [draftScope, pendingSwitch, selectedBoundaryKey, selectedDesaOption?.label, selectedDraftFeature?.namaDesa, selectedKecamatanId]);
+
   const rollbackMutation = useMutation({
     mutationFn: async (revisionId: number) => {
       const response = await apiRequest(
@@ -559,6 +708,44 @@ export default function BackofficeBatasWilayah() {
           }
           lastSavedLabel={formatBoundaryEditorSavedLabel(selectedDraftFeature?.updatedAt)}
           showDraftStatus={showDraftStatus}
+          switchGuardModal={
+            pendingSwitch ? (
+              <AlertDialog open onOpenChange={(open) => (!open ? setPendingSwitch(null) : undefined)}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Masih ada draf yang belum selesai</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {pendingSwitch.kind === "recover"
+                        ? `${getDraftScopeLabel(pendingSwitch.blockingDrafts[0])} masih menyimpan draf lama. Lanjut di ${pendingSwitch.targetLabel} akan menghapus draf sebelumnya.`
+                        : `${getDraftScopeLabel(pendingSwitch.blockingDrafts[0])} belum selesai diproses. Jika lanjut ke ${pendingSwitch.targetLabel}, draf sebelumnya akan dihapus.`}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel
+                      onClick={() => {
+                        if (pendingSwitch.kind === "recover" && pendingSwitch.blockingDrafts[0]) {
+                          const previousDraft = pendingSwitch.blockingDrafts[0];
+                          setSelectedKecamatanId(previousDraft.kecamatanId);
+                          setSelectedBoundaryKey(previousDraft.boundaryKey);
+                        }
+                        setPendingSwitch(null);
+                      }}
+                    >
+                      {pendingSwitch.kind === "recover" ? "Buka draf lama" : "Tetap di desa lama"}
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={(event) => {
+                        event.preventDefault();
+                        switchDraftMutation.mutate(pendingSwitch);
+                      }}
+                    >
+                      {switchDraftMutation.isPending ? "Memproses..." : "Lanjut & hapus draf lama"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : null
+          }
           mapCanvas={
             <Suspense
               fallback={
@@ -596,7 +783,6 @@ export default function BackofficeBatasWilayah() {
               isPublishing={publishMutation.isPending}
               topologyAnalysis={visibleTopologyAnalysis}
               topologyRevisionId={topologyRevision?.id ?? null}
-              revisionTopologyStatus={topologyRevision?.topologyStatus ?? null}
               takeoverConfirmed={Boolean(topologyRevision?.takeoverConfirmedAt)}
               desaOptions={[...desaOptions, ...topologyCandidateOptions]}
               selectedBoundaryKey={selectedBoundaryKey}
@@ -613,8 +799,8 @@ export default function BackofficeBatasWilayah() {
             />
           }
           rollbackRevisionId={rollbackMutation.variables ?? null}
-          onSelectKecamatan={setSelectedKecamatanId}
-          onSelectBoundaryKey={setSelectedBoundaryKey}
+          onSelectKecamatan={queueKecamatanSwitch}
+          onSelectBoundaryKey={queueBoundarySwitch}
           onRollbackRevision={(revisionId) => rollbackMutation.mutate(revisionId)}
         />
       </div>

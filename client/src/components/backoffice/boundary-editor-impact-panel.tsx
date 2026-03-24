@@ -19,10 +19,7 @@ import {
   type DraftTopologySummary,
 } from "@/lib/backoffice/boundary-editor-model";
 import type { BoundaryEditorDesaOption } from "@/lib/backoffice/boundary-editor-query";
-import type {
-  RegionBoundaryImpactMovedItem,
-  RegionBoundaryTopologyStatus,
-} from "@shared/region-boundary-admin";
+import type { RegionBoundaryImpactMovedItem } from "@shared/region-boundary-admin";
 
 export type BoundaryEditorImpactPanelModel = ReturnType<typeof createBoundaryImpactPanelModel>;
 
@@ -113,7 +110,6 @@ export function BoundaryEditorImpactPanel(props: {
   isPublishing?: boolean;
   topologyAnalysis?: DraftTopologySummary | null;
   topologyRevisionId?: number | null;
-  revisionTopologyStatus?: RegionBoundaryTopologyStatus | null;
   takeoverConfirmed?: boolean;
   desaOptions?: BoundaryEditorDesaOption[];
   selectedBoundaryKey?: string;
@@ -168,9 +164,6 @@ export function BoundaryEditorImpactPanel(props: {
     hasPreview: props.hasPreview,
     hasDraftChanges: props.hasDraftChanges,
     publishedRevisionCount: props.publishedRevisionCount,
-    topologyReadyForPublish: props.revisionTopologyStatus === null || props.revisionTopologyStatus === undefined
-      ? true
-      : props.revisionTopologyStatus === "draft-ready" || props.revisionTopologyStatus === "published",
   });
 
   return (
@@ -419,12 +412,6 @@ export function BoundaryEditorImpactPanel(props: {
           </div>
         </CardHeader>
         <CardContent className="grid gap-2">
-          {props.revisionTopologyStatus && props.revisionTopologyStatus !== "draft-ready" ? (
-            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 font-mono text-xs leading-6 text-amber-950">
-              Publish masih tertahan karena revisi aktif masih punya area boundary yang belum selesai.
-              Selesaikan area yang ditandai di peta, atau reset draf desa lain pada revisi ini bila memang tidak dipakai.
-            </div>
-          ) : null}
           <div className="rounded-lg border border-black/10 bg-white p-3">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/45">Publish mode</p>
             <select

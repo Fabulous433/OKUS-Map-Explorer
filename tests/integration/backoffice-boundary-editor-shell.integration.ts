@@ -82,6 +82,7 @@ async function run() {
       isLoading?: boolean;
       lastSavedLabel?: string | null;
       showDraftStatus?: boolean;
+      switchGuardModal?: React.ReactNode;
     }) => JSX.Element;
   };
 
@@ -222,6 +223,32 @@ async function run() {
   assert.ok(shellMarkup.includes("Save Draft"), "desktop shell harus memuat aksi simpan draft");
   assert.ok(shellMarkup.includes("Publish"), "desktop shell harus memuat aksi publish");
   assert.ok(shellMarkup.includes("Rollback"), "desktop shell harus memuat aksi rollback");
+
+  const switchGuardMarkup = renderToStaticMarkup(
+    createElement(BoundaryEditorShell!, {
+      selectedKecamatanId: "1609030",
+      selectedBoundaryKey: "muaraduakisam:ulak-agung-ulu",
+      kecamatanOptions: [{ id: "1609030", label: "Muaradua Kisam" }],
+      desaOptions: [
+        {
+          id: "1609030001",
+          boundaryKey: "muaraduakisam:ulak-agung-ulu",
+          label: "Ulak Agung Ulu",
+        },
+      ],
+      revisionHistory: [],
+      switchGuardModal: createElement(
+        "div",
+        null,
+        "Masih ada draf desa lain yang belum selesai. Lanjut ke desa ini akan menghapus draf lama.",
+      ),
+    }),
+  );
+
+  assert.ok(
+    switchGuardMarkup.includes("menghapus draf lama"),
+    "shell harus menyediakan ruang untuk modal blocker perpindahan desa",
+  );
 
   const untouchedShellMarkup = renderToStaticMarkup(
     createElement(BoundaryEditorShell!, {

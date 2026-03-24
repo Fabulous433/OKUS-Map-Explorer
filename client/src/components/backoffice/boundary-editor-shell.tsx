@@ -50,6 +50,7 @@ export function BoundaryEditorShell(props: {
   isLoading?: boolean;
   lastSavedLabel?: string | null;
   showDraftStatus?: boolean;
+  switchGuardModal?: ReactNode;
   mapCanvas?: ReactNode;
   rightPanel?: ReactNode;
   rollbackRevisionId?: number | null;
@@ -67,6 +68,7 @@ export function BoundaryEditorShell(props: {
     isLoading = false,
     lastSavedLabel = null,
     showDraftStatus = false,
+    switchGuardModal = null,
     mapCanvas,
     rightPanel,
     rollbackRevisionId = null,
@@ -321,6 +323,7 @@ export function BoundaryEditorShell(props: {
           </>
         )}
       </aside>
+      {switchGuardModal}
     </section>
   );
 }
