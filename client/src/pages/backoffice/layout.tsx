@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useLocation, useRoute } from "wouter";
-import { BarChart3, Users, Building2, Map, ChevronRight, Sparkles, Database, LogOut, User, Settings, FileSpreadsheet, PenTool } from "lucide-react";
+import { BarChart3, Users, Building2, Map, ChevronRight, Database, LogOut, User, Settings, FileSpreadsheet, PenTool } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { regionConfig } from "@/lib/region-config";
@@ -22,7 +22,6 @@ export const BACKOFFICE_NAV_ITEMS = [
   { href: "/backoffice/master-data", label: "Master Data", icon: Database, match: "/backoffice/master-data", roles: ["admin"] as const },
   { href: "/backoffice/batas-wilayah", label: "Batas Wilayah", icon: PenTool, match: "/backoffice/batas-wilayah", roles: ["admin"] as const },
   { href: "/backoffice/data-tools", label: "Data Tools", icon: FileSpreadsheet, match: "/backoffice/data-tools" },
-  { href: "/backoffice/mockup-form", label: "Mockup Form", icon: Sparkles, match: "/backoffice/mockup-form" },
 ];
 
 function NavItem({ href, label, icon: Icon, match }: (typeof BACKOFFICE_NAV_ITEMS)[number]) {

@@ -10,7 +10,6 @@ import BackofficeWajibPajak from "@/pages/backoffice/wajib-pajak";
 import BackofficeWajibPajakDetail from "@/pages/backoffice/wajib-pajak-detail";
 import BackofficeObjekPajak from "@/pages/backoffice/objek-pajak";
 import BackofficeObjekPajakDetail from "@/pages/backoffice/objek-pajak-detail";
-import BackofficeFormMockup from "@/pages/backoffice/form-mockup";
 import BackofficeMasterData from "@/pages/backoffice/master-data";
 import BackofficeDataTools from "@/pages/backoffice/data-tools";
 import BackofficeLogin from "@/pages/backoffice/login";
@@ -30,7 +29,6 @@ function Router() {
       <Route path="/backoffice/master-data" component={BackofficeMasterData} />
       <Route path="/backoffice/batas-wilayah" component={BackofficeBatasWilayah} />
       <Route path="/backoffice/data-tools" component={BackofficeDataTools} />
-      <Route path="/backoffice/mockup-form" component={BackofficeFormMockup} />
       <Route component={NotFound} />
     </Switch>
   );
