@@ -12,5 +12,7 @@ npm-debug.log*
 docs/*
 !docs/PATDA_MST_KECAMATAN.json
 !docs/PATDA_MST_KELURAHAN.json
+!docs/samples/
+!docs/samples/*.csv
 attached_assets
 _ai-context
