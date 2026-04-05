@@ -1,6 +1,6 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm } from "node:fs/promises";
 
 // Server deps to bundle to reduce openat(2) syscalls, which helps cold starts.
 const allowlist = [
@@ -58,6 +58,13 @@ async function buildAll() {
     external: externals,
     logLevel: "info",
   });
+
+  await mkdir("dist/docs/samples", { recursive: true });
+  await copyFile("docs/samples/simpatda-wp-import-sample.csv", "dist/docs/samples/simpatda-wp-import-sample.csv");
+  await copyFile(
+    "docs/samples/simpatda-op-pbjt-makanan-import-sample.csv",
+    "dist/docs/samples/simpatda-op-pbjt-makanan-import-sample.csv",
+  );
 }
 
 buildAll().catch((err) => {

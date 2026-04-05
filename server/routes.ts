@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { type Server } from "http";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { and, asc, desc, eq, gte, ilike, inArray, lte, lt, or, sql, type SQL } from "drizzle-orm";
 import { db, ensureDatabaseConnection, storage } from "./storage";
@@ -176,13 +176,31 @@ const OP_CSV_COLUMNS = [...OP_CSV_BASE_COLUMNS, ...OP_CSV_DETAIL_COLUMNS] as con
 const DATA_TOOLS_SAMPLE_FILES = {
   wp: {
     fileName: "simpatda-wp-import-sample.csv",
-    absolutePath: path.resolve(process.cwd(), "docs", "samples", "simpatda-wp-import-sample.csv"),
+    relativePath: path.join("docs", "samples", "simpatda-wp-import-sample.csv"),
   },
   "op-pbjt-makanan": {
     fileName: "simpatda-op-pbjt-makanan-import-sample.csv",
-    absolutePath: path.resolve(process.cwd(), "docs", "samples", "simpatda-op-pbjt-makanan-import-sample.csv"),
+    relativePath: path.join("docs", "samples", "simpatda-op-pbjt-makanan-import-sample.csv"),
   },
 } as const;
+
+async function resolveDataToolsSampleAbsolutePath(relativePath: string) {
+  const candidates = [
+    path.resolve(process.cwd(), relativePath),
+    path.resolve(process.cwd(), "dist", relativePath),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error(`Sample file not found for relative path: ${relativePath}`);
+}
 
 const OP_OPERATIONAL_DETAIL_COLUMNS_BY_JENIS: Record<JenisPajakOption, readonly string[]> = {
   "PBJT Makanan dan Minuman": [
@@ -2129,7 +2147,8 @@ async function sendDataToolsSample(
   if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
 
   const sample = DATA_TOOLS_SAMPLE_FILES[sampleKey];
-  const content = await readFile(sample.absolutePath, "utf-8");
+  const absolutePath = await resolveDataToolsSampleAbsolutePath(sample.relativePath);
+  const content = await readFile(absolutePath, "utf-8");
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename=${sample.fileName}`);
   res.send(content);
