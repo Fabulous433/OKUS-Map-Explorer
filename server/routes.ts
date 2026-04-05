@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { type Server } from "http";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { and, asc, desc, eq, gte, ilike, inArray, lte, lt, or, sql, type SQL } from "drizzle-orm";
 import { db, ensureDatabaseConnection, storage } from "./storage";
 import { env } from "./env";
@@ -34,6 +35,9 @@ import {
   wajibPajak,
   wajibPajakResolvedSchema,
   wpBadanUsaha,
+  type InsertObjekPajak,
+  type ObjekPajak,
+  type UpdateWajibPajakPayload,
   type WajibPajakWithBadanUsaha,
   type WpBadanUsahaInput,
 } from "@shared/schema";
@@ -70,6 +74,21 @@ import { getActiveRegionBoundary } from "./region-boundaries";
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: ATTACHMENT_MAX_FILE_SIZE_BYTES } });
 
 type CsvImportRow = Record<string, string | undefined>;
+type ImportRowAction = "created" | "updated" | "skipped" | "failed";
+type ImportPreviewRow = {
+  rowNumber: number;
+  action: ImportRowAction;
+  status: "valid" | "invalid";
+  entityLabel: string;
+  messages: string[];
+  warnings: string[];
+  resolutionSteps: string[];
+  sourceRow: Record<string, string>;
+  resolutionStatus: {
+    wpResolved: boolean | null;
+    rekeningResolved: boolean | null;
+  } | null;
+};
 
 const WP_CSV_COLUMNS = [
   "jenis_wp",
@@ -154,6 +173,16 @@ const OP_CSV_DETAIL_COLUMNS = [
 ] as const;
 
 const OP_CSV_COLUMNS = [...OP_CSV_BASE_COLUMNS, ...OP_CSV_DETAIL_COLUMNS] as const;
+const DATA_TOOLS_SAMPLE_FILES = {
+  wp: {
+    fileName: "simpatda-wp-import-sample.csv",
+    absolutePath: path.resolve(process.cwd(), "docs", "samples", "simpatda-wp-import-sample.csv"),
+  },
+  "op-pbjt-makanan": {
+    fileName: "simpatda-op-pbjt-makanan-import-sample.csv",
+    absolutePath: path.resolve(process.cwd(), "docs", "samples", "simpatda-op-pbjt-makanan-import-sample.csv"),
+  },
+} as const;
 
 const OP_OPERATIONAL_DETAIL_COLUMNS_BY_JENIS: Record<JenisPajakOption, readonly string[]> = {
   "PBJT Makanan dan Minuman": [
@@ -813,6 +842,13 @@ function sendZodValidationError(res: Response, error: ZodError, fallbackMessage:
   return res.status(400).json(buildValidationErrorPayload(error, fallbackMessage));
 }
 
+function isTruthyCsvDryRun(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
 export function normalizeBoundaryDraftMutationError(error: unknown, fallbackMessage: string) {
   if (error instanceof ZodError) {
     const hasTinyFragmentIssue = error.issues.some(
@@ -863,6 +899,22 @@ function normalizeObjekPajakMutationError(error: unknown): {
       status: 409,
       message: "NOPD sudah digunakan oleh objek pajak lain",
       fieldErrors: [{ field: "nopd", message: "NOPD sudah digunakan oleh objek pajak lain" }],
+    };
+  }
+
+  if (message.includes("NOPD") && message.includes("mengarah ke OP existing")) {
+    return {
+      status: 400,
+      message,
+      fieldErrors: [{ field: "nopd", message }],
+    };
+  }
+
+  if (message.includes("lebih dari satu kandidat")) {
+    return {
+      status: 400,
+      message,
+      fieldErrors: [{ field: "namaOp", message }],
     };
   }
 
@@ -1291,6 +1343,109 @@ function compactObject<T extends Record<string, unknown>>(input: T): Partial<T> 
   ) as Partial<T>;
 }
 
+function compactCsvDetail<T extends Record<string, unknown>>(input: T) {
+  const compacted = compactObject(input);
+  return Object.keys(compacted).length > 0 ? compacted : null;
+}
+
+async function listImportedEntityIds(entityType: "wajib_pajak" | "objek_pajak") {
+  const rows = await db
+    .select({ entityId: auditLog.entityId })
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.entityType, entityType),
+        eq(auditLog.action, "create"),
+        sql`${auditLog.metadata}->>'source' = 'csv-import'`,
+      ),
+    );
+
+  return Array.from(
+    new Set(
+      rows
+        .map((row) => Number.parseInt(row.entityId, 10))
+        .filter((value) => Number.isFinite(value)),
+    ),
+  );
+}
+
+async function deleteAllEntityAttachments(entityType: "wajib_pajak" | "objek_pajak", entityId: number) {
+  const attachmentEntityType = entityType === "wajib_pajak" ? "wajib_pajak" : "objek_pajak";
+  const attachments = await storage.listEntityAttachments(attachmentEntityType, entityId);
+  for (const attachment of attachments) {
+    await storage.deleteEntityAttachment(attachmentEntityType, entityId, attachment.id);
+    await deleteAttachmentFile(attachment.storagePath).catch(() => undefined);
+  }
+}
+
+function sanitizeCsvSourceRow(row: CsvImportRow) {
+  return Object.fromEntries(
+    Object.entries(row).map(([key, value]) => [key, typeof value === "string" ? value : ""]),
+  );
+}
+
+function normalizeComparableText(value: unknown) {
+  const cleaned = cleanText(value);
+  if (!cleaned) return "";
+  return cleaned.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function buildImportPreviewSummaryBase() {
+  return {
+    validRows: 0,
+    invalidRows: 0,
+    createdRows: 0,
+    updatedRows: 0,
+    skippedRows: 0,
+    failedRows: 0,
+    warningRows: 0,
+  };
+}
+
+function applyImportPreviewOutcome(
+  summary: ReturnType<typeof buildImportPreviewSummaryBase>,
+  action: ImportRowAction,
+  warningCount: number,
+) {
+  if (action === "failed") {
+    summary.invalidRows++;
+    summary.failedRows++;
+  } else {
+    summary.validRows++;
+    if (action === "created") summary.createdRows++;
+    if (action === "updated") summary.updatedRows++;
+    if (action === "skipped") summary.skippedRows++;
+  }
+
+  if (warningCount > 0) {
+    summary.warningRows++;
+  }
+}
+
+function buildImportWarningsFromQualityWarnings(warnings: QualityWarning[]) {
+  return warnings.map((warning) => warning.message);
+}
+
+const createWajibPajakImportSchema = wajibPajakResolvedSchema;
+
+const IMPORT_RESET_CONFIRMATION = {
+  "wajib-pajak": "RESET IMPORT WP",
+  "objek-pajak": "RESET IMPORT OP",
+} as const;
+
+function mergeNonEmptyPatch<T extends Record<string, unknown>>(base: T, patch: Partial<T>) {
+  const next = { ...base } as Record<string, unknown>;
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined || value === null || value === "") continue;
+    next[key] = value;
+  }
+  return next as T;
+}
+
+function areImportValuesEqual(left: unknown, right: unknown) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 function parseStringArray(value: string | undefined) {
   const cleaned = cleanText(value);
   if (!cleaned) return undefined;
@@ -1334,9 +1489,245 @@ async function getJenisPajakFromRekId(rekPajakId: number) {
   return rekening.jenisPajak;
 }
 
+async function resolveOpImportWpId(row: CsvImportRow) {
+  const directWpId = parseInteger(row.wp_id);
+  if (directWpId !== null) {
+    return {
+      id: directWpId,
+      step: `wp_id internal -> WP #${directWpId}`,
+    };
+  }
+
+  const npwpd = readCsvValue(row, "npwpd");
+  if (!npwpd) {
+    return {
+      id: null,
+      step: "NPWPD tidak diisi; backend mengharapkan wp_id atau npwpd",
+    };
+  }
+
+  const [matchedWp] = await db
+    .select({ id: wajibPajak.id })
+    .from(wajibPajak)
+    .where(eq(wajibPajak.npwpd, npwpd))
+    .limit(1);
+
+  if (!matchedWp) {
+    throw new Error(`NPWPD ${npwpd} tidak ditemukan pada data wajib pajak`);
+  }
+
+  return {
+    id: matchedWp.id,
+    step: `NPWPD ${npwpd} -> WP #${matchedWp.id}`,
+  };
+}
+
+async function resolveOpImportRekPajakId(row: CsvImportRow) {
+  const directRekPajakId = parseInteger(row.rek_pajak_id);
+  if (directRekPajakId !== null) {
+    return {
+      id: directRekPajakId,
+      step: `rek_pajak_id internal -> rekening #${directRekPajakId}`,
+    };
+  }
+
+  const kodeRekening = readCsvValue(row, "no_rek_pajak");
+  if (kodeRekening) {
+    const [matchedByCode] = await db
+      .select({ id: masterRekeningPajak.id })
+      .from(masterRekeningPajak)
+      .where(eq(masterRekeningPajak.kodeRekening, kodeRekening))
+      .limit(1);
+
+    if (!matchedByCode) {
+      throw new Error(`Kode rekening ${kodeRekening} tidak ditemukan pada master rekening pajak`);
+    }
+
+    return {
+      id: matchedByCode.id,
+      step: `kode rekening ${kodeRekening} -> rekening #${matchedByCode.id}`,
+    };
+  }
+
+  const namaRekening = readCsvValue(row, "nama_rek_pajak");
+  if (!namaRekening) {
+    return {
+      id: null,
+      step: "Rekening tidak diisi; backend mengharapkan rek_pajak_id, no_rek_pajak, atau nama_rek_pajak",
+    };
+  }
+
+  const [matchedByName] = await db
+    .select({ id: masterRekeningPajak.id })
+    .from(masterRekeningPajak)
+    .where(eq(masterRekeningPajak.namaRekening, namaRekening))
+    .limit(1);
+
+  if (!matchedByName) {
+    throw new Error(`Nama rekening ${namaRekening} tidak ditemukan pada master rekening pajak`);
+  }
+
+  return {
+    id: matchedByName.id,
+    step: `nama rekening ${namaRekening} -> rekening #${matchedByName.id}`,
+  };
+}
+
+async function resolveWpImportMatchByNpwpd(npwpd: string) {
+  const matches = await db
+    .select({
+      id: wajibPajak.id,
+    })
+    .from(wajibPajak)
+    .where(eq(wajibPajak.npwpd, npwpd))
+    .limit(2);
+
+  if (matches.length > 1) {
+    throw new Error(`NPWPD ${npwpd} terdeteksi ambigu pada data wajib pajak`);
+  }
+
+  return matches[0] ?? null;
+}
+
+async function buildWpImportWarnings(candidate: {
+  npwpd?: string;
+  nikKtpWp?: string;
+  nikPengelola?: string;
+  npwpBadanUsaha?: string;
+}) {
+  const wpRows = await db
+    .select({
+      id: wajibPajak.id,
+      npwpd: wajibPajak.npwpd,
+      nikKtpWp: wajibPajak.nikKtpWp,
+      nikPengelola: wajibPajak.nikPengelola,
+      npwpBadanUsaha: wpBadanUsaha.npwpBadanUsaha,
+      namaWp: wajibPajak.namaWp,
+      namaPengelola: wajibPajak.namaPengelola,
+      namaBadanUsaha: wpBadanUsaha.namaBadanUsaha,
+    })
+    .from(wajibPajak)
+    .leftJoin(wpBadanUsaha, eq(wajibPajak.id, wpBadanUsaha.wpId));
+
+  const wpMatches = wpRows.filter((row) => {
+    if (candidate.npwpd && row.npwpd === candidate.npwpd) return true;
+    if (candidate.nikKtpWp && (row.nikKtpWp === candidate.nikKtpWp || row.nikPengelola === candidate.nikKtpWp)) return true;
+    if (
+      candidate.nikPengelola &&
+      (row.nikPengelola === candidate.nikPengelola || row.nikKtpWp === candidate.nikPengelola)
+    ) {
+      return true;
+    }
+    if (candidate.npwpBadanUsaha && row.npwpBadanUsaha === candidate.npwpBadanUsaha) return true;
+    return false;
+  });
+
+  return buildImportWarningsFromQualityWarnings(
+    buildQualityWarnings({
+      candidate,
+      wpMatches,
+    }),
+  );
+}
+
+async function resolveOpImportExistingMatch(input: {
+  wpId: number;
+  rekPajakId: number;
+  namaOp: string;
+}) {
+  const candidates = await db
+    .select({
+      id: objekPajak.id,
+      nopd: objekPajak.nopd,
+      namaOp: objekPajak.namaOp,
+      wpId: objekPajak.wpId,
+      rekPajakId: objekPajak.rekPajakId,
+    })
+    .from(objekPajak)
+    .where(and(eq(objekPajak.wpId, input.wpId), eq(objekPajak.rekPajakId, input.rekPajakId)));
+
+  const normalizedNamaOp = normalizeComparableText(input.namaOp);
+  const matches = candidates.filter((candidate) => normalizeComparableText(candidate.namaOp) === normalizedNamaOp);
+  if (matches.length > 1) {
+    throw new Error("Kombinasi NPWPD, rekening, dan nama OP menghasilkan lebih dari satu kandidat existing");
+  }
+
+  return matches[0] ?? null;
+}
+
+async function resolveObjekPajakByNopd(nopd: string) {
+  const matches = await db
+    .select({
+      id: objekPajak.id,
+      nopd: objekPajak.nopd,
+      namaOp: objekPajak.namaOp,
+      wpId: objekPajak.wpId,
+      rekPajakId: objekPajak.rekPajakId,
+    })
+    .from(objekPajak)
+    .where(eq(objekPajak.nopd, nopd))
+    .limit(2);
+
+  if (matches.length > 1) {
+    throw new Error(`NOPD ${nopd} terdeteksi ambigu pada data objek pajak`);
+  }
+
+  return matches[0] ?? null;
+}
+
+function mergeWpImportComparisonState(existing: WajibPajakWithBadanUsaha, patch: UpdateWajibPajakPayload) {
+  const base = toResolvedWpShape(existing);
+  const merged = {
+    ...base,
+    ...Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)),
+    badanUsaha: patch.badanUsaha !== undefined ? patch.badanUsaha : base.badanUsaha,
+  };
+  return merged;
+}
+
+function mergeOpImportDetail(currentDetail: unknown, patchDetail: unknown) {
+  if (patchDetail === null || patchDetail === undefined) {
+    return currentDetail ?? null;
+  }
+
+  const currentObject =
+    currentDetail && typeof currentDetail === "object" && !Array.isArray(currentDetail)
+      ? (currentDetail as Record<string, unknown>)
+      : {};
+  const patchObject =
+    patchDetail && typeof patchDetail === "object" && !Array.isArray(patchDetail)
+      ? (patchDetail as Record<string, unknown>)
+      : {};
+
+  const merged = mergeNonEmptyPatch(currentObject, patchObject);
+  return Object.keys(merged).length > 0 ? merged : null;
+}
+
+function mergeOpImportComparisonState(existing: ObjekPajak, patch: Partial<InsertObjekPajak>, detailPajak: unknown) {
+  const merged = {
+    nopd: patch.nopd !== undefined ? patch.nopd : existing.nopd,
+    wpId: patch.wpId ?? existing.wpId,
+    rekPajakId: patch.rekPajakId ?? existing.rekPajakId,
+    namaOp: patch.namaOp ?? existing.namaOp,
+    npwpOp: patch.npwpOp !== undefined ? patch.npwpOp : existing.npwpOp,
+    alamatOp: patch.alamatOp ?? existing.alamatOp,
+    kecamatanId: patch.kecamatanId ?? existing.kecamatanId,
+    kelurahanId: patch.kelurahanId ?? existing.kelurahanId,
+    omsetBulanan: patch.omsetBulanan !== undefined ? patch.omsetBulanan : existing.omsetBulanan,
+    tarifPersen: patch.tarifPersen !== undefined ? patch.tarifPersen : existing.tarifPersen,
+    pajakBulanan: patch.pajakBulanan !== undefined ? patch.pajakBulanan : existing.pajakBulanan,
+    latitude: patch.latitude !== undefined ? patch.latitude : existing.latitude,
+    longitude: patch.longitude !== undefined ? patch.longitude : existing.longitude,
+    status: patch.status ?? existing.status,
+    detailPajak,
+  };
+
+  return merged;
+}
+
 function buildDetailFromCsvRow(row: CsvImportRow, jenisPajak: string) {
   if (jenisPajak === "PBJT Makanan dan Minuman") {
-    return compactObject({
+    return compactCsvDetail({
       jenisUsaha: cleanText(row.detail_jenis_usaha) ?? undefined,
       klasifikasi: cleanText(row.detail_klasifikasi) ?? undefined,
       kapasitasTempat: parseNumber(row.detail_kapasitas_tempat) ?? undefined,
@@ -1350,7 +1741,7 @@ function buildDetailFromCsvRow(row: CsvImportRow, jenisPajak: string) {
   }
 
   if (jenisPajak === "PBJT Jasa Perhotelan") {
-    return compactObject({
+    return compactCsvDetail({
       jenisUsaha: cleanText(row.detail_jenis_usaha) ?? undefined,
       jumlahKamar: parseNumber(row.detail_jumlah_kamar) ?? undefined,
       klasifikasi: cleanText(row.detail_klasifikasi) ?? undefined,
@@ -1362,7 +1753,7 @@ function buildDetailFromCsvRow(row: CsvImportRow, jenisPajak: string) {
   }
 
   if (jenisPajak === "PBJT Jasa Parkir") {
-    return compactObject({
+    return compactCsvDetail({
       jenisUsaha: cleanText(row.detail_jenis_usaha) ?? undefined,
       jenisLokasi: cleanText(row.detail_jenis_lokasi) ?? undefined,
       kapasitasKendaraan: parseNumber(row.detail_kapasitas_kendaraan) ?? undefined,
@@ -1372,7 +1763,7 @@ function buildDetailFromCsvRow(row: CsvImportRow, jenisPajak: string) {
   }
 
   if (jenisPajak === "PBJT Jasa Kesenian dan Hiburan") {
-    return compactObject({
+    return compactCsvDetail({
       jenisHiburan: cleanText(row.detail_jenis_hiburan) ?? undefined,
       kapasitas: parseNumber(row.detail_kapasitas) ?? undefined,
       jamOperasional: cleanText(row.detail_jam_operasional) ?? undefined,
@@ -1381,7 +1772,7 @@ function buildDetailFromCsvRow(row: CsvImportRow, jenisPajak: string) {
   }
 
   if (jenisPajak === "PBJT Tenaga Listrik") {
-    return compactObject({
+    return compactCsvDetail({
       jenisTenagaListrik: cleanText(row.detail_jenis_tenaga_listrik) ?? undefined,
       dayaListrik: parseNumber(row.detail_daya_listrik) ?? undefined,
       kapasitas: parseNumber(row.detail_kapasitas) ?? undefined,
@@ -1389,7 +1780,7 @@ function buildDetailFromCsvRow(row: CsvImportRow, jenisPajak: string) {
   }
 
   if (jenisPajak === "Pajak Reklame") {
-    return compactObject({
+    return compactCsvDetail({
       jenisReklame: cleanText(row.detail_jenis_reklame) ?? undefined,
       ukuranPanjang: parseNumber(row.detail_ukuran_panjang) ?? undefined,
       ukuranLebar: parseNumber(row.detail_ukuran_lebar) ?? undefined,
@@ -1402,7 +1793,7 @@ function buildDetailFromCsvRow(row: CsvImportRow, jenisPajak: string) {
   }
 
   if (jenisPajak === "Pajak Air Tanah") {
-    return compactObject({
+    return compactCsvDetail({
       jenisAirTanah: cleanText(row.detail_jenis_air_tanah) ?? undefined,
       rata2UkuranPemakaian: parseNumber(row.detail_rata2_ukuran_pemakaian) ?? undefined,
       kriteriaAirTanah: cleanText(row.detail_kriteria_air_tanah) ?? undefined,
@@ -1411,7 +1802,7 @@ function buildDetailFromCsvRow(row: CsvImportRow, jenisPajak: string) {
   }
 
   if (jenisPajak === "Pajak Sarang Burung Walet") {
-    return compactObject({
+    return compactCsvDetail({
       jenisBurungWalet: cleanText(row.detail_jenis_burung_walet) ?? undefined,
       panenPerTahun: parseNumber(row.detail_panen_per_tahun) ?? undefined,
       rata2BeratPanen: parseNumber(row.detail_rata2_berat_panen) ?? undefined,
@@ -1531,6 +1922,141 @@ function resolveWpImportPayloadFromCsvRow(row: CsvImportRow) {
   });
 }
 
+function resolveWpImportPatchPayloadFromCsvRow(row: CsvImportRow) {
+  const peranWp = readCsvValue(row, "peran_wp");
+  const hasCompactSubject = hasAnyCsvValue(row, [
+    "nama_subjek",
+    "nik_subjek",
+    "alamat_subjek",
+    "kecamatan_subjek",
+    "kelurahan_subjek",
+    "telepon_wa_subjek",
+    "email_subjek",
+  ]);
+  const useCompactSubjectForPemilik = hasCompactSubject && peranWp !== "pengelola";
+  const useCompactSubjectForPengelola = hasCompactSubject && peranWp === "pengelola";
+
+  const payload: Record<string, unknown> = {};
+  const assign = (key: string, value: unknown) => {
+    if (value !== undefined) {
+      payload[key] = value;
+    }
+  };
+
+  assign("jenisWp", readCsvValue(row, "jenis_wp"));
+  assign("peranWp", peranWp);
+  assign("npwpd", readCsvValue(row, "npwpd"));
+  assign("statusAktif", readCsvValue(row, "status_aktif"));
+
+  assign("namaWp", useCompactSubjectForPemilik ? readCsvValue(row, "nama_subjek") : readCsvValue(row, "nama_wp"));
+  assign("nikKtpWp", useCompactSubjectForPemilik ? readCsvValue(row, "nik_subjek") : readCsvValue(row, "nik_ktp_wp"));
+  assign("alamatWp", useCompactSubjectForPemilik ? readCsvValue(row, "alamat_subjek") : readCsvValue(row, "alamat_wp"));
+  assign(
+    "kecamatanWp",
+    useCompactSubjectForPemilik ? readCsvValue(row, "kecamatan_subjek") : readCsvValue(row, "kecamatan_wp"),
+  );
+  assign(
+    "kelurahanWp",
+    useCompactSubjectForPemilik ? readCsvValue(row, "kelurahan_subjek") : readCsvValue(row, "kelurahan_wp"),
+  );
+  assign(
+    "teleponWaWp",
+    useCompactSubjectForPemilik ? readCsvValue(row, "telepon_wa_subjek") : readCsvValue(row, "telepon_wa_wp"),
+  );
+  assign("emailWp", useCompactSubjectForPemilik ? readCsvValue(row, "email_subjek") : readCsvValue(row, "email_wp"));
+
+  assign(
+    "namaPengelola",
+    useCompactSubjectForPengelola ? readCsvValue(row, "nama_subjek") : readCsvValue(row, "nama_pengelola"),
+  );
+  assign(
+    "nikPengelola",
+    useCompactSubjectForPengelola ? readCsvValue(row, "nik_subjek") : readCsvValue(row, "nik_pengelola"),
+  );
+  assign(
+    "alamatPengelola",
+    useCompactSubjectForPengelola ? readCsvValue(row, "alamat_subjek") : readCsvValue(row, "alamat_pengelola"),
+  );
+  assign(
+    "kecamatanPengelola",
+    useCompactSubjectForPengelola ? readCsvValue(row, "kecamatan_subjek") : readCsvValue(row, "kecamatan_pengelola"),
+  );
+  assign(
+    "kelurahanPengelola",
+    useCompactSubjectForPengelola ? readCsvValue(row, "kelurahan_subjek") : readCsvValue(row, "kelurahan_pengelola"),
+  );
+  assign(
+    "teleponWaPengelola",
+    useCompactSubjectForPengelola ? readCsvValue(row, "telepon_wa_subjek") : readCsvValue(row, "telepon_wa_pengelola"),
+  );
+
+  const badanUsahaPayload = compactObject({
+    namaBadanUsaha: readCsvValue(row, "nama_badan_usaha"),
+    npwpBadanUsaha: readCsvValue(row, "npwp_badan_usaha"),
+    alamatBadanUsaha: readCsvValue(row, "alamat_badan_usaha"),
+    kecamatanBadanUsaha: readCsvValue(row, "kecamatan_badan_usaha"),
+    kelurahanBadanUsaha: readCsvValue(row, "kelurahan_badan_usaha"),
+    teleponBadanUsaha: readCsvValue(row, "telepon_badan_usaha"),
+    emailBadanUsaha: readCsvValue(row, "email_badan_usaha"),
+  });
+  if (Object.keys(badanUsahaPayload).length > 0) {
+    payload.badanUsaha = badanUsahaPayload;
+  }
+
+  return normalizeWpData(payload, true);
+}
+
+function resolveOpImportPayloadFromCsvRow(
+  row: CsvImportRow,
+  resolved: { wpId: number | null; rekPajakId: number | null },
+  partial = false,
+) {
+  if (!partial) {
+    return normalizeOpData({
+      nopd: row.nopd,
+      wpId: resolved.wpId,
+      rekPajakId: resolved.rekPajakId,
+      namaOp: row.nama_op,
+      npwpOp: row.npwp_op,
+      alamatOp: row.alamat_op,
+      kecamatanId: row.kecamatan_id,
+      kelurahanId: row.kelurahan_id,
+      omsetBulanan: row.omset_bulanan,
+      tarifPersen: row.tarif_persen,
+      pajakBulanan: row.pajak_bulanan,
+      latitude: row.latitude,
+      longitude: row.longitude,
+      status: row.status,
+      detailPajak: null,
+    });
+  }
+
+  const payload: Record<string, unknown> = {
+    wpId: resolved.wpId,
+    rekPajakId: resolved.rekPajakId,
+  };
+  const assign = (key: string, value: unknown) => {
+    if (value !== undefined) {
+      payload[key] = value;
+    }
+  };
+
+  assign("nopd", readCsvValue(row, "nopd"));
+  assign("namaOp", readCsvValue(row, "nama_op"));
+  assign("npwpOp", readCsvValue(row, "npwp_op"));
+  assign("alamatOp", readCsvValue(row, "alamat_op"));
+  assign("kecamatanId", readCsvValue(row, "kecamatan_id"));
+  assign("kelurahanId", readCsvValue(row, "kelurahan_id"));
+  assign("omsetBulanan", readCsvValue(row, "omset_bulanan"));
+  assign("tarifPersen", readCsvValue(row, "tarif_persen"));
+  assign("pajakBulanan", readCsvValue(row, "pajak_bulanan"));
+  assign("latitude", readCsvValue(row, "latitude"));
+  assign("longitude", readCsvValue(row, "longitude"));
+  assign("status", readCsvValue(row, "status"));
+
+  return normalizeOpData(payload, true);
+}
+
 function selectWpSubjectForCsv(wp: WajibPajakWithBadanUsaha) {
   const prefersPengelola = wp.peranWp === "pengelola";
 
@@ -1593,6 +2119,20 @@ function buildObjekPajakExportFileName(mode: OpExportMode, jenisPajak?: JenisPaj
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
   return `objek_pajak_${safeJenis}.csv`;
+}
+
+async function sendDataToolsSample(
+  req: Request,
+  res: Response,
+  sampleKey: keyof typeof DATA_TOOLS_SAMPLE_FILES,
+) {
+  if (!requireRole(req, res, APP_ROLE_OPTIONS)) return;
+
+  const sample = DATA_TOOLS_SAMPLE_FILES[sampleKey];
+  const content = await readFile(sample.absolutePath, "utf-8");
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename=${sample.fileName}`);
+  res.send(content);
 }
 
 async function buildDashboardSummaryData(params: {
@@ -2375,6 +2915,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.send(csv);
   });
 
+  app.get("/api/data-tools/samples/wp", async (req, res) => {
+    await sendDataToolsSample(req, res, "wp");
+  });
+
+  app.get("/api/data-tools/samples/op-pbjt-makanan", async (req, res) => {
+    await sendDataToolsSample(req, res, "op-pbjt-makanan");
+  });
+
   app.post("/api/wajib-pajak/import", upload.single("file"), async (req, res) => {
     if (!requireRole(req, res, ["admin", "editor"])) return;
 
@@ -2383,48 +2931,331 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ message: "File CSV diperlukan" });
       }
 
+      const dryRun = isTruthyCsvDryRun(req.body?.dryRun);
       const actorName = getActorName(req);
       const content = req.file.buffer.toString("utf-8");
       const records = parse<CsvImportRow>(content, { columns: true, skip_empty_lines: true, trim: true });
 
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
       let success = 0;
       let failed = 0;
       const errors: string[] = [];
+      const warnings: string[] = [];
+      const previewRows: ImportPreviewRow[] = [];
+      const previewSummary = {
+        ...buildImportPreviewSummaryBase(),
+        compactRows: 0,
+        legacyRows: 0,
+      };
 
       for (let i = 0; i < records.length; i++) {
         const row = records[i];
-
-        const wpData = resolveWpImportPayloadFromCsvRow(row);
-
-        const parsed = createWajibPajakSchema.safeParse(wpData);
-        if (!parsed.success) {
-          failed++;
-          errors.push(`Baris ${i + 2}: ${parsed.error.issues.map((e) => e.message).join(", ")}`);
-          continue;
+        const rowNumber = i + 2;
+        const sourceRow = sanitizeCsvSourceRow(row);
+        const hasCompactSubject = hasAnyCsvValue(row, [
+          "nama_subjek",
+          "nik_subjek",
+          "alamat_subjek",
+          "kecamatan_subjek",
+          "kelurahan_subjek",
+          "telepon_wa_subjek",
+          "email_subjek",
+        ]);
+        if (hasCompactSubject) {
+          previewSummary.compactRows++;
+        } else {
+          previewSummary.legacyRows++;
         }
-
+        const entityLabel =
+          readCsvValue(row, "nama_subjek", "nama_wp", "nama_pengelola", "nama_badan_usaha") ?? `Baris ${rowNumber}`;
+        const resolutionSteps = [
+          hasCompactSubject ? "header compact -> dipetakan ke subjek tunggal" : "header legacy -> dipetakan backward-compatible",
+        ];
+        const rowWarnings: string[] = [];
         try {
-          const created = await storage.createWajibPajak(parsed.data);
+          const createPayload = resolveWpImportPayloadFromCsvRow(row);
+          const patchPayload = resolveWpImportPatchPayloadFromCsvRow(row);
+          const npwpd = readCsvValue(row, "npwpd");
+          const matchedByNpwpd = npwpd ? await resolveWpImportMatchByNpwpd(npwpd) : null;
+
+          if (matchedByNpwpd) {
+            resolutionSteps.push(`NPWPD ${npwpd} -> update WP #${matchedByNpwpd.id}`);
+            const existing = await storage.getWajibPajak(matchedByNpwpd.id);
+            if (!existing) {
+              throw new Error(`WP #${matchedByNpwpd.id} tidak ditemukan saat proses update`);
+            }
+
+            const parsedPatch = updateWajibPajakPayloadSchema.safeParse(patchPayload);
+            if (!parsedPatch.success) {
+              const messages = parsedPatch.error.issues.map((issue) => issue.message);
+              failed++;
+              errors.push(`Baris ${rowNumber}: ${messages.join(", ")}`);
+              applyImportPreviewOutcome(previewSummary, "failed", rowWarnings.length);
+              previewRows.push({
+                rowNumber,
+                action: "failed",
+                status: "invalid",
+                entityLabel,
+                messages,
+                warnings: rowWarnings,
+                resolutionSteps,
+                sourceRow,
+                resolutionStatus: null,
+              });
+              continue;
+            }
+
+            const beforeComparison = toResolvedWpShape(existing);
+            const afterComparison = mergeWpImportComparisonState(existing, parsedPatch.data);
+            if (areImportValuesEqual(beforeComparison, afterComparison)) {
+              skipped++;
+              resolutionSteps.push("Tidak ada perubahan efektif -> row dilewati");
+              applyImportPreviewOutcome(previewSummary, "skipped", rowWarnings.length);
+              previewRows.push({
+                rowNumber,
+                action: "skipped",
+                status: "valid",
+                entityLabel,
+                messages: [],
+                warnings: rowWarnings,
+                resolutionSteps,
+                sourceRow,
+                resolutionStatus: null,
+              });
+              continue;
+            }
+
+            if (dryRun) {
+              updated++;
+              success++;
+              applyImportPreviewOutcome(previewSummary, "updated", rowWarnings.length);
+              previewRows.push({
+                rowNumber,
+                action: "updated",
+                status: "valid",
+                entityLabel,
+                messages: [],
+                warnings: rowWarnings,
+                resolutionSteps,
+                sourceRow,
+                resolutionStatus: null,
+              });
+              continue;
+            }
+
+            const updatedWp = await storage.updateWajibPajak(existing.id, parsedPatch.data);
+            await writeAuditLog({
+              entityType: "wajib_pajak",
+              entityId: updatedWp.id,
+              action: "update",
+              actorName,
+              beforeData: existing,
+              afterData: updatedWp,
+              metadata: { source: "csv-import", row: rowNumber },
+            });
+            updated++;
+            success++;
+            applyImportPreviewOutcome(previewSummary, "updated", rowWarnings.length);
+            previewRows.push({
+              rowNumber,
+              action: "updated",
+              status: "valid",
+              entityLabel,
+              messages: [],
+              warnings: rowWarnings,
+              resolutionSteps,
+              sourceRow,
+              resolutionStatus: null,
+            });
+            continue;
+          }
+
+          if (npwpd) {
+            rowWarnings.push(`NPWPD ${npwpd} tidak ditemukan; row akan dibuat sebagai WP baru dan NPWPD akan disimpan dari file import`);
+          } else {
+            const duplicateWarnings = await buildWpImportWarnings({
+              nikKtpWp: readCsvValue(row, "nik_subjek", "nik_ktp_wp"),
+              nikPengelola: readCsvValue(row, "nik_pengelola"),
+              npwpBadanUsaha: readCsvValue(row, "npwp_badan_usaha"),
+            });
+            rowWarnings.push(...duplicateWarnings);
+          }
+
+          if (rowWarnings.length > 0) {
+            warnings.push(...rowWarnings.map((warning) => `Baris ${rowNumber}: ${warning}`));
+          }
+
+          const parsedCreate = createWajibPajakImportSchema.safeParse(createPayload);
+          if (!parsedCreate.success) {
+            const messages = parsedCreate.error.issues.map((issue) => issue.message);
+            failed++;
+            errors.push(`Baris ${rowNumber}: ${messages.join(", ")}`);
+            applyImportPreviewOutcome(previewSummary, "failed", rowWarnings.length);
+            previewRows.push({
+              rowNumber,
+              action: "failed",
+              status: "invalid",
+              entityLabel,
+              messages,
+              warnings: rowWarnings,
+              resolutionSteps,
+              sourceRow,
+              resolutionStatus: null,
+            });
+            continue;
+          }
+
+          if (dryRun) {
+            created++;
+            success++;
+            applyImportPreviewOutcome(previewSummary, "created", rowWarnings.length);
+            previewRows.push({
+              rowNumber,
+              action: "created",
+              status: "valid",
+              entityLabel,
+              messages: [],
+              warnings: rowWarnings,
+              resolutionSteps,
+              sourceRow,
+              resolutionStatus: null,
+            });
+            continue;
+          }
+
+          const createdWp = await storage.createWajibPajak(parsedCreate.data);
           await writeAuditLog({
             entityType: "wajib_pajak",
-            entityId: created.id,
+            entityId: createdWp.id,
             action: "create",
             actorName,
             beforeData: null,
-            afterData: created,
-            metadata: { source: "csv-import", row: i + 2 },
+            afterData: createdWp,
+            metadata: { source: "csv-import", row: rowNumber },
           });
+          created++;
           success++;
+          applyImportPreviewOutcome(previewSummary, "created", rowWarnings.length);
+          previewRows.push({
+            rowNumber,
+            action: "created",
+            status: "valid",
+            entityLabel,
+            messages: [],
+            warnings: rowWarnings,
+            resolutionSteps,
+            sourceRow,
+            resolutionStatus: null,
+          });
         } catch (err: any) {
+          const message = err instanceof Error ? err.message : String(err);
           failed++;
-          errors.push(`Baris ${i + 2}: ${err.message}`);
+          errors.push(`Baris ${rowNumber}: ${message}`);
+          applyImportPreviewOutcome(previewSummary, "failed", rowWarnings.length);
+          if (rowWarnings.length > 0) {
+            warnings.push(...rowWarnings.map((warning) => `Baris ${rowNumber}: ${warning}`));
+          }
+          previewRows.push({
+            rowNumber,
+            action: "failed",
+            status: "invalid",
+            entityLabel,
+            messages: [message],
+            warnings: rowWarnings,
+            resolutionSteps,
+            sourceRow,
+            resolutionStatus: null,
+          });
         }
       }
 
-      res.json({ success, failed, total: records.length, errors });
+      res.json({
+        created,
+        updated,
+        skipped,
+        success,
+        failed,
+        total: records.length,
+        errors,
+        warnings,
+        dryRun,
+        previewRows,
+        previewSummary,
+      });
     } catch (err: any) {
       res.status(400).json({ message: `Gagal parsing CSV: ${err.message}` });
     }
+  });
+
+  app.post("/api/wajib-pajak/reset-imported", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
+    const confirmationText = typeof req.body?.confirmationText === "string" ? req.body.confirmationText.trim() : "";
+    if (confirmationText !== IMPORT_RESET_CONFIRMATION["wajib-pajak"]) {
+      return res.status(400).json({
+        message: `Konfirmasi reset tidak valid. Gunakan "${IMPORT_RESET_CONFIRMATION["wajib-pajak"]}".`,
+      });
+    }
+
+    const actorName = getActorName(req);
+    const importedWpIds = await listImportedEntityIds("wajib_pajak");
+    const relatedOpIds =
+      importedWpIds.length > 0
+        ? Array.from(
+            new Set(
+              (
+                await db
+                  .select({ id: objekPajak.id })
+                  .from(objekPajak)
+                  .where(inArray(objekPajak.wpId, importedWpIds))
+              ).map((row) => row.id),
+            ),
+          )
+        : [];
+
+    let deletedRelatedOpCount = 0;
+    for (const opId of relatedOpIds) {
+      const existing = await storage.getObjekPajak(opId);
+      if (!existing) continue;
+      await deleteAllEntityAttachments("objek_pajak", opId);
+      await storage.deleteObjekPajak(opId);
+      await writeAuditLog({
+        entityType: "objek_pajak",
+        entityId: opId,
+        action: "delete",
+        actorName,
+        beforeData: existing,
+        afterData: null,
+        metadata: { source: "reset-imported", resetTarget: "wajib_pajak" },
+      });
+      deletedRelatedOpCount++;
+    }
+
+    let deletedCount = 0;
+    for (const wpId of importedWpIds) {
+      const existing = await storage.getWajibPajak(wpId);
+      if (!existing) continue;
+      await deleteAllEntityAttachments("wajib_pajak", wpId);
+      await storage.deleteWajibPajak(wpId);
+      await writeAuditLog({
+        entityType: "wajib_pajak",
+        entityId: wpId,
+        action: "delete",
+        actorName,
+        beforeData: existing,
+        afterData: null,
+        metadata: { source: "reset-imported" },
+      });
+      deletedCount++;
+    }
+
+    return res.json({
+      deletedCount,
+      deletedRelatedOpCount,
+      confirmationText: IMPORT_RESET_CONFIRMATION["wajib-pajak"],
+    });
   });
 
   app.get("/api/master/kecamatan", async (req, res) => {
@@ -3640,61 +4471,281 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/objek-pajak/import", upload.single("file"), async (req, res) => {
     if (!requireRole(req, res, ["admin", "editor"])) return;
 
-      try {
+    try {
       if (!req.file) {
         return res.status(400).json({ message: "File CSV diperlukan" });
       }
 
+      const dryRun = isTruthyCsvDryRun(req.body?.dryRun);
       const actorName = getActorName(req);
       const content = req.file.buffer.toString("utf-8");
       const records = parse<CsvImportRow>(content, { columns: true, skip_empty_lines: true, trim: true });
 
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
       let success = 0;
       let failed = 0;
       const errors: string[] = [];
+      const warnings: string[] = [];
+      const previewRows: ImportPreviewRow[] = [];
+      const previewSummary = {
+        ...buildImportPreviewSummaryBase(),
+        wpResolvedRows: 0,
+        wpUnresolvedRows: 0,
+        rekeningResolvedRows: 0,
+        rekeningUnresolvedRows: 0,
+      };
 
       for (let i = 0; i < records.length; i++) {
         const row = records[i];
+        const rowNumber = i + 2;
+        const sourceRow = sanitizeCsvSourceRow(row);
+        const entityLabel = readCsvValue(row, "nama_op") ?? `Baris ${rowNumber}`;
+        const rowWarnings: string[] = [];
 
-        const opData = normalizeOpData({
-          nopd: row.nopd,
-          wpId: parseInteger(row.wp_id),
-          rekPajakId: parseInteger(row.rek_pajak_id),
-          namaOp: row.nama_op,
-          npwpOp: row.npwp_op,
-          alamatOp: row.alamat_op,
-          kecamatanId: row.kecamatan_id,
-          kelurahanId: row.kelurahan_id,
-          omsetBulanan: row.omset_bulanan,
-          tarifPersen: row.tarif_persen,
-          pajakBulanan: row.pajak_bulanan,
-          latitude: row.latitude,
-          longitude: row.longitude,
-          status: row.status,
-          detailPajak: null,
-        });
+        let resolvedWpId: number | null = null;
+        let resolvedRekPajakId: number | null = null;
+        const resolutionSteps: string[] = [];
+        let resolutionStatus = {
+          wpResolved: null as boolean | null,
+          rekeningResolved: null as boolean | null,
+        };
 
-        const parsed = insertObjekPajakSchema.safeParse(opData);
-        if (!parsed.success) {
+        try {
+          const wpResolution = await resolveOpImportWpId(row);
+          const rekeningResolution = await resolveOpImportRekPajakId(row);
+          resolvedWpId = wpResolution.id;
+          resolvedRekPajakId = rekeningResolution.id;
+          resolutionStatus = {
+            wpResolved: wpResolution.id !== null,
+            rekeningResolved: rekeningResolution.id !== null,
+          };
+          if (wpResolution.id === null) {
+            previewSummary.wpUnresolvedRows++;
+          } else {
+            previewSummary.wpResolvedRows++;
+          }
+          if (rekeningResolution.id === null) {
+            previewSummary.rekeningUnresolvedRows++;
+          } else {
+            previewSummary.rekeningResolvedRows++;
+          }
+          if (wpResolution.step) resolutionSteps.push(wpResolution.step);
+          if (rekeningResolution.step) resolutionSteps.push(rekeningResolution.step);
+        } catch (err: any) {
+          const message = err instanceof Error ? err.message : String(err);
           failed++;
-          const payload = buildValidationErrorPayload(parsed.error, "Data OP tidak valid");
-          errors.push(`Baris ${i + 2}: ${payload.fieldErrors.map((e) => e.message).join(", ")}`);
+          errors.push(`Baris ${rowNumber}: ${message}`);
+          applyImportPreviewOutcome(previewSummary, "failed", rowWarnings.length);
+          previewRows.push({
+            rowNumber,
+            action: "failed",
+            status: "invalid",
+            entityLabel,
+            messages: [message],
+            warnings: rowWarnings,
+            resolutionSteps,
+            sourceRow,
+            resolutionStatus,
+          });
           continue;
         }
 
         try {
-          const jenisPajak = await getJenisPajakFromRekId(parsed.data.rekPajakId);
-          const detailCandidate = buildDetailFromCsvRow(row, jenisPajak);
-          const detailParsed = validateDetailByJenis(jenisPajak, detailCandidate);
-          if (!detailParsed.success) {
-            failed++;
-            const payload = buildValidationErrorPayload(detailParsed.error, "Detail pajak tidak valid");
-            errors.push(`Baris ${i + 2}: ${payload.fieldErrors.map((e) => e.message).join(", ")}`);
+          const patchPayload = resolveOpImportPayloadFromCsvRow(
+            row,
+            { wpId: resolvedWpId, rekPajakId: resolvedRekPajakId },
+            true,
+          );
+          const matchedWpId = typeof patchPayload.wpId === "number" ? patchPayload.wpId : null;
+          const matchedRekPajakId = typeof patchPayload.rekPajakId === "number" ? patchPayload.rekPajakId : null;
+          const matchedNamaOp =
+            typeof patchPayload.namaOp === "string" && patchPayload.namaOp.trim().length > 0 ? patchPayload.namaOp : null;
+          const existingMatch =
+            matchedWpId && matchedRekPajakId && matchedNamaOp
+              ? await resolveOpImportExistingMatch({
+                  wpId: matchedWpId,
+                  rekPajakId: matchedRekPajakId,
+                  namaOp: matchedNamaOp,
+                })
+              : null;
+
+          const rowNopd = readCsvValue(row, "nopd");
+          const nopdMatch = rowNopd ? await resolveObjekPajakByNopd(rowNopd) : null;
+          if (rowNopd && nopdMatch && (!existingMatch || nopdMatch.id !== existingMatch.id)) {
+            throw new Error(`NOPD ${rowNopd} mengarah ke OP existing yang berbeda dengan hasil pencocokan utama`);
+          }
+
+          if (existingMatch) {
+            resolutionSteps.push(`NPWPD + rekening + nama OP -> update OP #${existingMatch.id}`);
+            const existing = await storage.getObjekPajak(existingMatch.id);
+            if (!existing) {
+              throw new Error(`OP #${existingMatch.id} tidak ditemukan saat proses update`);
+            }
+
+            const jenisPajak = await getJenisPajakFromRekId(existing.rekPajakId);
+            const detailCandidate = buildDetailFromCsvRow(row, jenisPajak);
+            const mergedDetail = mergeOpImportDetail(existing.detailPajak, detailCandidate);
+            const detailParsed = validateDetailByJenis(jenisPajak, mergedDetail);
+            if (!detailParsed.success) {
+              const payload = buildValidationErrorPayload(detailParsed.error, "Detail pajak tidak valid");
+              const messages = payload.fieldErrors.map((e) => e.message);
+              failed++;
+              errors.push(`Baris ${rowNumber}: ${messages.join(", ")}`);
+              applyImportPreviewOutcome(previewSummary, "failed", rowWarnings.length);
+              previewRows.push({
+                rowNumber,
+                action: "failed",
+                status: "invalid",
+                entityLabel,
+                messages,
+                warnings: rowWarnings,
+                resolutionSteps,
+                sourceRow,
+                resolutionStatus,
+              });
+              continue;
+            }
+
+            const beforeComparison = mergeOpImportComparisonState(existing, {}, existing.detailPajak);
+            const afterComparison = mergeOpImportComparisonState(existing, patchPayload, detailParsed.data);
+            if (areImportValuesEqual(beforeComparison, afterComparison)) {
+              skipped++;
+              resolutionSteps.push("Tidak ada perubahan efektif -> row dilewati");
+              applyImportPreviewOutcome(previewSummary, "skipped", rowWarnings.length);
+              previewRows.push({
+                rowNumber,
+                action: "skipped",
+                status: "valid",
+                entityLabel,
+                messages: [],
+                warnings: rowWarnings,
+                resolutionSteps,
+                sourceRow,
+                resolutionStatus,
+              });
+              continue;
+            }
+
+            if (dryRun) {
+              updated++;
+              success++;
+              applyImportPreviewOutcome(previewSummary, "updated", rowWarnings.length);
+              previewRows.push({
+                rowNumber,
+                action: "updated",
+                status: "valid",
+                entityLabel,
+                messages: [],
+                warnings: rowWarnings,
+                resolutionSteps,
+                sourceRow,
+                resolutionStatus,
+              });
+              continue;
+            }
+
+            const updatedOp = await storage.updateObjekPajak(existing.id, {
+              ...patchPayload,
+              detailPajak: detailParsed.data,
+            });
+            await writeAuditLog({
+              entityType: "objek_pajak",
+              entityId: updatedOp.id,
+              action: "update",
+              actorName,
+              beforeData: existing,
+              afterData: updatedOp,
+              metadata: { source: "csv-import", row: rowNumber },
+            });
+            updated++;
+            success++;
+            applyImportPreviewOutcome(previewSummary, "updated", rowWarnings.length);
+            previewRows.push({
+              rowNumber,
+              action: "updated",
+              status: "valid",
+              entityLabel,
+              messages: [],
+              warnings: rowWarnings,
+              resolutionSteps,
+              sourceRow,
+              resolutionStatus,
+            });
             continue;
           }
 
-          const created = await storage.createObjekPajak({
-            ...parsed.data,
+          const createPayload = resolveOpImportPayloadFromCsvRow(
+            row,
+            { wpId: resolvedWpId, rekPajakId: resolvedRekPajakId },
+            false,
+          );
+          const parsedCreate = insertObjekPajakSchema.safeParse(createPayload);
+          if (!parsedCreate.success) {
+            const payload = buildValidationErrorPayload(parsedCreate.error, "Data OP tidak valid");
+            const messages = payload.fieldErrors.map((e) => e.message);
+            failed++;
+            errors.push(`Baris ${rowNumber}: ${messages.join(", ")}`);
+            applyImportPreviewOutcome(previewSummary, "failed", rowWarnings.length);
+            previewRows.push({
+              rowNumber,
+              action: "failed",
+              status: "invalid",
+              entityLabel,
+              messages,
+              warnings: rowWarnings,
+              resolutionSteps,
+              sourceRow,
+              resolutionStatus,
+            });
+            continue;
+          }
+
+          const jenisPajak = await getJenisPajakFromRekId(parsedCreate.data.rekPajakId);
+          const detailCandidate = buildDetailFromCsvRow(row, jenisPajak);
+          const detailParsed = validateDetailByJenis(jenisPajak, detailCandidate);
+          if (!detailParsed.success) {
+            const payload = buildValidationErrorPayload(detailParsed.error, "Detail pajak tidak valid");
+            const messages = payload.fieldErrors.map((e) => e.message);
+            failed++;
+            errors.push(`Baris ${rowNumber}: ${messages.join(", ")}`);
+            applyImportPreviewOutcome(previewSummary, "failed", rowWarnings.length);
+            previewRows.push({
+              rowNumber,
+              action: "failed",
+              status: "invalid",
+              entityLabel,
+              messages,
+              warnings: rowWarnings,
+              resolutionSteps,
+              sourceRow,
+              resolutionStatus,
+            });
+            continue;
+          }
+
+          resolutionSteps.push("Tidak ada OP existing yang cocok -> create baru");
+          if (dryRun) {
+            created++;
+            success++;
+            applyImportPreviewOutcome(previewSummary, "created", rowWarnings.length);
+            previewRows.push({
+              rowNumber,
+              action: "created",
+              status: "valid",
+              entityLabel,
+              messages: [],
+              warnings: rowWarnings,
+              resolutionSteps,
+              sourceRow,
+              resolutionStatus,
+            });
+            continue;
+          }
+
+          const createdOp = await storage.createObjekPajak({
+            ...parsedCreate.data,
             statusVerifikasi: "draft",
             catatanVerifikasi: null,
             verifiedAt: null,
@@ -3703,25 +4754,102 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           });
           await writeAuditLog({
             entityType: "objek_pajak",
-            entityId: created.id,
+            entityId: createdOp.id,
             action: "create",
             actorName,
             beforeData: null,
-            afterData: created,
-            metadata: { source: "csv-import", row: i + 2 },
+            afterData: createdOp,
+            metadata: { source: "csv-import", row: rowNumber },
           });
+          created++;
           success++;
+          applyImportPreviewOutcome(previewSummary, "created", rowWarnings.length);
+          previewRows.push({
+            rowNumber,
+            action: "created",
+            status: "valid",
+            entityLabel,
+            messages: [],
+            warnings: rowWarnings,
+            resolutionSteps,
+            sourceRow,
+            resolutionStatus,
+          });
         } catch (err: any) {
-          failed++;
           const normalized = normalizeObjekPajakMutationError(err);
-          errors.push(`Baris ${i + 2}: ${normalized.message}`);
+          failed++;
+          errors.push(`Baris ${rowNumber}: ${normalized.message}`);
+          applyImportPreviewOutcome(previewSummary, "failed", rowWarnings.length);
+          if (rowWarnings.length > 0) {
+            warnings.push(...rowWarnings.map((warning) => `Baris ${rowNumber}: ${warning}`));
+          }
+          previewRows.push({
+            rowNumber,
+            action: "failed",
+            status: "invalid",
+            entityLabel,
+            messages: [normalized.message],
+            warnings: rowWarnings,
+            resolutionSteps,
+            sourceRow,
+            resolutionStatus,
+          });
         }
       }
 
-      res.json({ success, failed, total: records.length, errors });
+      res.json({
+        created,
+        updated,
+        skipped,
+        success,
+        failed,
+        total: records.length,
+        errors,
+        warnings,
+        dryRun,
+        previewRows,
+        previewSummary,
+      });
     } catch (err: any) {
       res.status(400).json({ message: `Gagal parsing CSV: ${err.message}` });
     }
+  });
+
+  app.post("/api/objek-pajak/reset-imported", async (req, res) => {
+    if (!requireRole(req, res, ["admin"])) return;
+
+    const confirmationText = typeof req.body?.confirmationText === "string" ? req.body.confirmationText.trim() : "";
+    if (confirmationText !== IMPORT_RESET_CONFIRMATION["objek-pajak"]) {
+      return res.status(400).json({
+        message: `Konfirmasi reset tidak valid. Gunakan "${IMPORT_RESET_CONFIRMATION["objek-pajak"]}".`,
+      });
+    }
+
+    const actorName = getActorName(req);
+    const importedOpIds = await listImportedEntityIds("objek_pajak");
+
+    let deletedCount = 0;
+    for (const opId of importedOpIds) {
+      const existing = await storage.getObjekPajak(opId);
+      if (!existing) continue;
+      await deleteAllEntityAttachments("objek_pajak", opId);
+      await storage.deleteObjekPajak(opId);
+      await writeAuditLog({
+        entityType: "objek_pajak",
+        entityId: opId,
+        action: "delete",
+        actorName,
+        beforeData: existing,
+        afterData: null,
+        metadata: { source: "reset-imported" },
+      });
+      deletedCount++;
+    }
+
+    return res.json({
+      deletedCount,
+      confirmationText: IMPORT_RESET_CONFIRMATION["objek-pajak"],
+    });
   });
 
   app.patch("/api/objek-pajak/:id/verification", async (req, res) => {

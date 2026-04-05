@@ -1,5 +1,42 @@
 # Changelog
 
+## Phase 2.16x — Idempotent SIMPATDA Import
+
+### Added
+- Idempotent CSV import semantics untuk:
+  - `POST /api/wajib-pajak/import`
+  - `POST /api/objek-pajak/import`
+- Klasifikasi hasil per baris dan per run:
+  - `created`
+  - `updated`
+  - `skipped`
+  - `failed`
+- Warning non-blocking pada import WP tanpa `npwpd` saat backend menemukan sinyal duplikasi dari `nik` atau `npwp_badan_usaha`.
+- Conflict rule untuk OP saat `nopd` menunjuk OP existing yang berbeda dari hasil pencocokan utama.
+- Integration suite baru: `idempotent-csv-import.integration.ts`.
+
+### Improved
+- Import WP sekarang update-capable bila `npwpd` cocok tepat satu data existing.
+- Import WP sekarang juga menyimpan `npwpd` dari file saat row baru benar-benar dibuat lewat import.
+- Import OP sekarang update-capable dengan identity utama `npwpd + rekening + nama_op`.
+- Update import memakai patch non-empty:
+  - field kosong di CSV tidak lagi menghapus nilai existing
+  - row tanpa perubahan efektif sekarang diklasifikasikan sebagai `skipped`
+- `dryRun` sekarang memprediksi action final yang sama dengan import sesungguhnya.
+- Halaman `Data Tools` sekarang menekankan hasil berbasis action:
+  - summary cards `created/updated/skipped/failed`
+  - quick filter preview berbasis action + warning
+  - badge baris `CREATED/UPDATED/SKIPPED/FAILED`
+  - unduhan `report CSV` penuh untuk audit UAT/operator
+  - konfirmasi import final sebelum data ditulis ke sistem
+  - tombol reset imported data WP/OP terpisah untuk cleanup duplikat hasil trial import
+  - histori lokal menyimpan counter action dan label action per row
+  - panel `Petunjuk Mapping` di FE diganti dengan tutorial import singkat dan preview tabel file lokal sebelum validasi backend
+
+### Fixed
+- Preview/import OP parsial tidak lagi gagal hanya karena field wajib create kosong, selama row sebenarnya masuk jalur update existing.
+- Error custom import OP seperti ambiguity match dan conflict `nopd` tidak lagi tereduksi menjadi pesan generik.
+
 ## Phase 2.16w — Boundary Editor Strict Active Desa Scope
 
 ### Fixed
@@ -382,6 +419,38 @@
 - Mode export operasional `Objek Pajak` per jenis pajak dari halaman `Data Tools`, terpisah dari template import universal.
 - Kolom `lampiran` pada export `Wajib Pajak` dan `Objek Pajak`, dengan nilai `ADA` jika entity memiliki attachment.
 - Regression suite baru `tests/integration/wp-csv-contract.integration.ts` untuk mengunci contract CSV WP compact.
+
+## Phase 2.16f — SIMPATDA Import Alignment
+
+### Added
+- Regression suite `tests/integration/op-csv-semantic-import.integration.ts` untuk mengunci import OP berbasis referensi semantic (`npwpd` + `no_rek_pajak`) tanpa mewajibkan ID internal.
+- Sample CSV adaptasi SIMPATDA di `docs/samples/` untuk WP dan OP PBJT Makanan dan Minuman dengan subset kolom yang lebih relevan ke kontrak project ini.
+- Panel `Petunjuk Mapping` di halaman `Data Tools` untuk merangkum kolom sumber SIMPATDA, target minimal import, dan catatan operator.
+- Mode `Preview Import` di halaman `Data Tools` untuk WP dan OP, berbasis `dry-run` tanpa menyimpan data.
+- Tombol `Download CSV Error` pada hasil preview/import agar operator bisa menurunkan daftar baris gagal ke file koreksi.
+- Audit 5 baris pertama langsung di panel preview import, termasuk status valid/gagal, label entity, dan langkah resolusi relasi.
+- Tombol `Download Template Koreksi` yang membawa kolom asli baris gagal + pesan error, siap diedit dan di-upload ulang.
+- Kartu `summary mapping` pada panel preview/import untuk membaca kualitas file lebih cepat sebelum operator turun ke detail baris.
+- Quick tabs pada preview detail:
+  - `Semua`
+  - `Valid`
+  - `Perlu Koreksi`
+  - `Gagal Resolusi` untuk OP jika ada mismatch `NPWPD` atau `rekening`
+- Inline badge pada setiap row preview agar operator bisa scan cepat tanpa membaca semua teks resolusi.
+- Template koreksi sekarang lebih aman dibuka di Excel untuk kolom identifier sensitif seperti `NPWPD`, `NIK`, `NOPD`, dan kode rekening.
+- Panel `Histori Import Lokal` di halaman `Data Tools` untuk menyimpan ringkasan preview/import terakhir per browser, sehingga operator bisa melihat run terakhir tanpa upload ulang file, membuka kembali snapshot ringkasnya ke panel hasil, memberi pin pada run penting, memfilter histori per entitas atau mode run, mencari histori dengan keyword ringan, menghapus satu run yang tidak relevan, dan membersihkan histori lokal saat perlu reset.
+
+### Improved
+- Import CSV `Objek Pajak` sekarang dapat me-resolve `wp_id` dari `npwpd`.
+- Import CSV `Objek Pajak` sekarang dapat me-resolve `rek_pajak_id` dari `no_rek_pajak` atau `nama_rek_pajak`.
+- Import detail OP tidak lagi gagal jika file semantic/minimal sengaja tidak membawa kolom `detail_*`.
+- Halaman `Data Tools` sekarang memisahkan `Format Internal`, `Adaptasi SIMPATDA`, dan hasil preview import per entitas agar operator tidak salah langkah.
+- Panel hasil preview/import sekarang tetap menyimpan ringkasan run terakhir per entitas, termasuk contoh error dan file CSV error yang bisa diunduh.
+- Dry-run import sekarang mengembalikan `previewRows` sehingga UI dapat menampilkan detail baris tanpa memaksa operator mengunduh file terlebih dahulu.
+- `previewRows` sekarang juga membawa `sourceRow`, sehingga halaman `Data Tools` bisa membentuk template koreksi yang lebih operasional daripada daftar error polos.
+- Preview/import sekarang juga mengembalikan `previewSummary`, sehingga operator dapat melihat jumlah resolusi `NPWPD`/`rekening` yang berhasil atau gagal tanpa menghitung manual.
+- Preview/import OP sekarang juga mengembalikan `resolutionStatus` per baris agar UI dapat memfilter langsung baris yang gagal resolve relasi.
+- Metadata yang sama sekarang dipakai untuk badge scan cepat seperti `NPWPD OK`, `REKENING GAGAL`, atau `HEADER LEGACY`.
 
 ### Improved
 - Export `Wajib Pajak` sekarang memakai struktur subjek tunggal yang mengikuti `peran_wp`, sehingga file operasional tidak lagi memecah pemilik vs pengelola ke dua blok kolom terpisah.

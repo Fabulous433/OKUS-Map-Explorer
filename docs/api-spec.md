@@ -93,6 +93,44 @@ Rule umum:
 - `POST /api/wajib-pajak/import`
 - Auth export: `admin|editor|viewer`
 - Auth import: `admin|editor`
+- Field `dryRun=true` pada `multipart/form-data` untuk endpoint import WP/OP:
+  - parse + klasifikasikan semua baris menjadi `created|updated|skipped|failed`
+  - tidak menyimpan data ke database
+  - response tetap mengembalikan `created`, `updated`, `skipped`, `success`, `failed`, `total`, `errors`, `warnings`, `dryRun=true`, `previewRows`, dan `previewSummary`
+- Import WP bersifat idempotent:
+  - jika `npwpd` cocok tepat satu WP existing, row diperlakukan sebagai update parsial
+  - jika `npwpd` ada tetapi belum ditemukan, row tetap create-capable dan `npwpd` dari file import akan disimpan ke WP baru
+  - field kosong pada CSV tidak menghapus field existing
+  - jika tidak ada perubahan efektif, row dikembalikan sebagai `skipped`
+  - jika CSV tidak membawa `npwpd`, row tetap create-capable dan warning duplikasi non-blocking bisa muncul dari `nik` / `npwp badan usaha`
+- Endpoint maintenance import WP:
+  - `POST /api/wajib-pajak/reset-imported`
+  - Auth: `admin`
+  - body wajib: `{ "confirmationText": "RESET IMPORT WP" }`
+  - menghapus WP yang dibuat lewat import CSV dan OP terkait bila ada
+- UI `Data Tools` memakai `errors[]` dari response ini untuk menampilkan contoh error dan mengunduh `CSV error` koreksi operator.
+- UI `Data Tools` juga bisa mengunduh `report CSV` penuh dari hasil preview/import untuk kebutuhan audit UAT, berisi `action`, `warning`, `messages`, `resolutionSteps`, dan kolom sumber per row.
+- Import final dari halaman `Data Tools` sekarang lewat dialog konfirmasi dulu sebelum file benar-benar ditulis ke sistem.
+- `previewRows` dipakai UI untuk menampilkan audit 5 baris pertama langsung di layar, termasuk `action`, status valid/gagal, warning non-blocking, dan langkah resolusi per baris.
+- `previewRows.sourceRow` dipakai UI untuk menurunkan `template koreksi` berisi kolom sumber asli + pesan error, sehingga operator bisa edit file hasil unduh lalu upload ulang.
+- Saat membentuk `template koreksi`, kolom identifier seperti `NPWPD`, `NIK`, `NOPD`, dan `no_rek_pajak` dipaksa ke format text-friendly untuk Excel agar nilainya tidak mudah berubah saat file dibuka di spreadsheet.
+- Halaman `Data Tools` juga menyimpan ringkasan preview/import terakhir di `localStorage` browser agar operator bisa melihat histori run ringan tanpa mengulang upload file, memulihkan snapshot ringkasan itu kembali ke panel hasil per entitas, memberi pin pada run penting, memfilter histori berdasarkan entitas atau mode run, mencari histori dengan keyword ringan, menghapus satu run yang sudah tidak relevan, dan menghapus histori lokal per browser saat perlu reset.
+- `previewSummary` dipakai UI untuk menampilkan ringkasan mapping, misalnya:
+  - WP: `createdRows`, `updatedRows`, `skippedRows`, `failedRows`, `warningRows`, `compactRows`, `legacyRows`
+  - OP: `createdRows`, `updatedRows`, `skippedRows`, `failedRows`, `warningRows`, `wpResolvedRows`, `wpUnresolvedRows`, `rekeningResolvedRows`, `rekeningUnresolvedRows`
+- `previewRows.resolutionStatus` dan `previewRows.action` dipakai UI untuk quick filter tab:
+  - `Semua`
+  - `Created`
+  - `Updated`
+  - `Skipped`
+  - `Failed`
+  - `Ada Warning`
+  - `Gagal Resolusi` untuk OP saat ada baris yang gagal resolve `NPWPD` atau `rekening`
+- UI juga menurunkan badge inline dari metadata ini, misalnya:
+  - action: `CREATED`, `UPDATED`, `SKIPPED`, `FAILED`
+  - warning: `ADA WARNING`
+  - WP: `HEADER COMPACT`, `HEADER LEGACY`
+  - OP: `NPWPD OK`, `NPWPD GAGAL`, `REKENING OK`, `REKENING GAGAL`
 
 Kolom CSV WP export (compact):
 `jenis_wp, peran_wp, npwpd, status_aktif, nama_subjek, nik_subjek, alamat_subjek, kecamatan_subjek, kelurahan_subjek, telepon_wa_subjek, email_subjek, lampiran, nama_badan_usaha, npwp_badan_usaha, alamat_badan_usaha, kecamatan_badan_usaha, kelurahan_badan_usaha, telepon_badan_usaha, email_badan_usaha`
@@ -295,6 +333,24 @@ Aturan:
 - Query export:
   - default / `mode=template`: template universal yang tetap importable
   - `mode=operational&jenisPajak=<label-jenis>`: export operasional per jenis pajak
+- Field `dryRun=true` pada `multipart/form-data` dapat dipakai untuk preview hasil import tanpa menyimpan row baru.
+- Import OP sekarang idempotent:
+  - identity utama: `npwpd + no_rek_pajak|nama_rek_pajak + nama_op`
+  - jika tepat satu OP existing cocok, row diperlakukan sebagai update parsial
+  - field kosong pada CSV tidak menghapus field existing
+  - jika tidak ada perubahan efektif, row dikembalikan sebagai `skipped`
+- `nopd` bukan key utama import OP:
+  - jika `nopd` ada dan konsisten dengan hasil pencocokan utama, row tetap boleh update
+  - jika `nopd` menunjuk OP existing lain, row gagal dengan conflict identity
+- Endpoint maintenance import OP:
+  - `POST /api/objek-pajak/reset-imported`
+  - Auth: `admin`
+  - body wajib: `{ "confirmationText": "RESET IMPORT OP" }`
+  - menghapus OP yang dibuat lewat import CSV
+- UI `Data Tools` mengekspor ulang `errors[]` ke file `*_preview_errors.csv` atau `*_import_errors.csv` agar operator bisa memperbaiki file sumber secara batch.
+- UI `Data Tools` juga dapat menurunkan `*_preview_report.csv` atau `*_import_report.csv` untuk audit semua row selama UAT/import operasional.
+- Untuk OP, `previewRows` juga membawa `resolutionSteps` agar operator bisa melihat hasil resolusi `NPWPD` dan `rekening` sebelum import final.
+- Untuk baris gagal, UI juga dapat menurunkan `*_preview_corrections.csv` atau `*_import_corrections.csv` yang mempertahankan kolom sumber asli.
 - `detail_fasilitas` untuk perhotelan memakai format satu kolom dengan delimiter `|`
 - reklame tidak lagi memakai `detail_ukuran_reklame`, tetapi:
   - `detail_ukuran_panjang`
@@ -304,6 +360,12 @@ Aturan:
 - Error import dikembalikan per baris dalam bentuk pesan yang sudah dinormalisasi, misalnya:
   - `Baris 4: Format NOPD salah, mohon diperiksa kembali`
   - `Baris 8: NOPD sudah digunakan oleh objek pajak lain`
+  - `Baris 11: NOPD AA.BB.CC.XXXX mengarah ke OP existing yang berbeda dengan hasil pencocokan utama`
+  - `Baris 14: Kombinasi NPWPD, rekening, dan nama OP menghasilkan lebih dari satu kandidat existing`
+- Import OP mendukung dua mode referensi relasi:
+  - mode internal lama: `wp_id` + `rek_pajak_id`
+  - mode semantic/minimal: `npwpd` + `no_rek_pajak` (atau `nama_rek_pajak` sebagai fallback)
+- Mode semantic diprioritaskan untuk sample import hasil adaptasi dari SIMPATDA agar operator tidak perlu mencari ID internal lebih dulu.
 
 Kolom template export OP:
 - kolom basis:
@@ -317,6 +379,9 @@ Kolom export operasional OP:
 
 Catatan:
 - `lampiran` berisi `ADA` jika OP memiliki minimal satu attachment.
+- Sample minimal import OP PBJT Makanan dan Minuman yang relevan untuk adaptasi SIMPATDA:
+  - `npwpd, no_rek_pajak, nama_op, alamat_op, kecamatan_id, kelurahan_id, status`
+  - detail pajak boleh dikosongkan jika data sumber belum punya detail final yang dibutuhkan aplikasi.
 
 ### Attachment OP
 - `GET /api/objek-pajak/:id/attachments`
