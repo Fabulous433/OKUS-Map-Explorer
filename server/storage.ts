@@ -124,6 +124,10 @@ type CreateEntityAttachmentInput = {
   notes?: string | null;
 };
 
+type ObjekPajakMutationOptions = {
+  allowLegacyImportedNopd?: boolean;
+};
+
 function cleanDetailObject(input: DetailRecord | null | undefined) {
   if (!input) return null;
   const cleaned = Object.fromEntries(
@@ -753,10 +757,16 @@ async function getRekeningById(id: number) {
   return rekening;
 }
 
-async function resolveNopd(rekening: MasterRekeningPajak, nopdRaw?: string | null) {
+async function resolveNopd(
+  rekening: MasterRekeningPajak,
+  nopdRaw?: string | null,
+  options?: ObjekPajakMutationOptions,
+) {
   const cleaned = nopdRaw?.trim();
   if (cleaned) {
-    assertNopdMatchesRekening(cleaned, rekening);
+    if (!options?.allowLegacyImportedNopd) {
+      assertNopdMatchesRekening(cleaned, rekening);
+    }
     return cleaned;
   }
 
@@ -804,8 +814,8 @@ export interface IStorage {
   getObjekPajakPage(filters: ObjekPajakListFilter): Promise<PaginatedResult<ObjekPajakListItem>>;
   getObjekPajakMap(filters: ObjekPajakMapFilter): Promise<{ items: MapObjekPajakItem[]; totalInView: number; isCapped: boolean }>;
   getObjekPajak(id: number): Promise<ObjekPajak | undefined>;
-  createObjekPajak(op: InsertObjekPajak): Promise<ObjekPajak>;
-  updateObjekPajak(id: number, op: Partial<InsertObjekPajak>): Promise<ObjekPajak>;
+  createObjekPajak(op: InsertObjekPajak, options?: ObjekPajakMutationOptions): Promise<ObjekPajak>;
+  updateObjekPajak(id: number, op: Partial<InsertObjekPajak>, options?: ObjekPajakMutationOptions): Promise<ObjekPajak>;
   deleteObjekPajak(id: number): Promise<void>;
 }
 
@@ -1365,11 +1375,11 @@ export class DatabaseStorage implements IStorage {
     return mapObjekPajakRecord(row, detailMap.get(id) ?? null);
   }
 
-  async createObjekPajak(op: InsertObjekPajak): Promise<ObjekPajak> {
+  async createObjekPajak(op: InsertObjekPajak, options?: ObjekPajakMutationOptions): Promise<ObjekPajak> {
     const { detailPajak, nopd, ...base } = op;
     const now = new Date();
     const rekening = await getRekeningById(base.rekPajakId);
-    const finalNopd = await resolveNopd(rekening, nopd ?? undefined);
+    const finalNopd = await resolveNopd(rekening, nopd ?? undefined, options);
     await assertKelurahanDalamKecamatan(base.kelurahanId, base.kecamatanId);
     await assertSpatialRegionSelection({
       latitude: base.latitude,
@@ -1398,7 +1408,11 @@ export class DatabaseStorage implements IStorage {
     return hydrated;
   }
 
-  async updateObjekPajak(id: number, op: Partial<InsertObjekPajak>): Promise<ObjekPajak> {
+  async updateObjekPajak(
+    id: number,
+    op: Partial<InsertObjekPajak>,
+    options?: ObjekPajakMutationOptions,
+  ): Promise<ObjekPajak> {
     const current = await this.getObjekPajak(id);
     if (!current) {
       throw new Error("Objek Pajak tidak ditemukan");
@@ -1421,7 +1435,7 @@ export class DatabaseStorage implements IStorage {
 
     let nextNopd = current.nopd;
     if (op.nopd !== undefined) {
-      nextNopd = await resolveNopd(rekening, op.nopd);
+      nextNopd = await resolveNopd(rekening, op.nopd, options);
     } else if (nextRekPajakId !== current.rekPajakId) {
       nextNopd = await resolveNopd(rekening, current.nopd);
     }

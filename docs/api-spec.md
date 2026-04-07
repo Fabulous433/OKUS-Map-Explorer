@@ -88,7 +88,7 @@ Rule umum:
 - Hapus WP.
 - Auth: `admin|editor`.
 
-### CSV WP
+### Export/Import WP
 - `GET /api/wajib-pajak/export`
 - `POST /api/wajib-pajak/import`
 - Auth export: `admin|editor|viewer`
@@ -100,15 +100,16 @@ Rule umum:
 - Import WP bersifat idempotent:
   - jika `npwpd` cocok tepat satu WP existing, row diperlakukan sebagai update parsial
   - jika `npwpd` ada tetapi belum ditemukan, row tetap create-capable dan `npwpd` dari file import akan disimpan ke WP baru
-  - field kosong pada CSV tidak menghapus field existing
+  - endpoint import sekarang menerima file Excel `.xlsx` / `.xls` sebagai sumber utama operator
+  - field kosong pada file Excel tidak menghapus field existing
   - jika tidak ada perubahan efektif, row dikembalikan sebagai `skipped`
-  - jika CSV tidak membawa `npwpd`, row tetap create-capable dan warning duplikasi non-blocking bisa muncul dari `nik` / `npwp badan usaha`
+  - jika file Excel tidak membawa `npwpd`, row tetap create-capable dan warning duplikasi non-blocking bisa muncul dari `nik` / `npwp badan usaha`
 - Endpoint maintenance import WP:
   - `POST /api/wajib-pajak/reset-imported`
   - Auth: `admin`
   - body wajib: `{ "confirmationText": "RESET IMPORT WP" }`
-  - menghapus WP yang dibuat lewat import CSV dan OP terkait bila ada
-- UI `Data Tools` memakai `errors[]` dari response ini untuk menampilkan contoh error dan mengunduh `CSV error` koreksi operator.
+  - menghapus WP yang dibuat lewat import Excel dan OP terkait bila ada
+- UI `Data Tools` memakai `errors[]` dari response ini untuk menampilkan contoh error dan mengunduh file error koreksi operator.
 - UI `Data Tools` juga bisa mengunduh `report CSV` penuh dari hasil preview/import untuk kebutuhan audit UAT, berisi `action`, `warning`, `messages`, `resolutionSteps`, dan kolom sumber per row.
 - Import final dari halaman `Data Tools` sekarang lewat dialog konfirmasi dulu sebelum file benar-benar ditulis ke sistem.
 - `previewRows` dipakai UI untuk menampilkan audit 5 baris pertama langsung di layar, termasuk `action`, status valid/gagal, warning non-blocking, dan langkah resolusi per baris.
@@ -132,7 +133,7 @@ Rule umum:
   - WP: `HEADER COMPACT`, `HEADER LEGACY`
   - OP: `NPWPD OK`, `NPWPD GAGAL`, `REKENING OK`, `REKENING GAGAL`
 
-Kolom CSV WP export (compact):
+Kolom export WP (compact CSV):
 `jenis_wp, peran_wp, npwpd, status_aktif, nama_subjek, nik_subjek, alamat_subjek, kecamatan_subjek, kelurahan_subjek, telepon_wa_subjek, email_subjek, lampiran, nama_badan_usaha, npwp_badan_usaha, alamat_badan_usaha, kecamatan_badan_usaha, kelurahan_badan_usaha, telepon_badan_usaha, email_badan_usaha`
 
 Catatan:
@@ -325,7 +326,7 @@ Aturan:
 - Hapus OP.
 - Auth: `admin|editor`.
 
-### CSV OP
+### Export/Import OP
 - `GET /api/objek-pajak/export`
 - `POST /api/objek-pajak/import`
 - Auth export: `admin|editor|viewer`
@@ -337,16 +338,18 @@ Aturan:
 - Import OP sekarang idempotent:
   - identity utama: `npwpd + no_rek_pajak|nama_rek_pajak + nama_op`
   - jika tepat satu OP existing cocok, row diperlakukan sebagai update parsial
-  - field kosong pada CSV tidak menghapus field existing
+  - endpoint import sekarang menerima file Excel `.xlsx` / `.xls` sebagai sumber utama operator
+  - field kosong pada file Excel tidak menghapus field existing
   - jika tidak ada perubahan efektif, row dikembalikan sebagai `skipped`
 - `nopd` bukan key utama import OP:
   - jika `nopd` ada dan konsisten dengan hasil pencocokan utama, row tetap boleh update
   - jika `nopd` menunjuk OP existing lain, row gagal dengan conflict identity
+  - jika `nopd` dari file import memakai format lama atau prefix rekening lama yang tidak lagi cocok dengan sistem sekarang, nilainya diabaikan dan backend akan mempertahankan / membentuk `NOPD` internal yang valid
 - Endpoint maintenance import OP:
   - `POST /api/objek-pajak/reset-imported`
   - Auth: `admin`
   - body wajib: `{ "confirmationText": "RESET IMPORT OP" }`
-  - menghapus OP yang dibuat lewat import CSV
+  - menghapus OP yang dibuat lewat import Excel
 - UI `Data Tools` mengekspor ulang `errors[]` ke file `*_preview_errors.csv` atau `*_import_errors.csv` agar operator bisa memperbaiki file sumber secara batch.
 - UI `Data Tools` juga dapat menurunkan `*_preview_report.csv` atau `*_import_report.csv` untuk audit semua row selama UAT/import operasional.
 - Untuk OP, `previewRows` juga membawa `resolutionSteps` agar operator bisa melihat hasil resolusi `NPWPD` dan `rekening` sebelum import final.
@@ -379,9 +382,10 @@ Kolom export operasional OP:
 
 Catatan:
 - `lampiran` berisi `ADA` jika OP memiliki minimal satu attachment.
-- Sample minimal import OP PBJT Makanan dan Minuman yang relevan untuk adaptasi SIMPATDA:
-  - `npwpd, no_rek_pajak, nama_op, alamat_op, kecamatan_id, kelurahan_id, status`
-  - detail pajak boleh dikosongkan jika data sumber belum punya detail final yang dibutuhkan aplikasi.
+- Sample import OP yang diunduh dari `Data Tools` sekarang bersifat universal:
+  - memakai kolom semantic `npwpd + no_rek_pajak|nama_rek_pajak` agar operator tidak perlu tahu `wp_id` / `rek_pajak_id` internal
+  - tetap menyertakan kolom `detail_*` lintas jenis pajak sebagai kolom opsional
+  - operator cukup mengisi kolom dasar + detail yang relevan untuk jenis pajaknya
 
 ### Attachment OP
 - `GET /api/objek-pajak/:id/attachments`

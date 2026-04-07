@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { stringify } from "csv-stringify/sync";
 
 import { createIntegrationServer, requiredNumber, type JsonRecord } from "./_helpers";
+import { buildExcelBlob } from "./_excel";
 
 async function run() {
   const server = await createIntegrationServer();
@@ -31,33 +31,30 @@ async function run() {
 
     const importedWpName = `IT Reset Imported WP ${Date.now()}`;
     const importedWpNpwpd = `ITRESETWP${Date.now()}`;
-    const importedWpCsv = stringify(
-      [
-        {
-          jenis_wp: "orang_pribadi",
-          peran_wp: "pemilik",
-          npwpd: importedWpNpwpd,
-          status_aktif: "active",
-          nama_subjek: importedWpName,
-          nik_subjek: `1600000000${Date.now().toString().slice(-6)}`,
-          alamat_subjek: "Jl. Imported Reset WP",
-          kecamatan_subjek: "Muaradua",
-          kelurahan_subjek: "Batu Belang Jaya",
-          telepon_wa_subjek: "081200000102",
-          email_subjek: "",
-          nama_badan_usaha: "",
-          npwp_badan_usaha: "",
-          alamat_badan_usaha: "",
-          kecamatan_badan_usaha: "",
-          kelurahan_badan_usaha: "",
-          telepon_badan_usaha: "",
-          email_badan_usaha: "",
-        },
-      ],
-      { header: true },
-    );
+    const importedWpRows = [
+      {
+        jenis_wp: "orang_pribadi",
+        peran_wp: "pemilik",
+        npwpd: importedWpNpwpd,
+        status_aktif: "active",
+        nama_subjek: importedWpName,
+        nik_subjek: `1600000000${Date.now().toString().slice(-6)}`,
+        alamat_subjek: "Jl. Imported Reset WP",
+        kecamatan_subjek: "Muaradua",
+        kelurahan_subjek: "Batu Belang Jaya",
+        telepon_wa_subjek: "081200000102",
+        email_subjek: "",
+        nama_badan_usaha: "",
+        npwp_badan_usaha: "",
+        alamat_badan_usaha: "",
+        kecamatan_badan_usaha: "",
+        kelurahan_badan_usaha: "",
+        telepon_badan_usaha: "",
+        email_badan_usaha: "",
+      },
+    ];
     const importedWpForm = new FormData();
-    importedWpForm.append("file", new Blob([importedWpCsv], { type: "text/csv" }), "reset-imported-wp.csv");
+    importedWpForm.append("file", buildExcelBlob(importedWpRows), "reset-imported-wp.xlsx");
     const importedWpResult = await requestJson("/api/wajib-pajak/import", {
       method: "POST",
       body: importedWpForm,
@@ -79,22 +76,19 @@ async function run() {
     const kodeRekening = String(rekeningMakanan?.kodeRekening ?? "");
 
     const importedOpName = `IT Reset Imported OP ${Date.now()}`;
-    const importedOpCsv = stringify(
-      [
-        {
-          npwpd: importedWpNpwpd,
-          no_rek_pajak: kodeRekening,
-          nama_op: importedOpName,
-          alamat_op: "Jl. Imported Reset OP",
-          kecamatan_id: "1609040",
-          kelurahan_id: "1609040001",
-          status: "active",
-        },
-      ],
-      { header: true },
-    );
+    const importedOpRows = [
+      {
+        npwpd: importedWpNpwpd,
+        no_rek_pajak: kodeRekening,
+        nama_op: importedOpName,
+        alamat_op: "Jl. Imported Reset OP",
+        kecamatan_id: "1609040",
+        kelurahan_id: "1609040001",
+        status: "active",
+      },
+    ];
     const importedOpForm = new FormData();
-    importedOpForm.append("file", new Blob([importedOpCsv], { type: "text/csv" }), "reset-imported-op.csv");
+    importedOpForm.append("file", buildExcelBlob(importedOpRows), "reset-imported-op.xlsx");
     const importedOpResult = await requestJson("/api/objek-pajak/import", {
       method: "POST",
       body: importedOpForm,

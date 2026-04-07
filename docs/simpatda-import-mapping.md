@@ -55,7 +55,7 @@ Catatan:
 - Jika CSV tidak membawa `npwpd`, import WP tetap boleh create, tetapi backend dapat mengembalikan warning duplikasi non-blocking berdasarkan `nik` atau `npwp_badan_usaha`.
 - Field kosong pada CSV WP tidak akan menghapus nilai existing saat row masuk jalur update.
 
-## OP PBJT Makanan dan Minuman
+## OP Universal
 
 Sumber acuan:
 - `PATDA_RESTORAN_PROFIL.json`
@@ -71,8 +71,10 @@ Kolom SIMPATDA yang paling relevan:
 
 Penyesuaian penting:
 - Kode rekening SIMPATDA lama untuk restoran tidak dipakai mentah jika tidak cocok dengan master rekening aktif project ini.
-- Untuk project ini, sample PBJT Makanan dan Minuman memakai `no_rek_pajak=4.1.01.19.01.0001`.
-- Detail PBJT Makanan dan Minuman bersifat opsional saat import; jika sumber belum punya detail final yang valid, sample minimal boleh tanpa kolom `detail_*`.
+- Sample OP sekarang universal:
+  - gunakan `npwpd` untuk mencocokkan WP existing tanpa perlu `wp_id` internal
+  - gunakan `no_rek_pajak` atau `nama_rek_pajak` untuk mencocokkan rekening pajak tanpa perlu `rek_pajak_id` internal
+  - kolom `detail_*` boleh dibiarkan kosong jika memang tidak relevan untuk jenis pajak yang diimport
 - Identity import OP memakai kombinasi `npwpd + no_rek_pajak|nama_rek_pajak + nama_op`.
 - `nopd` boleh ikut dibawa sebagai cek konsistensi, tetapi bukan key utama matching.
 - Jika row cocok ke OP existing, update berjalan dengan patch non-empty saja; field kosong pada CSV tidak menghapus nilai lama.
@@ -87,5 +89,5 @@ Sample target project minimal:
 - `status`
 
 Artefak sample:
-- [simpatda-wp-import-sample.csv](D:\Code\OKUS-Map-Explorer\docs\samples\simpatda-wp-import-sample.csv)
-- [simpatda-op-pbjt-makanan-import-sample.csv](D:\Code\OKUS-Map-Explorer\docs\samples\simpatda-op-pbjt-makanan-import-sample.csv)
+- [simpatda-wp-import-sample.xlsx](D:\Code\OKUS-Map-Explorer\docs\samples\simpatda-wp-import-sample.xlsx)
+- [simpatda-op-import-sample.xlsx](D:\Code\OKUS-Map-Explorer\docs\samples\simpatda-op-import-sample.xlsx)

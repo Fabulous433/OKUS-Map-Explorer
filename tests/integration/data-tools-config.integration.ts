@@ -28,25 +28,25 @@ async function run() {
   assert.equal(opConfig.groups[1].title, "Adaptasi SIMPATDA");
   assert.ok(
     wpConfig.groups[0].actions.some(
-      (action: { label: string; kind: string }) => action.label === "Pilih File CSV" && action.kind === "import",
+      (action: { label: string; kind: string }) => action.label === "Pilih File Excel" && action.kind === "import",
     ),
-    "lane internal WP harus mulai dari pilih file CSV",
+    "lane internal WP harus mulai dari pilih file Excel",
   );
   assert.ok(
     opConfig.groups[0].actions.some(
-      (action: { label: string; kind: string }) => action.label === "Pilih File CSV" && action.kind === "import",
+      (action: { label: string; kind: string }) => action.label === "Pilih File Excel" && action.kind === "import",
     ),
-    "lane internal OP harus mulai dari pilih file CSV",
+    "lane internal OP harus mulai dari pilih file Excel",
   );
 
   assert.equal(wpConfig.sampleHref, "/api/data-tools/samples/wp");
-  assert.equal(opConfig.sampleHref, "/api/data-tools/samples/op-pbjt-makanan");
+  assert.equal(opConfig.sampleHref, "/api/data-tools/samples/op");
   assert.ok(
-    wpConfig.groups[1].actions.some((action: { label: string }) => action.label === "Download Sample SIMPATDA"),
+    wpConfig.groups[1].actions.some((action: { label: string }) => action.label === "Download Sample Excel"),
     "lane sample WP harus tetap menyediakan download sample",
   );
   assert.ok(
-    opConfig.groups[1].actions.some((action: { label: string }) => action.label === "Download Sample SIMPATDA PBJT"),
+    opConfig.groups[1].actions.some((action: { label: string }) => action.label === "Download Sample Excel OP"),
     "lane sample OP harus tetap menyediakan download sample",
   );
 }

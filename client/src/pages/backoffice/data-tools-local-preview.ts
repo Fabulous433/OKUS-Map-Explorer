@@ -1,73 +1,65 @@
 import type { DataToolsEntity } from "./data-tools-config";
 
-export type LocalCsvPreviewState = {
+export type LocalSpreadsheetPreviewState = {
   entity: DataToolsEntity;
   file: File;
   fileName: string;
+  fileSignature: string;
   columns: string[];
   rows: Record<string, string>[];
   totalRows: number;
 };
 
-function parseCsvLine(line: string) {
-  const cells: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let index = 0; index < line.length; index++) {
-    const char = line[index];
-    const nextChar = line[index + 1];
-
-    if (char === '"') {
-      if (inQuotes && nextChar === '"') {
-        current += '"';
-        index++;
-        continue;
-      }
-      inQuotes = !inQuotes;
-      continue;
-    }
-
-    if (char === "," && !inQuotes) {
-      cells.push(current);
-      current = "";
-      continue;
-    }
-
-    current += char;
-  }
-
-  cells.push(current);
-  return cells.map((cell) => cell.trim());
+function isExcelFile(file: File) {
+  const lowerName = file.name.toLowerCase();
+  return lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls");
 }
 
-export function buildLocalCsvPreview(entity: DataToolsEntity, file: File, content: string): LocalCsvPreviewState {
-  const normalized = content.replace(/^\uFEFF/, "");
-  const lines = normalized
-    .split(/\r?\n/)
-    .map((line) => line.trimEnd())
-    .filter((line) => line.length > 0);
-
-  if (lines.length === 0) {
-    throw new Error("File CSV kosong");
+export async function buildLocalSpreadsheetPreview(
+  entity: DataToolsEntity,
+  file: File,
+): Promise<LocalSpreadsheetPreviewState> {
+  if (!isExcelFile(file)) {
+    throw new Error("File Excel (.xlsx atau .xls) diperlukan");
   }
 
-  const columns = parseCsvLine(lines[0]).filter((column) => column.length > 0);
-  if (columns.length === 0) {
-    throw new Error("Header CSV tidak ditemukan");
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", raw: false });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) {
+    throw new Error("Sheet Excel tidak ditemukan");
   }
 
-  const rows = lines.slice(1, 6).map((line) => {
-    const values = parseCsvLine(line);
-    return Object.fromEntries(columns.map((column, index) => [column, values[index] ?? ""]));
+  const sheet = workbook.Sheets[firstSheetName];
+  const sheetRows = XLSX.utils.sheet_to_json<(string | number | boolean | null)[]>(sheet, {
+    header: 1,
+    raw: false,
+    defval: "",
+    blankrows: false,
   });
+
+  if (sheetRows.length === 0) {
+    throw new Error("File Excel kosong");
+  }
+
+  const columns = (sheetRows[0] ?? [])
+    .map((value) => String(value ?? "").trim())
+    .filter((column) => column.length > 0);
+  if (columns.length === 0) {
+    throw new Error("Header Excel tidak ditemukan");
+  }
+
+  const rows = sheetRows.slice(1, 6).map((row) =>
+    Object.fromEntries(columns.map((column, index) => [column, String(row[index] ?? "").trim()])),
+  );
 
   return {
     entity,
     file,
     fileName: file.name,
+    fileSignature: `${file.name}:${file.size}:${file.lastModified}`,
     columns,
     rows,
-    totalRows: Math.max(lines.length - 1, 0),
+    totalRows: Math.max(sheetRows.length - 1, 0),
   };
 }

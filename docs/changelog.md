@@ -1,9 +1,23 @@
 # Changelog
 
+## Phase 2.16y — Excel-Only SIMPATDA Import
+
+### Changed
+- `POST /api/wajib-pajak/import` dan `POST /api/objek-pajak/import` sekarang menerima file Excel `.xlsx` / `.xls` sebagai format import operator.
+- Download sample `Data Tools` sekarang mengirim workbook `.xlsx`, bukan file CSV mentah.
+- Preview lokal di browser sekarang membaca sheet Excel pertama, bukan parser CSV lokal.
+- Jalur import di `Data Tools` sekarang memakai copy/operator flow berbasis Excel, termasuk validasi file, reset import, dan pesan error parsing.
+- Integration helpers baru untuk workbook Excel dipakai di suite import agar contract import benar-benar teruji pada format file produksi operator.
+- Import OP sekarang tidak lagi gagal hanya karena `NOPD` lama dari SIMPATDA tidak cocok dengan format/prefix sistem saat ini; nilai `NOPD` seperti itu diabaikan dan sistem memakai `NOPD` internal yang valid.
+
+### Notes
+- Jalur export operasional/internal tetap CSV.
+- File audit hasil (`report`, `error`, `template koreksi`) tetap CSV karena lebih praktis untuk koreksi massal operator.
+
 ## Phase 2.16x — Idempotent SIMPATDA Import
 
 ### Added
-- Idempotent CSV import semantics untuk:
+- Idempotent import semantics untuk:
   - `POST /api/wajib-pajak/import`
   - `POST /api/objek-pajak/import`
 - Klasifikasi hasil per baris dan per run:
@@ -20,7 +34,7 @@
 - Import WP sekarang juga menyimpan `npwpd` dari file saat row baru benar-benar dibuat lewat import.
 - Import OP sekarang update-capable dengan identity utama `npwpd + rekening + nama_op`.
 - Update import memakai patch non-empty:
-  - field kosong di CSV tidak lagi menghapus nilai existing
+  - field kosong di file import tidak lagi menghapus nilai existing
   - row tanpa perubahan efektif sekarang diklasifikasikan sebagai `skipped`
 - `dryRun` sekarang memprediksi action final yang sama dengan import sesungguhnya.
 - Halaman `Data Tools` sekarang menekankan hasil berbasis action:
@@ -424,7 +438,7 @@
 
 ### Added
 - Regression suite `tests/integration/op-csv-semantic-import.integration.ts` untuk mengunci import OP berbasis referensi semantic (`npwpd` + `no_rek_pajak`) tanpa mewajibkan ID internal.
-- Sample CSV adaptasi SIMPATDA di `docs/samples/` untuk WP dan OP PBJT Makanan dan Minuman dengan subset kolom yang lebih relevan ke kontrak project ini.
+- Sample Excel adaptasi SIMPATDA di `docs/samples/` untuk WP dan template universal OP dengan kolom semantic yang lebih relevan ke kontrak project ini.
 - Panel `Petunjuk Mapping` di halaman `Data Tools` untuk merangkum kolom sumber SIMPATDA, target minimal import, dan catatan operator.
 - Mode `Preview Import` di halaman `Data Tools` untuk WP dan OP, berbasis `dry-run` tanpa menyimpan data.
 - Tombol `Download CSV Error` pada hasil preview/import agar operator bisa menurunkan daftar baris gagal ke file koreksi.

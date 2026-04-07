@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { stringify } from "csv-stringify/sync";
 
 import { createIntegrationServer, requiredNumber, type JsonRecord } from "./_helpers";
+import { buildExcelBlob } from "./_excel";
 
 async function run() {
   const server = await createIntegrationServer();
@@ -15,35 +15,30 @@ async function run() {
     const semanticNpwpd = `ITNPWPD${Date.now()}`;
 
     const wpImportName = `IT Dry Run WP ${Date.now()}`;
-    const wpCsv = stringify(
-      [
-        {
-          jenis_wp: "orang_pribadi",
-          peran_wp: "pemilik",
-          npwpd: "",
-          status_aktif: "active",
-          nama_subjek: wpImportName,
-          nik_subjek: "1600000000000101",
-          alamat_subjek: "Jl. Dry Run WP",
-          kecamatan_subjek: "Muaradua",
-          kelurahan_subjek: "Batu Belang Jaya",
-          telepon_wa_subjek: "081234567801",
-          email_subjek: "",
-          nama_badan_usaha: "",
-          npwp_badan_usaha: "",
-          alamat_badan_usaha: "",
-          kecamatan_badan_usaha: "",
-          kelurahan_badan_usaha: "",
-          telepon_badan_usaha: "",
-          email_badan_usaha: "",
-        },
-      ],
+    const wpRows = [
       {
-        header: true,
+        jenis_wp: "orang_pribadi",
+        peran_wp: "pemilik",
+        npwpd: "",
+        status_aktif: "active",
+        nama_subjek: wpImportName,
+        nik_subjek: "1600000000000101",
+        alamat_subjek: "Jl. Dry Run WP",
+        kecamatan_subjek: "Muaradua",
+        kelurahan_subjek: "Batu Belang Jaya",
+        telepon_wa_subjek: "081234567801",
+        email_subjek: "",
+        nama_badan_usaha: "",
+        npwp_badan_usaha: "",
+        alamat_badan_usaha: "",
+        kecamatan_badan_usaha: "",
+        kelurahan_badan_usaha: "",
+        telepon_badan_usaha: "",
+        email_badan_usaha: "",
       },
-    );
+    ];
     const wpForm = new FormData();
-    wpForm.append("file", new Blob([wpCsv], { type: "text/csv" }), "wp-dry-run.csv");
+    wpForm.append("file", buildExcelBlob(wpRows), "wp-dry-run.xlsx");
     wpForm.append("dryRun", "true");
 
     const wpDryRun = await requestJson("/api/wajib-pajak/import", {
@@ -107,24 +102,19 @@ async function run() {
     assert.ok(rekeningMakanan, "rekening PBJT Makanan dan Minuman wajib tersedia");
 
     const opImportName = `IT Dry Run OP ${Date.now()}`;
-    const opCsv = stringify(
-      [
-        {
-          npwpd: semanticNpwpd,
-          no_rek_pajak: String(rekeningMakanan?.kodeRekening ?? ""),
-          nama_op: opImportName,
-          alamat_op: "Batu Belang Jaya",
-          kecamatan_id: "1609040",
-          kelurahan_id: "1609040001",
-          status: "active",
-        },
-      ],
+    const opRows = [
       {
-        header: true,
+        npwpd: semanticNpwpd,
+        no_rek_pajak: String(rekeningMakanan?.kodeRekening ?? ""),
+        nama_op: opImportName,
+        alamat_op: "Batu Belang Jaya",
+        kecamatan_id: "1609040",
+        kelurahan_id: "1609040001",
+        status: "active",
       },
-    );
+    ];
     const opForm = new FormData();
-    opForm.append("file", new Blob([opCsv], { type: "text/csv" }), "op-dry-run.csv");
+    opForm.append("file", buildExcelBlob(opRows), "op-dry-run.xlsx");
     opForm.append("dryRun", "true");
 
     const opDryRun = await requestJson("/api/objek-pajak/import", {
@@ -178,24 +168,19 @@ async function run() {
       "dry-run OP tidak boleh menyimpan record baru",
     );
 
-    const invalidOpCsv = stringify(
-      [
-        {
-          npwpd: semanticNpwpd,
-          no_rek_pajak: "",
-          nama_op: "IT Dry Run OP Invalid",
-          alamat_op: "Batu Belang Jaya",
-          kecamatan_id: "1609040",
-          kelurahan_id: "1609040001",
-          status: "active",
-        },
-      ],
+    const invalidOpRows = [
       {
-        header: true,
+        npwpd: semanticNpwpd,
+        no_rek_pajak: "",
+        nama_op: "IT Dry Run OP Invalid",
+        alamat_op: "Batu Belang Jaya",
+        kecamatan_id: "1609040",
+        kelurahan_id: "1609040001",
+        status: "active",
       },
-    );
+    ];
     const invalidOpForm = new FormData();
-    invalidOpForm.append("file", new Blob([invalidOpCsv], { type: "text/csv" }), "op-dry-run-invalid.csv");
+    invalidOpForm.append("file", buildExcelBlob(invalidOpRows), "op-dry-run-invalid.xlsx");
     invalidOpForm.append("dryRun", "true");
 
     const invalidOpDryRun = await requestJson("/api/objek-pajak/import", {

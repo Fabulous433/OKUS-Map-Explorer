@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { buildExcelBlob } from "./_excel";
 
 async function loadModule() {
   try {
@@ -12,25 +13,34 @@ async function run() {
   const module = await loadModule();
   assert.ok(module, "helper local preview Data Tools harus tersedia");
 
-  const { buildLocalCsvPreview } = module;
-  assert.equal(typeof buildLocalCsvPreview, "function", "builder local preview wajib diexport");
+  const { buildLocalSpreadsheetPreview } = module;
+  assert.equal(typeof buildLocalSpreadsheetPreview, "function", "builder local preview wajib diexport");
 
   const file = new File(
     [
-      "jenis_wp,peran_wp,npwpd,alamat_subjek\norang_pribadi,pemilik,P001,\"JL. RANAU, DESA BATU BELANG\"\norang_pribadi,pemilik,P002,JL. TANPA KOMA",
+      buildExcelBlob([
+        {
+          jenis_wp: "orang_pribadi",
+          peran_wp: "pemilik",
+          npwpd: "P001",
+          alamat_subjek: "JL. RANAU, DESA BATU BELANG",
+        },
+        {
+          jenis_wp: "orang_pribadi",
+          peran_wp: "pemilik",
+          npwpd: "P002",
+          alamat_subjek: "JL. TANPA KOMA",
+        },
+      ]),
     ],
-    "sample.csv",
-    { type: "text/csv" },
+    "sample.xlsx",
+    { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
   );
 
-  const preview = buildLocalCsvPreview(
-    "wajib-pajak",
-    file,
-    "jenis_wp,peran_wp,npwpd,alamat_subjek\norang_pribadi,pemilik,P001,\"JL. RANAU, DESA BATU BELANG\"\norang_pribadi,pemilik,P002,JL. TANPA KOMA",
-  );
+  const preview = await buildLocalSpreadsheetPreview("wajib-pajak", file);
 
   assert.equal(preview.entity, "wajib-pajak");
-  assert.equal(preview.fileName, "sample.csv");
+  assert.equal(preview.fileName, "sample.xlsx");
   assert.deepEqual(preview.columns, ["jenis_wp", "peran_wp", "npwpd", "alamat_subjek"]);
   assert.equal(preview.totalRows, 2);
   assert.equal(preview.rows[0]?.npwpd, "P001");

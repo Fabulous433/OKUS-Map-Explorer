@@ -48,8 +48,8 @@ export const DATA_TOOLS_ENTITY_CONFIG: DataToolsEntityConfig[] = [
           },
           {
             kind: "import",
-            label: "Pilih File CSV",
-            description: "Pilih file dulu, lihat preview kolom lokal, lalu lanjut preview validasi atau tambah/perbaiki data.",
+            label: "Pilih File Excel",
+            description: "Pilih file Excel dulu, lihat preview sheet lokal, lalu lanjut preview validasi atau tambah/perbaiki data.",
             icon: Upload,
           },
         ],
@@ -61,8 +61,8 @@ export const DATA_TOOLS_ENTITY_CONFIG: DataToolsEntityConfig[] = [
         actions: [
           {
             kind: "sample",
-            label: "Download Sample SIMPATDA",
-            description: "Download dulu kalau operator belum punya format file yang benar untuk diisi.",
+            label: "Download Sample Excel",
+            description: "Download template Excel dulu kalau operator belum punya format file yang benar untuk diisi.",
             icon: Download,
             href: "/api/data-tools/samples/wp",
           },
@@ -74,7 +74,7 @@ export const DATA_TOOLS_ENTITY_CONFIG: DataToolsEntityConfig[] = [
     entity: "objek-pajak",
     title: "Objek Pajak",
     icon: Building2,
-    sampleHref: "/api/data-tools/samples/op-pbjt-makanan",
+    sampleHref: "/api/data-tools/samples/op",
     groups: [
       {
         title: "Format Internal",
@@ -96,8 +96,8 @@ export const DATA_TOOLS_ENTITY_CONFIG: DataToolsEntityConfig[] = [
           },
           {
             kind: "import",
-            label: "Pilih File CSV",
-            description: "Pilih file dulu, lihat preview kolom lokal, lalu lanjut preview validasi atau tambah/perbaiki data.",
+            label: "Pilih File Excel",
+            description: "Pilih file Excel dulu, lihat preview sheet lokal, lalu lanjut preview validasi atau tambah/perbaiki data.",
             icon: Upload,
           },
         ],
@@ -105,14 +105,14 @@ export const DATA_TOOLS_ENTITY_CONFIG: DataToolsEntityConfig[] = [
       {
         title: "Adaptasi SIMPATDA",
         tone: "sample",
-        description: "Sample minimal PBJT makanan dan minuman dengan referensi NPWPD + kode rekening, tanpa ID internal.",
+        description: "Template import universal OP dengan kolom dasar + kolom detail lintas jenis pajak yang bisa dikosongkan bila tidak dipakai.",
         actions: [
           {
             kind: "sample",
-            label: "Download Sample SIMPATDA PBJT",
-            description: "Download dulu kalau operator belum punya format file yang benar untuk diisi.",
+            label: "Download Sample Excel OP",
+            description: "Download template Excel universal OP dulu kalau operator belum punya format file yang benar untuk diisi.",
             icon: Download,
-            href: "/api/data-tools/samples/op-pbjt-makanan",
+            href: "/api/data-tools/samples/op",
           },
         ],
       },

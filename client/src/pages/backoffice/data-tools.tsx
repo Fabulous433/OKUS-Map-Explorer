@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
+  CheckCircle2,
   ChevronDown,
+  CircleAlert,
   Database,
   Download,
   FileSpreadsheet,
+  LoaderCircle,
   Pin,
   PinOff,
   Search,
@@ -83,7 +86,7 @@ import {
   type HistoryEntityFilterKey,
   type HistoryModeFilterKey,
 } from "./data-tools-history-filter";
-import { buildLocalCsvPreview, type LocalCsvPreviewState } from "./data-tools-local-preview";
+import { buildLocalSpreadsheetPreview, type LocalSpreadsheetPreviewState } from "./data-tools-local-preview";
 
 const GROUP_STYLES = {
   internal: {
@@ -115,10 +118,12 @@ type PendingResetConfirmation = {
 type TutorialStep = 1 | 2 | 3 | 4 | 5;
 type DataToolsPrimaryTab = "import" | "export";
 type ImportWorkspaceView = "file" | "result" | "history";
+type ImportProcessStatus = "validating" | "importing" | "success" | "blocked" | "error";
 
 type ImportResultState = {
   source: "live" | "history";
   mode: ImportRunMode;
+  fileSignature: string | null;
   total: number;
   created: number;
   updated: number;
@@ -144,6 +149,16 @@ type ImportResultState = {
   }>;
 };
 
+type ImportProcessState = {
+  status: ImportProcessStatus;
+  mode: ImportExecutionMode;
+  entity: DataToolsEntity;
+  progress: number;
+  title: string;
+  description: string;
+  summary: string | null;
+};
+
 export default function BackofficeDataTools() {
   const { hasRole } = useAuth();
   const canMutate = hasRole(["admin", "editor"]);
@@ -159,17 +174,20 @@ export default function BackofficeDataTools() {
   const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
   const [importHistory, setImportHistory] = useState<DataToolsImportHistoryEntry[]>([]);
   const [importResultState, setImportResultState] = useState<Partial<Record<DataToolsEntity, ImportResultState>>>({});
-  const [localPreviewState, setLocalPreviewState] = useState<Partial<Record<DataToolsEntity, LocalCsvPreviewState>>>({});
+  const [localPreviewState, setLocalPreviewState] = useState<Partial<Record<DataToolsEntity, LocalSpreadsheetPreviewState>>>({});
   const [tutorialStep, setTutorialStep] = useState<TutorialStep>(1);
   const [activeTutorialEntity, setActiveTutorialEntity] = useState<DataToolsEntity | null>(null);
   const [activePrimaryTab, setActivePrimaryTab] = useState<DataToolsPrimaryTab>("import");
   const [activeImportWorkspaceView, setActiveImportWorkspaceView] = useState<ImportWorkspaceView>("file");
   const [pendingImportConfirmation, setPendingImportConfirmation] = useState<PendingImportConfirmation | null>(null);
   const [pendingResetConfirmation, setPendingResetConfirmation] = useState<PendingResetConfirmation | null>(null);
+  const [importProcessState, setImportProcessState] = useState<ImportProcessState | null>(null);
+  const [importProcessElapsedMs, setImportProcessElapsedMs] = useState(0);
   const wpFileRef = useRef<HTMLInputElement>(null);
   const opFileRef = useRef<HTMLInputElement>(null);
   const importWorkbenchRef = useRef<HTMLDivElement>(null);
   const entityCardRefs = useRef<Partial<Record<DataToolsEntity, HTMLDivElement | null>>>({});
+  const importProcessStartedAtRef = useRef<number | null>(null);
   const fileRefs: Record<DataToolsEntity, React.RefObject<HTMLInputElement>> = {
     "wajib-pajak": wpFileRef,
     "objek-pajak": opFileRef,
@@ -182,6 +200,71 @@ export default function BackofficeDataTools() {
   useEffect(() => {
     setImportHistory(loadDataToolsImportHistory());
   }, []);
+
+  useEffect(() => {
+    if (!importProcessState) return;
+
+    if (importProcessState.status === "validating" || importProcessState.status === "importing") {
+      const ceiling = importProcessState.status === "validating" ? 82 : 90;
+      const intervalId = window.setInterval(() => {
+        setImportProcessState((current) => {
+          if (!current || current.status !== importProcessState.status) {
+            return current;
+          }
+
+          const increment = current.progress < 32 ? 7 : current.progress < 62 ? 4 : 2;
+          return {
+            ...current,
+            progress: Math.min(ceiling, current.progress + increment),
+          };
+        });
+      }, 220);
+
+      return () => window.clearInterval(intervalId);
+    }
+
+    if (importProcessState.status === "blocked" || importProcessState.status === "error") {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setImportProcessState((current) => (current?.status === importProcessState.status ? null : current));
+    }, importProcessState.status === "success" ? 6500 : 3400);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [importProcessState]);
+
+  useEffect(() => {
+    if (!(importProcessState?.status === "validating" || importProcessState?.status === "importing")) {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [importProcessState]);
+
+  useEffect(() => {
+    if (!importProcessState || !importProcessStartedAtRef.current) {
+      return;
+    }
+
+    if (importProcessState.status !== "validating" && importProcessState.status !== "importing") {
+      return;
+    }
+
+    setImportProcessElapsedMs(Date.now() - importProcessStartedAtRef.current);
+    const intervalId = window.setInterval(() => {
+      if (!importProcessStartedAtRef.current) return;
+      setImportProcessElapsedMs(Date.now() - importProcessStartedAtRef.current);
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [importProcessState]);
 
   function formatHistoryTimestamp(value: string) {
     const date = new Date(value);
@@ -272,6 +355,7 @@ export default function BackofficeDataTools() {
       [entry.entity]: {
         source: "history",
         mode: entry.mode,
+        fileSignature: null,
         total: entry.total,
         created: entry.created,
         updated: entry.updated,
@@ -299,16 +383,243 @@ export default function BackofficeDataTools() {
     scrollToImportWorkspace();
   }
 
+  const isProcessBusy =
+    importProcessState?.status === "validating" || importProcessState?.status === "importing";
+
+  function formatImportSummary(result: Pick<ImportResultState, "created" | "updated" | "skipped" | "failed">) {
+    return `${result.created} created, ${result.updated} updated, ${result.skipped} skipped, ${result.failed} failed`;
+  }
+
+  function formatElapsedDuration(valueMs: number) {
+    const totalSeconds = Math.max(0, Math.floor(valueMs / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  function getImportProcessRowCount(entity: DataToolsEntity) {
+    const localPreview = localPreviewState[entity];
+    if (localPreview?.totalRows) {
+      return localPreview.totalRows;
+    }
+
+    return importResultState[entity]?.total ?? 0;
+  }
+
+  function getImportProcessDescription(
+    entity: DataToolsEntity,
+    status: ImportProcessStatus,
+    mode: ImportExecutionMode,
+    fallback?: string,
+  ) {
+    if (fallback && fallback.length > 0) {
+      return fallback;
+    }
+
+    const entityCopy =
+      entity === "wajib-pajak"
+        ? {
+            validating: "Mengunggah workbook Wajib Pajak, membaca sheet aktif, lalu memeriksa identitas, status, dan aturan field WP.",
+            importing: "Sedang menambah atau memperbarui data Wajib Pajak ke sistem. Jangan tutup atau refresh halaman ini.",
+            successPreview: "Preview Wajib Pajak selesai. Periksa created, updated, skipped, dan failed sebelum import final.",
+            successImport: "Perubahan data Wajib Pajak sudah ditulis ke sistem. Ringkasan hasil tersedia di panel bawah.",
+            blockedPreview: "Preview Wajib Pajak menemukan baris failed. Perbaiki kolom yang disebutkan sebelum lanjut import final.",
+            blockedImport: "Import Wajib Pajak diblok karena masih ada baris failed pada preflight backend.",
+          }
+        : {
+            validating: "Mengunggah workbook Objek Pajak, membaca sheet aktif, lalu memeriksa NPWPD, rekening pajak, NOPD, dan relasi OP.",
+            importing: "Sedang menambah atau memperbarui data Objek Pajak ke sistem. Jangan tutup atau refresh halaman ini.",
+            successPreview: "Preview Objek Pajak selesai. Pastikan relasi NPWPD, rekening, dan detail OP sudah sesuai sebelum import final.",
+            successImport: "Perubahan data Objek Pajak sudah ditulis ke sistem. Ringkasan hasil tersedia di panel bawah.",
+            blockedPreview: "Preview Objek Pajak menemukan baris failed. Perbaiki NPWPD, rekening, NOPD, atau kolom detail yang disebutkan.",
+            blockedImport: "Import Objek Pajak diblok karena preflight backend masih menemukan baris failed.",
+          };
+
+    if (status === "validating") return entityCopy.validating;
+    if (status === "importing") return entityCopy.importing;
+    if (status === "success") return mode === "preview" ? entityCopy.successPreview : entityCopy.successImport;
+    if (status === "blocked") return mode === "preview" ? entityCopy.blockedPreview : entityCopy.blockedImport;
+
+    return "Proses backend berhenti sebelum selesai. Periksa koneksi, isi file, atau detail error pada panel hasil.";
+  }
+
+  function getImportProcessPhase(processState: ImportProcessState) {
+    const { entity, status, mode, progress } = processState;
+
+    if (status === "validating") {
+      if (progress < 28) {
+        return entity === "wajib-pajak" ? "Mengunggah workbook Wajib Pajak" : "Mengunggah workbook Objek Pajak";
+      }
+      if (progress < 52) {
+        return "Membaca sheet aktif dan struktur kolom";
+      }
+      if (progress < 76) {
+        return entity === "wajib-pajak"
+          ? "Memeriksa identitas WP, status aktif, dan aturan field"
+          : "Memeriksa NPWPD, rekening pajak, NOPD, dan relasi OP";
+      }
+
+      return "Menyusun hasil dry-run backend";
+    }
+
+    if (status === "importing") {
+      if (progress < 30) {
+        return "Menjalankan preflight backend untuk file yang dipilih";
+      }
+      if (progress < 58) {
+        return entity === "wajib-pajak"
+          ? "Menyamakan baris import dengan data Wajib Pajak yang ada"
+          : "Menyamakan baris import dengan data Objek Pajak dan relasi master";
+      }
+      if (progress < 84) {
+        return entity === "wajib-pajak" ? "Menulis perubahan Wajib Pajak ke database" : "Menulis perubahan Objek Pajak ke database";
+      }
+
+      return "Menyusun ringkasan hasil import";
+    }
+
+    if (status === "success") {
+      return mode === "preview" ? "Validasi backend selesai tanpa write ke sistem" : "Write database selesai dan hasil sudah disinkronkan";
+    }
+
+    if (status === "blocked") {
+      return mode === "preview" ? "Validasi backend menemukan baris yang harus diperbaiki" : "Preflight import menghentikan proses sebelum write ke sistem";
+    }
+
+    return "Backend menghentikan proses sebelum semua tahap selesai";
+  }
+
+  function getImportProcessTrack(processState: ImportProcessState) {
+    const previewPhases = ["Upload", "Parse", "Validate", "Report"];
+    const importPhases = ["Preflight", "Match", "Write", "Result"];
+    const phases = processState.mode === "preview" ? previewPhases : importPhases;
+
+    let activeIndex = 0;
+    if (processState.status === "success" || processState.status === "blocked" || processState.status === "error") {
+      activeIndex = phases.length - 1;
+    } else if (processState.progress >= 76) {
+      activeIndex = 3;
+    } else if (processState.progress >= 52) {
+      activeIndex = 2;
+    } else if (processState.progress >= 28) {
+      activeIndex = 1;
+    }
+
+    return phases.map((label, index) => ({
+      label,
+      state: index < activeIndex ? "done" : index === activeIndex ? "active" : "idle",
+    }));
+  }
+
   async function handleImport(entity: DataToolsEntity, file: File, mode: ImportExecutionMode) {
+    importProcessStartedAtRef.current = Date.now();
+    setImportProcessElapsedMs(0);
+    setImportProcessState({
+      status: mode === "preview" ? "validating" : "importing",
+      mode,
+      entity,
+      progress: mode === "preview" ? 14 : 18,
+      title: mode === "preview" ? "Memvalidasi File" : "Mengimpor ke Sistem",
+      description: getImportProcessDescription(entity, mode === "preview" ? "validating" : "importing", mode),
+      summary: null,
+    });
     const formData = new FormData();
     formData.append("file", file);
     if (mode === "preview") {
       formData.append("dryRun", "true");
     }
+    const fileSignature = `${file.name}:${file.size}:${file.lastModified}`;
     try {
       const res = await fetch(`/api/${entity}/import`, { method: "POST", body: formData });
       const result = await res.json();
       if (!res.ok) {
+        if (result && typeof result === "object" && Array.isArray(result.previewRows)) {
+          const blockedResult: ImportResultState = {
+            source: "live",
+            mode: result.dryRun ? "preview" : "import",
+            fileSignature,
+            total: Number(result.total ?? 0),
+            created: Number(result.created ?? 0),
+            updated: Number(result.updated ?? 0),
+            skipped: Number(result.skipped ?? 0),
+            success: Number(result.success ?? 0),
+            failed: Number(result.failed ?? 0),
+            errors: Array.isArray(result.errors) ? result.errors.map(String) : [],
+            warnings: Array.isArray(result.warnings) ? result.warnings.map(String) : [],
+            previewRows: Array.isArray(result.previewRows)
+              ? result.previewRows.map((row: any) => ({
+                  rowNumber: Number(row?.rowNumber ?? 0),
+                  action:
+                    row?.action === "created" || row?.action === "updated" || row?.action === "skipped"
+                      ? row.action
+                      : "failed",
+                  status: row?.status === "invalid" ? "invalid" : "valid",
+                  entityLabel: String(row?.entityLabel ?? ""),
+                  messages: Array.isArray(row?.messages) ? row.messages.map(String) : [],
+                  warnings: Array.isArray(row?.warnings) ? row.warnings.map(String) : [],
+                  resolutionSteps: Array.isArray(row?.resolutionSteps) ? row.resolutionSteps.map(String) : [],
+                  sourceRow:
+                    row?.sourceRow && typeof row.sourceRow === "object"
+                      ? Object.fromEntries(Object.entries(row.sourceRow).map(([key, value]) => [key, String(value ?? "")]))
+                      : {},
+                  resolutionStatus:
+                    row?.resolutionStatus && typeof row.resolutionStatus === "object"
+                      ? {
+                          wpResolved:
+                            row.resolutionStatus.wpResolved === null || row.resolutionStatus.wpResolved === undefined
+                              ? null
+                              : Boolean(row.resolutionStatus.wpResolved),
+                          rekeningResolved:
+                            row.resolutionStatus.rekeningResolved === null ||
+                            row.resolutionStatus.rekeningResolved === undefined
+                              ? null
+                              : Boolean(row.resolutionStatus.rekeningResolved),
+                        }
+                      : null,
+                }))
+              : [],
+            previewSummary:
+              result.previewSummary && typeof result.previewSummary === "object"
+                ? Object.fromEntries(Object.entries(result.previewSummary).map(([key, value]) => [key, Number(value ?? 0)]))
+                : {},
+          };
+          setImportResultState((current) => ({
+            ...current,
+            [entity]: blockedResult,
+          }));
+          setActiveTutorialEntity(entity);
+          setActiveImportWorkspaceView("result");
+          setTutorialStep(5);
+          setImportProcessState({
+            status: "blocked",
+            mode,
+            entity,
+            progress: 100,
+            title: mode === "preview" ? "Validasi Diblok" : "Import Diblok",
+            description: getImportProcessDescription(
+              entity,
+              "blocked",
+              mode,
+              typeof result.message === "string" && result.message.length > 0 ? result.message : undefined,
+            ),
+            summary: formatImportSummary(blockedResult),
+          });
+        } else {
+          setImportProcessState({
+            status: "error",
+            mode,
+            entity,
+            progress: 100,
+            title: mode === "preview" ? "Validasi Gagal" : "Import Gagal",
+            description: getImportProcessDescription(
+              entity,
+              "error",
+              mode,
+              typeof result?.message === "string" && result.message.length > 0 ? result.message : undefined,
+            ),
+            summary: null,
+          });
+        }
         toast({ title: "Gagal", description: result.message, variant: "destructive" });
       } else {
         setActiveTutorialEntity(entity);
@@ -316,6 +627,7 @@ export default function BackofficeDataTools() {
         const nextResult: ImportResultState = {
           source: "live",
           mode: result.dryRun ? "preview" : "import",
+          fileSignature,
           total: Number(result.total ?? 0),
           created: Number(result.created ?? 0),
           updated: Number(result.updated ?? 0),
@@ -367,15 +679,33 @@ export default function BackofficeDataTools() {
         }));
         setTutorialStep(5);
         persistImportHistory(entity, nextResult);
+        setImportProcessState({
+          status: "success",
+          mode: result.dryRun ? "preview" : "import",
+          entity,
+          progress: 100,
+          title: result.dryRun ? "Preview Selesai" : "Import Selesai",
+          description: getImportProcessDescription(entity, "success", result.dryRun ? "preview" : "import"),
+          summary: formatImportSummary(nextResult),
+        });
         toast({
           title: result.dryRun ? "Preview Selesai" : "Import Selesai",
-          description: `${nextResult.created} created, ${nextResult.updated} updated, ${nextResult.skipped} skipped, ${nextResult.failed} failed`,
+          description: formatImportSummary(nextResult),
         });
         if (!result.dryRun) {
           queryClient.invalidateQueries({ queryKey: [`/api/${entity}`] });
         }
       }
     } catch (err: unknown) {
+      setImportProcessState({
+        status: "error",
+        mode,
+        entity,
+        progress: 100,
+        title: mode === "preview" ? "Validasi Gagal" : "Import Gagal",
+        description: getImportProcessDescription(entity, "error", mode, err instanceof Error ? err.message : undefined),
+        summary: null,
+      });
       toast({
         title: "Error",
         description: err instanceof Error ? err.message : "Terjadi kesalahan",
@@ -384,7 +714,22 @@ export default function BackofficeDataTools() {
     }
   }
 
-  function openCsvExport(href: string) {
+  function isCurrentPreviewReadyForImport(entity: DataToolsEntity) {
+    const preview = localPreviewState[entity];
+    const result = importResultState[entity];
+    if (!preview || !result) {
+      return false;
+    }
+
+    return (
+      result.source === "live" &&
+      result.mode === "preview" &&
+      result.fileSignature === preview.fileSignature &&
+      result.failed === 0
+    );
+  }
+
+  function openDownload(href: string) {
     window.open(href, "_blank", "noopener,noreferrer");
   }
 
@@ -408,7 +753,28 @@ export default function BackofficeDataTools() {
     }
   }
 
+  function dismissImportProcessOverlay() {
+    importProcessStartedAtRef.current = null;
+    setImportProcessElapsedMs(0);
+    setImportProcessState(null);
+  }
+
+  function focusImportResults(entity: DataToolsEntity) {
+    setActiveTutorialEntity(entity);
+    setActiveImportWorkspaceView("result");
+    setTutorialStep(5);
+    scrollToImportWorkspace();
+    setImportProcessState(null);
+  }
+
+  function downloadCurrentImportAudit(entity: DataToolsEntity) {
+    const result = importResultState[entity];
+    if (!result) return;
+    downloadImportAuditReport(entity, result);
+  }
+
   function handleTutorialDownloadSample(entity: DataToolsEntity) {
+    if (isProcessBusy) return;
     const entityConfig = getEntityConfig(entity);
     if (!entityConfig?.sampleHref) {
       return;
@@ -416,7 +782,7 @@ export default function BackofficeDataTools() {
 
     setActiveTutorialEntity(entity);
     setActiveImportWorkspaceView("file");
-    openCsvExport(entityConfig.sampleHref);
+    openDownload(entityConfig.sampleHref);
     setTutorialStep(3);
     toast({
       title: "Sample Dibuka",
@@ -425,6 +791,7 @@ export default function BackofficeDataTools() {
   }
 
   function beginFileAction(entity: DataToolsEntity) {
+    if (isProcessBusy) return;
     setActiveTutorialEntity(entity);
     setActiveImportWorkspaceView("file");
     setTutorialStep(3);
@@ -432,6 +799,7 @@ export default function BackofficeDataTools() {
   }
 
   function requestImportConfirmation(entity: DataToolsEntity) {
+    if (isProcessBusy) return;
     setActiveTutorialEntity(entity);
     setActiveImportWorkspaceView("result");
     setTutorialStep(5);
@@ -439,14 +807,23 @@ export default function BackofficeDataTools() {
   }
 
   async function confirmPendingImport() {
-    if (!pendingImportConfirmation) return;
+    if (!pendingImportConfirmation || isProcessBusy) return;
     const current = pendingImportConfirmation;
     setPendingImportConfirmation(null);
     const preview = localPreviewState[current.entity];
     if (!preview) {
       toast({
         title: "File Belum Dipilih",
-        description: "Pilih file CSV dulu sebelum menjalankan import final.",
+        description: "Pilih file Excel dulu sebelum menjalankan import final.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!isCurrentPreviewReadyForImport(current.entity)) {
+      toast({
+        title: "Preview Belum Bersih",
+        description:
+          "Import final hanya bisa dijalankan setelah Preview & Validasi untuk file yang sama selesai tanpa baris failed.",
         variant: "destructive",
       });
       return;
@@ -455,9 +832,9 @@ export default function BackofficeDataTools() {
   }
 
   async function handleLocalFileSelection(entity: DataToolsEntity, file: File) {
+    if (isProcessBusy) return;
     try {
-      const content = await file.text();
-      const preview = buildLocalCsvPreview(entity, file, content);
+      const preview = await buildLocalSpreadsheetPreview(entity, file);
       setActiveTutorialEntity(entity);
       setActiveImportWorkspaceView("file");
       setLocalPreviewState((current) => ({
@@ -473,13 +850,14 @@ export default function BackofficeDataTools() {
     } catch (err: unknown) {
       toast({
         title: "Preview File Gagal",
-        description: err instanceof Error ? err.message : "Gagal membaca file CSV lokal",
+        description: err instanceof Error ? err.message : "Gagal membaca file Excel lokal",
         variant: "destructive",
       });
     }
   }
 
   async function handleResetImportedData(entity: DataToolsEntity) {
+    if (isProcessBusy) return;
     try {
       const res = await fetch(`/api/${entity}/reset-imported`, {
         method: "POST",
@@ -591,6 +969,163 @@ export default function BackofficeDataTools() {
     window.URL.revokeObjectURL(url);
   }
 
+  function renderImportProcessOverlay() {
+    if (!importProcessState) return null;
+
+    const busy = importProcessState.status === "validating" || importProcessState.status === "importing";
+    const entityLabel = ENTITY_LABELS[importProcessState.entity];
+    const rowCount = getImportProcessRowCount(importProcessState.entity);
+    const currentResult = importResultState[importProcessState.entity];
+    const canOpenResult = Boolean(currentResult);
+    const canDownloadAudit = Boolean(currentResult && currentResult.previewRows.length > 0);
+    const phaseLabel = getImportProcessPhase(importProcessState);
+    const phaseTrack = getImportProcessTrack(importProcessState);
+    const iconTone = busy
+      ? "border-cyan-400/30 bg-cyan-400/12 text-cyan-200"
+      : importProcessState.status === "success"
+        ? "border-emerald-400/30 bg-emerald-400/12 text-emerald-200"
+        : "border-amber-400/30 bg-amber-400/12 text-amber-200";
+    const progressTone = busy
+      ? "from-sky-400 via-cyan-300 to-emerald-300"
+      : importProcessState.status === "success"
+        ? "from-emerald-400 via-teal-300 to-cyan-300"
+        : "from-amber-400 via-orange-300 to-rose-300";
+    const Icon =
+      importProcessState.status === "success"
+        ? CheckCircle2
+        : importProcessState.status === "blocked" || importProcessState.status === "error"
+          ? CircleAlert
+          : LoaderCircle;
+
+    return (
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/28 px-4 backdrop-blur-[2px]">
+        <Card className="w-full max-w-lg overflow-hidden border border-slate-700/70 bg-[#12161c] text-white shadow-[0_30px_80px_rgba(15,23,42,0.45)]">
+          <div className="space-y-5 p-5 md:p-6">
+            <div className="flex items-start gap-4">
+              <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border ${iconTone}`}>
+                <Icon className={`h-7 w-7 ${busy ? "animate-spin" : ""}`} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className="rounded-full border-white/10 bg-white/5 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-slate-200"
+                  >
+                    {entityLabel}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className="rounded-full border-white/10 bg-white/5 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-slate-400"
+                  >
+                    {importProcessState.mode === "preview" ? "preview backend" : "import final"}
+                  </Badge>
+                  {rowCount > 0 ? (
+                    <Badge
+                      variant="outline"
+                      className="rounded-full border-white/10 bg-white/5 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-slate-400"
+                    >
+                      {rowCount} baris
+                    </Badge>
+                  ) : null}
+                  <Badge
+                    variant="outline"
+                    className="rounded-full border-white/10 bg-white/5 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-slate-400"
+                  >
+                    {formatElapsedDuration(importProcessElapsedMs)}
+                  </Badge>
+                </div>
+                <p className="mt-3 font-sans text-2xl font-black tracking-[0.02em] text-white">
+                  {importProcessState.title}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">{importProcessState.description}</p>
+                <div className="mt-3 inline-flex max-w-full items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-slate-300">
+                  {phaseLabel}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="h-3 overflow-hidden rounded-full bg-white/10 ring-1 ring-inset ring-white/10">
+                <div
+                  className={`h-full rounded-full bg-gradient-to-r ${progressTone} transition-[width] duration-300 ease-out`}
+                  style={{ width: `${Math.max(importProcessState.progress, 8)}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-slate-400">
+                <span>{busy ? "sedang diproses" : "proses selesai"}</span>
+                <span>{Math.round(importProcessState.progress)}%</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {phaseTrack.map((phase) => (
+                <div
+                  key={phase.label}
+                  className={`rounded-xl border px-3 py-2 text-center font-mono text-[10px] uppercase tracking-[0.14em] transition-all duration-300 ${
+                    phase.state === "done"
+                      ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"
+                      : phase.state === "active"
+                        ? "border-sky-400/35 bg-sky-400/12 text-sky-100 shadow-[0_0_0_1px_rgba(56,189,248,0.12)]"
+                        : "border-white/10 bg-white/[0.03] text-slate-500"
+                  }`}
+                >
+                  {phase.label}
+                </div>
+              ))}
+            </div>
+
+            {importProcessState.summary ? (
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <p className="font-mono text-xs uppercase tracking-[0.14em] text-slate-400">Ringkasan</p>
+                <p className="mt-2 font-sans text-lg font-black text-white">{importProcessState.summary}</p>
+              </div>
+            ) : null}
+
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
+              {busy
+                ? "Jangan tutup, refresh, atau klik ulang tombol proses selama backend masih bekerja."
+                : "Panel hasil import di bawah sudah ikut diperbarui."}
+            </p>
+
+            {!busy ? (
+              <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center sm:justify-end">
+                {canOpenResult ? (
+                  <Button
+                    type="button"
+                    className="bg-white text-slate-950 hover:bg-slate-100"
+                    onClick={() => focusImportResults(importProcessState.entity)}
+                  >
+                    <Search className="mr-2 h-4 w-4" />
+                    {importProcessState.status === "blocked" ? "Lihat Baris Gagal" : "Lihat Hasil"}
+                  </Button>
+                ) : null}
+                {canDownloadAudit ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-white/15 bg-white/5 text-white hover:bg-white/10"
+                    onClick={() => downloadCurrentImportAudit(importProcessState.entity)}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Unduh Audit
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-slate-300 hover:bg-white/5 hover:text-white"
+                  onClick={dismissImportProcessOverlay}
+                >
+                  Tutup
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   function getVisibleGroupActions(group: DataToolsGroupConfig, primaryTab: DataToolsPrimaryTab) {
     return group.actions.filter((action) => {
       if (primaryTab === "import") {
@@ -645,7 +1180,7 @@ export default function BackofficeDataTools() {
               <DropdownMenuItem
                 key={item.label}
                 className="font-mono text-xs"
-                onSelect={() => openCsvExport(item.href)}
+            onSelect={() => openDownload(item.href)}
               >
                 {item.label}
               </DropdownMenuItem>
@@ -660,7 +1195,7 @@ export default function BackofficeDataTools() {
         key={`${entityConfig.entity}-${action.label}-${index}`}
         variant="outline"
         className="w-full justify-start font-mono text-xs font-bold"
-        onClick={() => action.href && openCsvExport(action.href)}
+                  onClick={() => action.href && openDownload(action.href)}
       >
         <Icon className="mr-2 h-4 w-4" />
         {action.label}
@@ -677,7 +1212,7 @@ export default function BackofficeDataTools() {
           <div>
             <p className="font-sans text-sm font-black uppercase tracking-[0.12em] text-red-900">Reset Data Import</p>
             <p className="mt-1 text-sm text-red-900/75">
-              Menghapus data {ENTITY_LABELS[entity]} yang dibuat lewat import CSV. Aman untuk cleanup duplikat hasil trial import.
+            Menghapus data {ENTITY_LABELS[entity]} yang dibuat lewat import Excel. Aman untuk cleanup duplikat hasil trial import.
             </p>
           </div>
           <Button
@@ -716,7 +1251,7 @@ export default function BackofficeDataTools() {
       {
         step: 3,
         title: "LANGKAH 3: Pilih File",
-        body: "Pilih file CSV dari komputer untuk memunculkan preview lokal dan siap divalidasi.",
+        body: "Pilih file Excel dari komputer untuk memunculkan preview sheet lokal dan siap divalidasi.",
         icon: Upload,
       },
       {
@@ -744,7 +1279,7 @@ export default function BackofficeDataTools() {
     const illustrationCaptionMap: Record<TutorialStep, string> = {
       1: "Pilih konteks kerja dulu supaya sample, file, dan hasil validasi tidak tertukar antara WP dan OP.",
       2: "Unduh sample sesuai entitas yang dipilih kalau operator belum punya format file yang benar.",
-      3: "Pilih satu file CSV dari komputer untuk memunculkan preview lokal dan menyiapkan dry-run.",
+      3: "Pilih satu file Excel dari komputer untuk memunculkan preview sheet lokal dan menyiapkan dry-run.",
       4: "Pada langkah ini operator melihat preview file dan simulasi hasil import dalam satu alur kerja.",
       5: "Kalau hasil preview sudah bersih, lanjutkan ke import final agar data ditambah atau diperbarui di sistem.",
     };
@@ -757,8 +1292,8 @@ export default function BackofficeDataTools() {
     };
     const illustrationChipMap: Record<TutorialStep, string[]> = {
       1: ["pilih lane", "wp", "op"],
-      2: ["sample csv", "header siap", "format aman"],
-      3: ["file lokal", "csv upload", "preview awal"],
+      2: ["sample excel", "sheet siap", "format aman"],
+      3: ["file excel", "xlsx upload", "preview awal"],
       4: ["preview lokal", "dry-run", "audit hasil"],
       5: ["created", "updated", "skipped", "failed"],
     };
@@ -785,7 +1320,7 @@ export default function BackofficeDataTools() {
           : tutorialStep === 4
               ? "Jalankan preview dan validasi untuk melihat simulasi hasil import."
               : tutorialStep === 3
-                ? "Pilih file CSV dari komputer untuk melanjutkan."
+                ? "Pilih file Excel dari komputer untuk melanjutkan."
                 : tutorialStep === 2
                   ? "Download sample sesuai entitas aktif atau skip kalau file sudah siap."
                   : "Mulai dengan memilih entitas WP atau OP.";
@@ -938,6 +1473,7 @@ export default function BackofficeDataTools() {
                   type="button"
                   variant={activeTutorialEntity === entity ? "default" : "outline"}
                   className={actionClass}
+                  disabled={isProcessBusy}
                   onClick={() => {
                     setActiveTutorialEntity(entity);
                     setTutorialStep(2);
@@ -960,7 +1496,7 @@ export default function BackofficeDataTools() {
                 type="button"
                 variant="outline"
                 className={actionClass}
-                disabled={!activeTutorialEntity}
+                disabled={!activeTutorialEntity || isProcessBusy}
                 onClick={() => activeTutorialEntity && handleTutorialDownloadSample(activeTutorialEntity)}
               >
                 <Download className="mr-2 h-3.5 w-3.5" />
@@ -980,7 +1516,7 @@ export default function BackofficeDataTools() {
                 type="button"
                 variant="outline"
                 className={actionClass}
-                disabled={!activeTutorialEntity}
+                disabled={!activeTutorialEntity || isProcessBusy}
                 onClick={() => activeTutorialEntity && beginFileAction(activeTutorialEntity)}
               >
                 <Upload className="mr-2 h-3.5 w-3.5" />
@@ -1000,7 +1536,7 @@ export default function BackofficeDataTools() {
                 type="button"
                 variant="outline"
                 className={actionClass}
-                disabled={!selectedPreviewEntity || !selectedPreviewState}
+                disabled={!selectedPreviewEntity || !selectedPreviewState || isProcessBusy}
                 onClick={() => {
                   if (!selectedPreviewEntity || !selectedPreviewState) return;
                   setActiveTutorialEntity(selectedPreviewEntity);
@@ -1015,7 +1551,7 @@ export default function BackofficeDataTools() {
                 type="button"
                 variant="ghost"
                 className={`${actionClass} text-slate-600 hover:text-slate-950`}
-                disabled={!selectedPreviewEntity}
+                disabled={!selectedPreviewEntity || isProcessBusy}
                 onClick={() => selectedPreviewEntity && beginFileAction(selectedPreviewEntity)}
               >
                 Ganti File
@@ -1027,6 +1563,8 @@ export default function BackofficeDataTools() {
       }
 
       const hasPreviewValidation = selectedResultState?.source === "live" && selectedResultState.mode === "preview";
+      const canRunFinalImport =
+        !!selectedPreviewEntity && !!selectedPreviewState && isCurrentPreviewReadyForImport(selectedPreviewEntity);
 
       return (
         <>
@@ -1034,7 +1572,7 @@ export default function BackofficeDataTools() {
             <Button
               type="button"
               className={actionClass}
-              disabled={!selectedPreviewEntity || !selectedPreviewState}
+              disabled={!canRunFinalImport || isProcessBusy}
               onClick={() => selectedPreviewEntity && requestImportConfirmation(selectedPreviewEntity)}
             >
               <Database className="mr-2 h-3.5 w-3.5" />
@@ -1045,7 +1583,7 @@ export default function BackofficeDataTools() {
                 type="button"
                 variant="outline"
                 className={actionClass}
-                disabled={!selectedPreviewEntity || !selectedPreviewState}
+                disabled={!selectedPreviewEntity || !selectedPreviewState || isProcessBusy}
                 onClick={() => {
                   if (!selectedPreviewEntity || !selectedPreviewState) return;
                   setActiveTutorialEntity(selectedPreviewEntity);
@@ -1285,7 +1823,7 @@ export default function BackofficeDataTools() {
                         </div>
                       ) : (
                         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 font-mono text-[10px] uppercase tracking-[0.14em] text-slate-700">
-                          {tutorialStep === 2 ? "sample csv" : "file csv lokal"}
+                          {tutorialStep === 2 ? "sample excel" : "file excel lokal"}
                         </div>
                       )}
                     </div>
@@ -1348,7 +1886,7 @@ export default function BackofficeDataTools() {
         step: 3,
         title: "LANGKAH 3: Pilih File",
         shortLabel: "File",
-        body: "Pilih file CSV dari komputer untuk memunculkan preview lokal dan siap divalidasi.",
+        body: "Pilih file Excel dari komputer untuk memunculkan preview sheet lokal dan siap divalidasi.",
         icon: Upload,
       },
       {
@@ -1391,7 +1929,7 @@ export default function BackofficeDataTools() {
             : tutorialStep === 4
               ? "Jalankan simulasi import tanpa menyimpan data ke sistem."
               : tutorialStep === 3
-                ? "Pilih satu file CSV untuk konteks aktif, lalu validasi."
+                ? "Pilih satu file Excel untuk konteks aktif, lalu validasi."
                 : tutorialStep === 2
                   ? "Unduh sample jika perlu, atau lanjutkan bila file sudah siap."
                   : "Mulai dengan memilih entitas kerja lebih dulu.";
@@ -1538,6 +2076,7 @@ export default function BackofficeDataTools() {
                     ? "bg-slate-950 text-white hover:bg-slate-950"
                     : "border-slate-300 bg-white text-slate-700"
                 }`}
+                disabled={isProcessBusy}
                 onClick={() => {
                   setActiveTutorialEntity(entity);
                   setTutorialStep(2);
@@ -1558,7 +2097,7 @@ export default function BackofficeDataTools() {
                 type="button"
                 variant="outline"
                 className={actionClass}
-                disabled={!activeTutorialEntity}
+                disabled={!activeTutorialEntity || isProcessBusy}
                 onClick={() => activeTutorialEntity && handleTutorialDownloadSample(activeTutorialEntity)}
               >
                 <Download className="mr-2 h-3.5 w-3.5" />
@@ -1568,7 +2107,7 @@ export default function BackofficeDataTools() {
                 type="button"
                 variant="ghost"
                 className={`${actionClass} text-slate-600 hover:text-slate-950`}
-                disabled={!activeTutorialEntity}
+                disabled={!activeTutorialEntity || isProcessBusy}
                 onClick={goToNextStep}
               >
                 Skip Sample
@@ -1587,7 +2126,7 @@ export default function BackofficeDataTools() {
                 type="button"
                 variant="outline"
                 className={actionClass}
-                disabled={!activeTutorialEntity}
+                disabled={!activeTutorialEntity || isProcessBusy}
                 onClick={() => activeTutorialEntity && beginFileAction(activeTutorialEntity)}
               >
                 <Upload className="mr-2 h-3.5 w-3.5" />
@@ -1607,7 +2146,7 @@ export default function BackofficeDataTools() {
                 type="button"
                 variant="outline"
                 className={actionClass}
-                disabled={!selectedPreviewEntity || !selectedPreviewState}
+                disabled={!selectedPreviewEntity || !selectedPreviewState || isProcessBusy}
                 onClick={() => {
                   if (!selectedPreviewEntity || !selectedPreviewState) return;
                   setActiveTutorialEntity(selectedPreviewEntity);
@@ -1622,7 +2161,7 @@ export default function BackofficeDataTools() {
                 type="button"
                 variant="ghost"
                 className={`${actionClass} text-slate-600 hover:text-slate-950`}
-                disabled={!selectedPreviewEntity}
+                disabled={!selectedPreviewEntity || isProcessBusy}
                 onClick={() => selectedPreviewEntity && beginFileAction(selectedPreviewEntity)}
               >
                 Ganti File
@@ -1634,6 +2173,8 @@ export default function BackofficeDataTools() {
       }
 
       const hasPreviewValidation = selectedResultState?.source === "live" && selectedResultState.mode === "preview";
+      const canRunFinalImport =
+        !!selectedPreviewEntity && !!selectedPreviewState && isCurrentPreviewReadyForImport(selectedPreviewEntity);
 
       return (
         <>
@@ -1641,7 +2182,7 @@ export default function BackofficeDataTools() {
             <Button
               type="button"
               className={actionClass}
-              disabled={!selectedPreviewEntity || !selectedPreviewState}
+              disabled={!canRunFinalImport || isProcessBusy}
               onClick={() => selectedPreviewEntity && requestImportConfirmation(selectedPreviewEntity)}
             >
               <Database className="mr-2 h-3.5 w-3.5" />
@@ -1652,7 +2193,7 @@ export default function BackofficeDataTools() {
                 type="button"
                 variant="outline"
                 className={actionClass}
-                disabled={!selectedPreviewEntity || !selectedPreviewState}
+                disabled={!selectedPreviewEntity || !selectedPreviewState || isProcessBusy}
                 onClick={() => {
                   if (!selectedPreviewEntity || !selectedPreviewState) return;
                   setActiveTutorialEntity(selectedPreviewEntity);
@@ -1774,7 +2315,7 @@ export default function BackofficeDataTools() {
           <p className="font-sans text-sm font-black uppercase tracking-[0.12em] text-blue-950">Preview File Lokal</p>
           <p className="mt-1 text-sm text-blue-950/75">
             File <span className="font-mono font-bold">{preview.fileName}</span> berisi {preview.totalRows} baris data.
-            Periksa kolom dan contoh baris di bawah, lalu lanjutkan langkah berikutnya dari wizard di atas.
+            Periksa kolom sheet dan contoh baris di bawah, lalu lanjutkan langkah berikutnya dari wizard di atas.
           </p>
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -1917,7 +2458,7 @@ export default function BackofficeDataTools() {
                 ? "Snapshot lokal dari histori browser. Ringkasan ini bisa dipakai untuk audit cepat, tetapi tombol unduh koreksi dinonaktifkan."
                 : result.mode === "preview"
                 ? "Validasi selesai tanpa menyimpan data. Lanjutkan ke import final jika hasilnya sudah bersih."
-                : "Ringkasan import terakhir. Jika masih ada baris gagal, unduh CSV error untuk koreksi file sumber."}
+                : "Ringkasan import terakhir. Jika masih ada baris gagal, unduh file error untuk koreksi file sumber."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1949,12 +2490,12 @@ export default function BackofficeDataTools() {
                 <DropdownMenuContent align="end" className="w-56 border border-black">
                   {result.previewRows.length > 0 ? (
                     <DropdownMenuItem className="font-mono text-xs" onSelect={() => downloadImportAuditReport(entity, result)}>
-                      Download Report CSV
+                      Download Report
                     </DropdownMenuItem>
                   ) : null}
                   {result.errors.length > 0 ? (
                     <DropdownMenuItem className="font-mono text-xs" onSelect={() => downloadImportErrors(entity, result)}>
-                      Download CSV Error
+                      Download Error File
                     </DropdownMenuItem>
                   ) : null}
                   {result.errors.length > 0 ? (
@@ -2195,7 +2736,7 @@ export default function BackofficeDataTools() {
               </Badge>
             </div>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-700">
-              Pilih keluaran CSV per entitas tanpa membuka workflow import. Semua aksi export dikemas sebagai katalog yang lebih padat.
+              Pilih keluaran export per entitas tanpa membuka workflow import. Semua aksi export dikemas sebagai katalog yang lebih padat.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -2467,7 +3008,7 @@ export default function BackofficeDataTools() {
         renderLocalFilePreview(activeEntity)
       ) : renderImportWorkspaceEmptyState(
           "Belum Ada File Lokal",
-          `Pilih file CSV ${ENTITY_LABELS[activeEntity]} dari wizard di atas untuk mulai menampilkan preview kolom lokal dan melanjutkan ke validasi backend.`,
+          `Pilih file Excel ${ENTITY_LABELS[activeEntity]} dari wizard di atas untuk mulai menampilkan preview sheet lokal dan melanjutkan ke validasi backend.`,
         );
     }
 
@@ -2588,7 +3129,7 @@ export default function BackofficeDataTools() {
                     </Badge>
                   </div>
                   <p className="mt-1 text-sm text-slate-600">
-                    Alat CSV untuk workflow import SIMPATDA dan export operasional backoffice.
+                    Alat import Excel SIMPATDA dan export operasional backoffice.
                   </p>
                 </div>
               </div>
@@ -2598,7 +3139,7 @@ export default function BackofficeDataTools() {
                     variant="outline"
                     className="rounded-full border-slate-200 bg-slate-50 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-slate-600"
                   >
-                    CSV
+                    XLSX
                   </Badge>
                   <Badge
                     variant="outline"
@@ -2632,7 +3173,7 @@ export default function BackofficeDataTools() {
             key={`hidden-input-${entityConfig.entity}`}
             ref={fileRefs[entityConfig.entity]}
             type="file"
-            accept=".csv"
+            accept=".xlsx,.xls"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -2736,12 +3277,12 @@ export default function BackofficeDataTools() {
               <AlertDialogTitle>Konfirmasi Reset Data Import</AlertDialogTitle>
               <AlertDialogDescription>
                 {pendingResetConfirmation
-                  ? `Aksi ini akan menghapus data ${ENTITY_LABELS[pendingResetConfirmation.entity]} yang dibuat lewat import CSV.${
+                  ? `Aksi ini akan menghapus data ${ENTITY_LABELS[pendingResetConfirmation.entity]} yang dibuat lewat import Excel.${
                       pendingResetConfirmation.entity === "wajib-pajak"
                         ? " OP yang terkait ke WP import tersebut juga akan ikut dibersihkan."
                         : ""
                     }`
-                  : "Aksi ini akan menghapus data hasil import CSV."}
+                  : "Aksi ini akan menghapus data hasil import Excel."}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -2755,6 +3296,7 @@ export default function BackofficeDataTools() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        {renderImportProcessOverlay()}
       </div>
     </BackofficeLayout>
   );

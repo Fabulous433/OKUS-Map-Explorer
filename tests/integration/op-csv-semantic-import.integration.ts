@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { stringify } from "csv-stringify/sync";
 
 import { createIntegrationServer, requiredNumber, requiredString, type JsonRecord } from "./_helpers";
+import { buildExcelBlob } from "./_excel";
 
 async function run() {
   const server = await createIntegrationServer();
@@ -47,21 +47,22 @@ async function run() {
     const kodeRekening = requiredString(rekeningMakanan?.kodeRekening, "kode rekening wajib ada");
 
     const importName = `IT Semantic OP ${Date.now()}`;
-    const csvPayload = stringify(
-      [
-        {
-          npwpd: semanticNpwpd,
-          no_rek_pajak: kodeRekening,
-          nama_op: importName,
-          alamat_op: "Batu Belang Jaya",
-          kecamatan_id: "1609040",
-          kelurahan_id: "1609040001",
-          status: "active",
-        },
-      ],
-      {
-        header: true,
-        columns: [
+    const form = new FormData();
+    form.append(
+      "file",
+      buildExcelBlob(
+        [
+          {
+            npwpd: semanticNpwpd,
+            no_rek_pajak: kodeRekening,
+            nama_op: importName,
+            alamat_op: "Batu Belang Jaya",
+            kecamatan_id: "1609040",
+            kelurahan_id: "1609040001",
+            status: "active",
+          },
+        ],
+        [
           "npwpd",
           "no_rek_pajak",
           "nama_op",
@@ -70,11 +71,9 @@ async function run() {
           "kelurahan_id",
           "status",
         ],
-      },
+      ),
+      "op-semantic-import.xlsx",
     );
-
-    const form = new FormData();
-    form.append("file", new Blob([csvPayload], { type: "text/csv" }), "op-semantic-import.csv");
 
     const { response: importResponse, body: importBodyRaw } = await requestJson("/api/objek-pajak/import", {
       method: "POST",

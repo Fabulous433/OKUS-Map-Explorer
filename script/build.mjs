@@ -60,10 +60,10 @@ async function buildAll() {
   });
 
   await mkdir("dist/docs/samples", { recursive: true });
-  await copyFile("docs/samples/simpatda-wp-import-sample.csv", "dist/docs/samples/simpatda-wp-import-sample.csv");
+  await copyFile("docs/samples/simpatda-wp-import-sample.xlsx", "dist/docs/samples/simpatda-wp-import-sample.xlsx");
   await copyFile(
-    "docs/samples/simpatda-op-pbjt-makanan-import-sample.csv",
-    "dist/docs/samples/simpatda-op-pbjt-makanan-import-sample.csv",
+    "docs/samples/simpatda-op-import-sample.xlsx",
+    "dist/docs/samples/simpatda-op-import-sample.xlsx",
   );
 }
 

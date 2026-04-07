@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { parse } from "csv-parse/sync";
-import { stringify } from "csv-stringify/sync";
 
 import { createIntegrationServer, requiredNumber, requiredString, type JsonRecord } from "./_helpers";
+import { buildExcelBlob } from "./_excel";
 
 const OP_CSV_COLUMNS = [
   "nopd",
@@ -65,7 +65,7 @@ async function run() {
   const { requestJson, requestText, requestForm, jsonRequest, loginAs } = server;
 
   let sourceId: number | null = null;
-  let importedId: number | null = null;
+  const importedIds: number[] = [];
   let attachmentId: string | null = null;
 
   try {
@@ -207,13 +207,8 @@ async function run() {
       alamat_op: "Jl. CSV Imported",
     };
 
-    const csvPayload = stringify([importRow], {
-      header: true,
-      columns: [...OP_CSV_COLUMNS],
-    });
-
     const form = new FormData();
-    form.append("file", new Blob([csvPayload], { type: "text/csv" }), "op-import.csv");
+    form.append("file", buildExcelBlob([importRow], [...OP_CSV_COLUMNS]), "op-import.xlsx");
 
     const { response: importResponse, body: importBodyRaw } = await requestJson("/api/objek-pajak/import", {
       method: "POST",
@@ -232,51 +227,71 @@ async function run() {
 
     const imported = ((listAfter.body as JsonRecord).items as JsonRecord[]).find((item) => item.namaOp === importName);
     assert.ok(imported, "Data hasil import harus ada");
-    importedId = requiredNumber(imported.id, "imported id wajib ada");
+    const importedId = requiredNumber(imported.id, "imported id wajib ada");
+    importedIds.push(importedId);
     assert.equal(imported.rekPajakId, rekPajakId);
     assert.match(requiredString(imported.nopd, "NOPD hasil import wajib ada"), /^\d{2}\.\d{2}\.\d{2}\.\d{4}$/);
     assert.equal("namaObjek" in imported, false);
     assert.equal("alamat" in imported, false);
 
-    const invalidLegacyRow: Record<string, string> = {
+    const legacyNopdRow: Record<string, string> = {
       ...sourceRow,
-      nopd: "OP.321.001.2026",
-      nama_op: `IT CSV Invalid Legacy ${Date.now()}`,
-      alamat_op: "Jl. CSV Invalid Legacy",
+      nopd: "19.99.99.2026",
+      nama_op: `IT Excel Legacy NOPD ${Date.now()}`,
+      alamat_op: "Jl. Excel Legacy NOPD",
     };
 
-    const invalidCsvPayload = stringify([invalidLegacyRow], {
-      header: true,
-      columns: [...OP_CSV_COLUMNS],
-    });
+    const legacyDryRunForm = new FormData();
+    legacyDryRunForm.append("file", buildExcelBlob([legacyNopdRow], [...OP_CSV_COLUMNS]), "op-import-legacy-dry-run.xlsx");
+    legacyDryRunForm.append("dryRun", "true");
 
-    const invalidForm = new FormData();
-    invalidForm.append("file", new Blob([invalidCsvPayload], { type: "text/csv" }), "op-import-invalid.csv");
-
-    const { response: invalidImportResponse, body: invalidImportBodyRaw } = await requestJson("/api/objek-pajak/import", {
+    const { response: legacyDryRunResponse, body: legacyDryRunBodyRaw } = await requestJson("/api/objek-pajak/import", {
       method: "POST",
-      body: invalidForm,
+      body: legacyDryRunForm,
     });
-    const invalidImportBody = (invalidImportBodyRaw ?? {}) as JsonRecord;
-    assert.equal(invalidImportResponse.status, 200);
-    assert.equal(invalidImportBody.total, 1);
-    assert.equal(invalidImportBody.success, 0);
-    assert.equal(invalidImportBody.failed, 1);
-    assert.ok(Array.isArray(invalidImportBody.errors));
+    const legacyDryRunBody = (legacyDryRunBodyRaw ?? {}) as JsonRecord;
+    assert.equal(legacyDryRunResponse.status, 200);
+    assert.equal(legacyDryRunBody.total, 1);
+    assert.equal(legacyDryRunBody.success, 1);
+    assert.equal(legacyDryRunBody.failed, 0);
     assert.ok(
-      ((invalidImportBody.errors as unknown[]) ?? []).some(
+      ((legacyDryRunBody.warnings as unknown[]) ?? []).some(
         (item) =>
           typeof item === "string" &&
-          item.includes("Format NOPD salah, mohon diperiksa kembali"),
+          item.includes("NOPD") &&
+          item.includes("diabaikan"),
       ),
-      "Import harus melaporkan format NOPD lama sebagai error yang jelas",
+      "Dry-run harus memberi warning saat NOPD lama diabaikan",
     );
+
+    const legacyFinalForm = new FormData();
+    legacyFinalForm.append("file", buildExcelBlob([legacyNopdRow], [...OP_CSV_COLUMNS]), "op-import-legacy.xlsx");
+    const { response: legacyImportResponse, body: legacyImportBodyRaw } = await requestJson("/api/objek-pajak/import", {
+      method: "POST",
+      body: legacyFinalForm,
+    });
+    const legacyImportBody = (legacyImportBodyRaw ?? {}) as JsonRecord;
+    assert.equal(legacyImportResponse.status, 200);
+    assert.equal(legacyImportBody.total, 1);
+    assert.equal(legacyImportBody.success, 1);
+    assert.equal(legacyImportBody.failed, 0);
+
+    const listAfterLegacyImport = await requestJson("/api/objek-pajak?includeUnverified=true");
+    assert.equal(listAfterLegacyImport.response.status, 200);
+    const importedLegacy = (((listAfterLegacyImport.body as JsonRecord).items ?? []) as JsonRecord[]).find(
+      (item) => item.namaOp === legacyNopdRow.nama_op,
+    );
+    assert.ok(importedLegacy, "Data hasil import dengan NOPD lama harus tetap dibuat");
+    const importedLegacyId = requiredNumber(importedLegacy?.id, "id import legacy wajib ada");
+    importedIds.push(importedLegacyId);
+    assert.match(requiredString(importedLegacy?.nopd, "NOPD hasil import legacy wajib ada"), /^\d{2}\.\d{2}\.\d{2}\.\d{4}$/);
+    assert.notEqual(importedLegacy?.nopd, legacyNopdRow.nopd, "NOPD lama harus diabaikan dan diganti sistem");
   } finally {
     if (attachmentId !== null && sourceId !== null) {
       await jsonRequest(`/api/objek-pajak/${sourceId}/attachments/${attachmentId}`, "DELETE");
     }
 
-    if (importedId !== null) {
+    for (const importedId of importedIds.reverse()) {
       await jsonRequest(`/api/objek-pajak/${importedId}`, "DELETE");
     }
 
@@ -290,10 +305,10 @@ async function run() {
 
 run()
   .then(() => {
-    console.log("[integration] OP CSV round-trip final contract: PASS");
+    console.log("[integration] OP Excel import + CSV export contract: PASS");
   })
   .catch((error) => {
-    console.error("[integration] OP CSV round-trip final contract: FAIL");
+    console.error("[integration] OP Excel import + CSV export contract: FAIL");
     console.error(error);
     process.exitCode = 1;
   });

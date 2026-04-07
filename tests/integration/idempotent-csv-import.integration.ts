@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { stringify } from "csv-stringify/sync";
 
 import { createIntegrationServer, requiredNumber, requiredString, type JsonRecord } from "./_helpers";
+import { buildExcelBlob } from "./_excel";
 
 async function run() {
   const server = await createIntegrationServer();
@@ -38,34 +38,31 @@ async function run() {
     });
     assert.equal(wpPatchNpwpd.response.status, 200);
 
-    const wpUpdateCsv = stringify(
-      [
-        {
-          jenis_wp: "orang_pribadi",
-          peran_wp: "pemilik",
-          npwpd: wpNpwpd,
-          status_aktif: "active",
-          nama_subjek: wpBaseName,
-          nik_subjek: "",
-          alamat_subjek: "Jl. Update WP",
-          kecamatan_subjek: "Muaradua",
-          kelurahan_subjek: "Batu Belang Jaya",
-          telepon_wa_subjek: "081200000009",
-          email_subjek: "",
-          nama_badan_usaha: "",
-          npwp_badan_usaha: "",
-          alamat_badan_usaha: "",
-          kecamatan_badan_usaha: "",
-          kelurahan_badan_usaha: "",
-          telepon_badan_usaha: "",
-          email_badan_usaha: "",
-        },
-      ],
-      { header: true },
-    );
+    const wpUpdateSheet = [
+      {
+        jenis_wp: "orang_pribadi",
+        peran_wp: "pemilik",
+        npwpd: wpNpwpd,
+        status_aktif: "active",
+        nama_subjek: wpBaseName,
+        nik_subjek: "",
+        alamat_subjek: "Jl. Update WP",
+        kecamatan_subjek: "Muaradua",
+        kelurahan_subjek: "Batu Belang Jaya",
+        telepon_wa_subjek: "081200000009",
+        email_subjek: "",
+        nama_badan_usaha: "",
+        npwp_badan_usaha: "",
+        alamat_badan_usaha: "",
+        kecamatan_badan_usaha: "",
+        kelurahan_badan_usaha: "",
+        telepon_badan_usaha: "",
+        email_badan_usaha: "",
+      },
+    ];
 
     const wpUpdateDryRunForm = new FormData();
-    wpUpdateDryRunForm.append("file", new Blob([wpUpdateCsv], { type: "text/csv" }), "wp-update-dry-run.csv");
+    wpUpdateDryRunForm.append("file", buildExcelBlob(wpUpdateSheet), "wp-update-dry-run.xlsx");
     wpUpdateDryRunForm.append("dryRun", "true");
 
     const wpUpdateDryRun = await requestJson("/api/wajib-pajak/import", {
@@ -82,7 +79,7 @@ async function run() {
     assert.equal(wpUpdatePreviewRows[0]?.action, "updated");
 
     const wpUpdateForm = new FormData();
-    wpUpdateForm.append("file", new Blob([wpUpdateCsv], { type: "text/csv" }), "wp-update.csv");
+    wpUpdateForm.append("file", buildExcelBlob(wpUpdateSheet), "wp-update.xlsx");
 
     const wpUpdateFinal = await requestJson("/api/wajib-pajak/import", {
       method: "POST",
@@ -95,33 +92,30 @@ async function run() {
     assert.equal((wpAfterUpdate.body as JsonRecord).alamatWp, "Jl. Update WP");
     assert.equal((wpAfterUpdate.body as JsonRecord).teleponWaWp, "081200000009");
 
-    const wpSkipCsv = stringify(
-      [
-        {
-          jenis_wp: "orang_pribadi",
-          peran_wp: "pemilik",
-          npwpd: wpNpwpd,
-          status_aktif: "active",
-          nama_subjek: "",
-          nik_subjek: "",
-          alamat_subjek: "",
-          kecamatan_subjek: "",
-          kelurahan_subjek: "",
-          telepon_wa_subjek: "",
-          email_subjek: "",
-          nama_badan_usaha: "",
-          npwp_badan_usaha: "",
-          alamat_badan_usaha: "",
-          kecamatan_badan_usaha: "",
-          kelurahan_badan_usaha: "",
-          telepon_badan_usaha: "",
-          email_badan_usaha: "",
-        },
-      ],
-      { header: true },
-    );
+    const wpSkipSheet = [
+      {
+        jenis_wp: "orang_pribadi",
+        peran_wp: "pemilik",
+        npwpd: wpNpwpd,
+        status_aktif: "active",
+        nama_subjek: "",
+        nik_subjek: "",
+        alamat_subjek: "",
+        kecamatan_subjek: "",
+        kelurahan_subjek: "",
+        telepon_wa_subjek: "",
+        email_subjek: "",
+        nama_badan_usaha: "",
+        npwp_badan_usaha: "",
+        alamat_badan_usaha: "",
+        kecamatan_badan_usaha: "",
+        kelurahan_badan_usaha: "",
+        telepon_badan_usaha: "",
+        email_badan_usaha: "",
+      },
+    ];
     const wpSkipForm = new FormData();
-    wpSkipForm.append("file", new Blob([wpSkipCsv], { type: "text/csv" }), "wp-skip.csv");
+    wpSkipForm.append("file", buildExcelBlob(wpSkipSheet), "wp-skip.xlsx");
     wpSkipForm.append("dryRun", "true");
 
     const wpSkipDryRun = await requestJson("/api/wajib-pajak/import", {
@@ -135,34 +129,78 @@ async function run() {
     const wpSkipPreviewRows = ((wpSkipDryRun.body as JsonRecord).previewRows ?? []) as JsonRecord[];
     assert.equal(wpSkipPreviewRows[0]?.action, "skipped");
 
-    const wpWarningName = `IT Warning WP ${Date.now()}`;
-    const wpWarningCsv = stringify(
-      [
-        {
-          jenis_wp: "orang_pribadi",
-          peran_wp: "pemilik",
-          npwpd: "",
-          status_aktif: "active",
-          nama_subjek: wpWarningName,
-          nik_subjek: (wpAfterUpdate.body as JsonRecord).nikKtpWp,
-          alamat_subjek: "Jl. Warning WP",
-          kecamatan_subjek: "Muaradua",
-          kelurahan_subjek: "Batu Belang Jaya",
-          telepon_wa_subjek: "081200000010",
-          email_subjek: "",
-          nama_badan_usaha: "",
-          npwp_badan_usaha: "",
-          alamat_badan_usaha: "",
-          kecamatan_badan_usaha: "",
-          kelurahan_badan_usaha: "",
-          telepon_badan_usaha: "",
-          email_badan_usaha: "",
-        },
-      ],
-      { header: true },
+    const wpOrangPribadiInvalidSheet = [
+      {
+        jenis_wp: "orang_pribadi",
+        peran_wp: "pemilik",
+        npwpd: "",
+        status_aktif: "active",
+        nama_subjek: `IT Invalid OP Field WP ${Date.now()}`,
+        nik_subjek: `1600000000${Date.now().toString().slice(-6)}`,
+        alamat_subjek: "Jl. Invalid WP",
+        kecamatan_subjek: "Muaradua",
+        kelurahan_subjek: "Batu Belang Jaya",
+        telepon_wa_subjek: "081200000099",
+        email_subjek: "",
+        nama_badan_usaha: "PT Tidak Boleh Ada",
+        npwp_badan_usaha: "010203040506",
+        alamat_badan_usaha: "",
+        kecamatan_badan_usaha: "",
+        kelurahan_badan_usaha: "",
+        telepon_badan_usaha: "",
+        email_badan_usaha: "",
+      },
+    ];
+    const wpOrangPribadiInvalidForm = new FormData();
+    wpOrangPribadiInvalidForm.append(
+      "file",
+      buildExcelBlob(wpOrangPribadiInvalidSheet),
+      "wp-orang-pribadi-invalid.xlsx",
     );
+    wpOrangPribadiInvalidForm.append("dryRun", "true");
+    const wpOrangPribadiInvalidDryRun = await requestJson("/api/wajib-pajak/import", {
+      method: "POST",
+      body: wpOrangPribadiInvalidForm,
+    });
+    assert.equal(wpOrangPribadiInvalidDryRun.response.status, 200);
+    assert.equal((wpOrangPribadiInvalidDryRun.body as JsonRecord).failed, 1);
+    const wpOrangPribadiPreviewRows = ((wpOrangPribadiInvalidDryRun.body as JsonRecord).previewRows ?? []) as JsonRecord[];
+    assert.equal(wpOrangPribadiPreviewRows[0]?.action, "failed");
+    assert.ok(
+      ((wpOrangPribadiPreviewRows[0]?.messages as unknown[]) ?? []).some(
+        (message) =>
+          typeof message === "string" &&
+          message.includes("nama_badan_usaha") &&
+          message.includes("npwp_badan_usaha") &&
+          message.includes("orang_pribadi"),
+      ),
+    );
+
+    const wpWarningName = `IT Warning WP ${Date.now()}`;
+    const wpWarningSheet = [
+      {
+        jenis_wp: "orang_pribadi",
+        peran_wp: "pemilik",
+        npwpd: "",
+        status_aktif: "active",
+        nama_subjek: wpWarningName,
+        nik_subjek: (wpAfterUpdate.body as JsonRecord).nikKtpWp,
+        alamat_subjek: "Jl. Warning WP",
+        kecamatan_subjek: "Muaradua",
+        kelurahan_subjek: "Batu Belang Jaya",
+        telepon_wa_subjek: "081200000010",
+        email_subjek: "",
+        nama_badan_usaha: "",
+        npwp_badan_usaha: "",
+        alamat_badan_usaha: "",
+        kecamatan_badan_usaha: "",
+        kelurahan_badan_usaha: "",
+        telepon_badan_usaha: "",
+        email_badan_usaha: "",
+      },
+    ];
     const wpWarningForm = new FormData();
-    wpWarningForm.append("file", new Blob([wpWarningCsv], { type: "text/csv" }), "wp-warning.csv");
+    wpWarningForm.append("file", buildExcelBlob(wpWarningSheet), "wp-warning.xlsx");
 
     const wpWarningImport = await requestJson("/api/wajib-pajak/import", {
       method: "POST",
@@ -185,33 +223,30 @@ async function run() {
 
     const importedWpName = `IT Imported With NPWPD ${Date.now()}`;
     const importedWpNpwpd = `ITNPWPDSTORE${Date.now()}`;
-    const wpCreateWithNpwpdCsv = stringify(
-      [
-        {
-          jenis_wp: "orang_pribadi",
-          peran_wp: "pemilik",
-          npwpd: importedWpNpwpd,
-          status_aktif: "active",
-          nama_subjek: importedWpName,
-          nik_subjek: `1600000000${Date.now().toString().slice(-6)}`,
-          alamat_subjek: "Jl. Imported NPWPD",
-          kecamatan_subjek: "Muaradua",
-          kelurahan_subjek: "Batu Belang Jaya",
-          telepon_wa_subjek: "081200000011",
-          email_subjek: "",
-          nama_badan_usaha: "",
-          npwp_badan_usaha: "",
-          alamat_badan_usaha: "",
-          kecamatan_badan_usaha: "",
-          kelurahan_badan_usaha: "",
-          telepon_badan_usaha: "",
-          email_badan_usaha: "",
-        },
-      ],
-      { header: true },
-    );
+    const wpCreateWithNpwpdSheet = [
+      {
+        jenis_wp: "orang_pribadi",
+        peran_wp: "pemilik",
+        npwpd: importedWpNpwpd,
+        status_aktif: "active",
+        nama_subjek: importedWpName,
+        nik_subjek: `1600000000${Date.now().toString().slice(-6)}`,
+        alamat_subjek: "Jl. Imported NPWPD",
+        kecamatan_subjek: "Muaradua",
+        kelurahan_subjek: "Batu Belang Jaya",
+        telepon_wa_subjek: "081200000011",
+        email_subjek: "",
+        nama_badan_usaha: "",
+        npwp_badan_usaha: "",
+        alamat_badan_usaha: "",
+        kecamatan_badan_usaha: "",
+        kelurahan_badan_usaha: "",
+        telepon_badan_usaha: "",
+        email_badan_usaha: "",
+      },
+    ];
     const wpCreateWithNpwpdForm = new FormData();
-    wpCreateWithNpwpdForm.append("file", new Blob([wpCreateWithNpwpdCsv], { type: "text/csv" }), "wp-create-with-npwpd.csv");
+    wpCreateWithNpwpdForm.append("file", buildExcelBlob(wpCreateWithNpwpdSheet), "wp-create-with-npwpd.xlsx");
     const wpCreateWithNpwpdImport = await requestJson("/api/wajib-pajak/import", {
       method: "POST",
       body: wpCreateWithNpwpdForm,
@@ -240,6 +275,41 @@ async function run() {
     const rekPajakId = requiredNumber(rekeningMakanan?.id, "rekening id wajib ada");
     const kodeRekening = requiredString(rekeningMakanan?.kodeRekening, "kode rekening wajib ada");
 
+    const invalidRestoranOpSheet = [
+      {
+        npwpd: wpNpwpd,
+        no_rek_pajak: kodeRekening,
+        nama_op: `IT Invalid Detail OP ${Date.now()}`,
+        alamat_op: "Jl. Invalid Detail OP",
+        kecamatan_id: "1609040",
+        kelurahan_id: "1609040001",
+        status: "active",
+        detail_jenis_usaha: "Restoran",
+        detail_kapasitas_tempat: "20",
+        detail_jumlah_karyawan: "5",
+      },
+    ];
+    const invalidRestoranOpForm = new FormData();
+    invalidRestoranOpForm.append("file", buildExcelBlob(invalidRestoranOpSheet), "op-invalid-detail.xlsx");
+    invalidRestoranOpForm.append("dryRun", "true");
+    const invalidRestoranOpDryRun = await requestJson("/api/objek-pajak/import", {
+      method: "POST",
+      body: invalidRestoranOpForm,
+    });
+    assert.equal(invalidRestoranOpDryRun.response.status, 200);
+    assert.equal((invalidRestoranOpDryRun.body as JsonRecord).failed, 1);
+    const invalidRestoranPreviewRows = ((invalidRestoranOpDryRun.body as JsonRecord).previewRows ?? []) as JsonRecord[];
+    assert.equal(invalidRestoranPreviewRows[0]?.action, "failed");
+    assert.ok(
+      ((invalidRestoranPreviewRows[0]?.messages as unknown[]) ?? []).some(
+        (message) =>
+          typeof message === "string" &&
+          message.includes("detail_klasifikasi") &&
+          message.includes("detail_jenis_usaha") &&
+          message.includes("Restoran"),
+      ),
+    );
+
     const opName = `IT Idempotent OP ${Date.now()}`;
     const createOp = await jsonRequest("/api/objek-pajak", "POST", {
       wpId: baseWpId,
@@ -260,23 +330,20 @@ async function run() {
     createdOpIds.push(baseOpId);
     const baseOpNopd = requiredString((createOp.body as JsonRecord).nopd, "nopd op dasar wajib ada");
 
-    const opUpdateCsv = stringify(
-      [
-        {
-          npwpd: wpNpwpd,
-          no_rek_pajak: kodeRekening,
-          nama_op: opName,
-          alamat_op: "Jl. Update OP",
-          kecamatan_id: "1609040",
-          kelurahan_id: "1609040001",
-          status: "inactive",
-        },
-      ],
-      { header: true },
-    );
+    const opUpdateSheet = [
+      {
+        npwpd: wpNpwpd,
+        no_rek_pajak: kodeRekening,
+        nama_op: opName,
+        alamat_op: "Jl. Update OP",
+        kecamatan_id: "1609040",
+        kelurahan_id: "1609040001",
+        status: "inactive",
+      },
+    ];
 
     const opUpdateDryRunForm = new FormData();
-    opUpdateDryRunForm.append("file", new Blob([opUpdateCsv], { type: "text/csv" }), "op-update-dry-run.csv");
+    opUpdateDryRunForm.append("file", buildExcelBlob(opUpdateSheet), "op-update-dry-run.xlsx");
     opUpdateDryRunForm.append("dryRun", "true");
     const opUpdateDryRun = await requestJson("/api/objek-pajak/import", {
       method: "POST",
@@ -291,7 +358,7 @@ async function run() {
     assert.equal(opUpdatePreviewRows[0]?.action, "updated");
 
     const opUpdateForm = new FormData();
-    opUpdateForm.append("file", new Blob([opUpdateCsv], { type: "text/csv" }), "op-update.csv");
+    opUpdateForm.append("file", buildExcelBlob(opUpdateSheet), "op-update.xlsx");
     const opUpdateFinal = await requestJson("/api/objek-pajak/import", {
       method: "POST",
       body: opUpdateForm,
@@ -303,22 +370,19 @@ async function run() {
     assert.equal((opAfterUpdate.body as JsonRecord).alamatOp, "Jl. Update OP");
     assert.equal((opAfterUpdate.body as JsonRecord).status, "inactive");
 
-    const opSkipCsv = stringify(
-      [
-        {
-          npwpd: wpNpwpd,
-          no_rek_pajak: kodeRekening,
-          nama_op: opName,
-          alamat_op: "",
-          kecamatan_id: "",
-          kelurahan_id: "",
-          status: "inactive",
-        },
-      ],
-      { header: true },
-    );
+    const opSkipSheet = [
+      {
+        npwpd: wpNpwpd,
+        no_rek_pajak: kodeRekening,
+        nama_op: opName,
+        alamat_op: "",
+        kecamatan_id: "",
+        kelurahan_id: "",
+        status: "inactive",
+      },
+    ];
     const opSkipForm = new FormData();
-    opSkipForm.append("file", new Blob([opSkipCsv], { type: "text/csv" }), "op-skip.csv");
+    opSkipForm.append("file", buildExcelBlob(opSkipSheet), "op-skip.xlsx");
     opSkipForm.append("dryRun", "true");
     const opSkipDryRun = await requestJson("/api/objek-pajak/import", {
       method: "POST",
@@ -348,23 +412,20 @@ async function run() {
     createdOpIds.push(conflictOpId);
     const conflictNopd = requiredString((createConflictOp.body as JsonRecord).nopd, "nopd conflict wajib ada");
 
-    const opConflictCsv = stringify(
-      [
-        {
-          nopd: conflictNopd,
-          npwpd: wpNpwpd,
-          no_rek_pajak: kodeRekening,
-          nama_op: opName,
-          alamat_op: "Jl. Konflik",
-          kecamatan_id: "1609040",
-          kelurahan_id: "1609040001",
-          status: "active",
-        },
-      ],
-      { header: true },
-    );
+    const opConflictSheet = [
+      {
+        nopd: conflictNopd,
+        npwpd: wpNpwpd,
+        no_rek_pajak: kodeRekening,
+        nama_op: opName,
+        alamat_op: "Jl. Konflik",
+        kecamatan_id: "1609040",
+        kelurahan_id: "1609040001",
+        status: "active",
+      },
+    ];
     const opConflictForm = new FormData();
-    opConflictForm.append("file", new Blob([opConflictCsv], { type: "text/csv" }), "op-conflict.csv");
+    opConflictForm.append("file", buildExcelBlob(opConflictSheet), "op-conflict.xlsx");
     opConflictForm.append("dryRun", "true");
     const opConflictDryRun = await requestJson("/api/objek-pajak/import", {
       method: "POST",
@@ -415,22 +476,19 @@ async function run() {
     assert.equal(createDuplicateOpB.response.status, 201);
     createdOpIds.push(requiredNumber((createDuplicateOpB.body as JsonRecord).id, "id op dup B wajib ada"));
 
-    const opMultiMatchCsv = stringify(
-      [
-        {
-          npwpd: wpNpwpd,
-          no_rek_pajak: kodeRekening,
-          nama_op: duplicateName,
-          alamat_op: "Jl. Duplicate Import",
-          kecamatan_id: "1609040",
-          kelurahan_id: "1609040001",
-          status: "active",
-        },
-      ],
-      { header: true },
-    );
+    const opMultiMatchSheet = [
+      {
+        npwpd: wpNpwpd,
+        no_rek_pajak: kodeRekening,
+        nama_op: duplicateName,
+        alamat_op: "Jl. Duplicate Import",
+        kecamatan_id: "1609040",
+        kelurahan_id: "1609040001",
+        status: "active",
+      },
+    ];
     const opMultiMatchForm = new FormData();
-    opMultiMatchForm.append("file", new Blob([opMultiMatchCsv], { type: "text/csv" }), "op-multi-match.csv");
+    opMultiMatchForm.append("file", buildExcelBlob(opMultiMatchSheet), "op-multi-match.xlsx");
     opMultiMatchForm.append("dryRun", "true");
     const opMultiMatchDryRun = await requestJson("/api/objek-pajak/import", {
       method: "POST",
@@ -460,10 +518,10 @@ async function run() {
 
 run()
   .then(() => {
-    console.log("[integration] Idempotent CSV import WP/OP: PASS");
+    console.log("[integration] Idempotent Excel import WP/OP: PASS");
   })
   .catch((error) => {
-    console.error("[integration] Idempotent CSV import WP/OP: FAIL");
+    console.error("[integration] Idempotent Excel import WP/OP: FAIL");
     console.error(error);
     process.exitCode = 1;
   });

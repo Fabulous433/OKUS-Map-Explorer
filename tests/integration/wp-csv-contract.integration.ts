@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { parse } from "csv-parse/sync";
-import { stringify } from "csv-stringify/sync";
 
 import { createIntegrationServer, requiredNumber, requiredString, type JsonRecord } from "./_helpers";
+import { buildExcelBlob } from "./_excel";
 
 const WP_COMPACT_COLUMNS = [
   "jenis_wp",
@@ -89,19 +89,14 @@ async function run() {
       email_badan_usaha: "",
     };
 
-    const compactPayload = stringify([compactRow], {
-      header: true,
-      columns: [...WP_COMPACT_COLUMNS],
-    });
-
     const compactForm = new FormData();
-    compactForm.append("file", new Blob([compactPayload], { type: "text/csv" }), "wp-compact.csv");
+    compactForm.append("file", buildExcelBlob([compactRow], [...WP_COMPACT_COLUMNS]), "wp-compact.xlsx");
 
     const compactImport = await requestForm("/api/wajib-pajak/import", "POST", compactForm);
     assert.equal(compactImport.response.status, 200);
     const compactImportBody = (compactImport.body ?? {}) as JsonRecord;
     assert.equal(compactImportBody.total, 1);
-    assert.equal(compactImportBody.success, 1, "CSV WP compact harus bisa di-import");
+    assert.equal(compactImportBody.success, 1, "Excel WP compact harus bisa di-import");
     assert.equal(compactImportBody.failed, 0);
 
     const compactList = await requestJson(`/api/wajib-pajak?page=1&limit=50&q=${encodeURIComponent(compactName)}`);
@@ -148,19 +143,14 @@ async function run() {
       email_badan_usaha: "",
     };
 
-    const legacyPayload = stringify([legacyRow], {
-      header: true,
-      columns: [...WP_LEGACY_COLUMNS],
-    });
-
     const legacyForm = new FormData();
-    legacyForm.append("file", new Blob([legacyPayload], { type: "text/csv" }), "wp-legacy.csv");
+    legacyForm.append("file", buildExcelBlob([legacyRow], [...WP_LEGACY_COLUMNS]), "wp-legacy.xlsx");
 
     const legacyImport = await requestForm("/api/wajib-pajak/import", "POST", legacyForm);
     assert.equal(legacyImport.response.status, 200);
     const legacyImportBody = (legacyImport.body ?? {}) as JsonRecord;
     assert.equal(legacyImportBody.total, 1);
-    assert.equal(legacyImportBody.success, 1, "CSV WP legacy tetap harus didukung");
+    assert.equal(legacyImportBody.success, 1, "Excel WP legacy tetap harus didukung");
     assert.equal(legacyImportBody.failed, 0);
 
     const legacyList = await requestJson(`/api/wajib-pajak?page=1&limit=50&q=${encodeURIComponent(legacyName)}`);
@@ -232,10 +222,10 @@ async function run() {
 
 run()
   .then(() => {
-    console.log("[integration] WP CSV compact contract: PASS");
+    console.log("[integration] WP Excel import + compact CSV export contract: PASS");
   })
   .catch((error) => {
-    console.error("[integration] WP CSV compact contract: FAIL");
+    console.error("[integration] WP Excel import + compact CSV export contract: FAIL");
     console.error(error);
     process.exitCode = 1;
   });
