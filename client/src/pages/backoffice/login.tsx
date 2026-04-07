@@ -9,6 +9,14 @@ import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { regionConfig } from "@/lib/region-config";
 
+type LoginResponse = {
+  user: {
+    id: string;
+    username: string;
+    role: "admin" | "editor" | "viewer";
+  };
+};
+
 export default function BackofficeLogin() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
@@ -37,10 +45,11 @@ export default function BackofficeLogin() {
         username,
         password,
       });
-      return response.json();
+      return (await response.json()) as LoginResponse;
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    onSuccess: async (result) => {
+      queryClient.setQueryData(["/api/auth/me"], result);
+      void queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       setLocation(nextPath);
     },
     onError: (error: Error) => {

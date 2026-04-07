@@ -61,6 +61,19 @@ async function run() {
     const includeBody = includeUnverifiedSummary.body as JsonRecord;
     const includeTotals = includeBody.totals as JsonRecord;
 
+    const datedSummary = await requestJson(
+      "/api/dashboard/summary?includeUnverified=true&from=2000-01-01&to=2000-01-31&groupBy=day",
+    );
+    assert.equal(datedSummary.response.status, 200);
+    const datedBody = datedSummary.body as JsonRecord;
+    const datedTotals = datedBody.totals as JsonRecord;
+
+    assert.equal(
+      requiredNumber(datedTotals.totalOp, "totalOp dated wajib number"),
+      requiredNumber(includeTotals.totalOp, "totalOp include wajib number"),
+      "Total OP dashboard harus merepresentasikan total data aktif, bukan hanya OP dalam window tanggal",
+    );
+
     const verifiedOnlySummary = await requestJson("/api/dashboard/summary?includeUnverified=false");
     assert.equal(verifiedOnlySummary.response.status, 200);
     const verifiedBody = verifiedOnlySummary.body as JsonRecord;

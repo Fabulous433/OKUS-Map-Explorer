@@ -2512,19 +2512,14 @@ async function buildDashboardSummaryData(params: {
   trendFrom?: Date;
   trendTo?: Date;
   groupBy: DashboardGroupBy;
-}): Promise<DashboardSummaryData> {
-  const summaryConditions: SQL[] = [];
-  if (!params.includeUnverified) {
-    summaryConditions.push(eq(objekPajak.statusVerifikasi, "verified"));
-  }
+  }): Promise<DashboardSummaryData> {
+    const summaryConditions: SQL[] = [];
+    if (!params.includeUnverified) {
+      summaryConditions.push(eq(objekPajak.statusVerifikasi, "verified"));
+    }
 
-  if (params.summaryFrom && params.summaryTo) {
-    summaryConditions.push(gte(objekPajak.createdAt, startOfUtcDay(params.summaryFrom)));
-    summaryConditions.push(lte(objekPajak.createdAt, endOfUtcDay(params.summaryTo)));
-  }
-
-  const hasDetailExpr = sql<boolean>`
-    (
+    const hasDetailExpr = sql<boolean>`
+      (
       exists (select 1 from op_detail_pbjt_makan_minum d1 where d1.op_id = ${objekPajak.id}) or
       exists (select 1 from op_detail_pbjt_perhotelan d2 where d2.op_id = ${objekPajak.id}) or
       exists (select 1 from op_detail_pbjt_hiburan d3 where d3.op_id = ${objekPajak.id}) or
