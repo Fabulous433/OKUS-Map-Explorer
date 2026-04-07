@@ -864,6 +864,8 @@ export type ObjekPajakListItem = {
   id: number;
   nopd: string;
   wpId: number;
+  wpDisplayName: string | null;
+  wpNpwpd: string | null;
   rekPajakId: number;
   namaOp: string;
   npwpOp: string | null;

@@ -69,11 +69,27 @@ import type {
 import BackofficeLayout from "./layout";
 import { OPFormDialog } from "./objek-pajak-form-dialog";
 import {
- INITIAL_CURSOR,
  invalidateObjekPajakQueries,
  jenisPajakColor,
  shortLabel,
 } from "./objek-pajak-shared";
+
+function buildPageItems(page: number, totalPages: number) {
+ const safeTotal = Math.max(1, totalPages);
+ if (safeTotal <= 5) {
+ return Array.from({ length: safeTotal }, (_, index) => index + 1);
+ }
+
+ if (page <= 3) {
+ return [1, 2, 3, 4, safeTotal];
+ }
+
+ if (page >= safeTotal - 2) {
+ return [1, safeTotal - 3, safeTotal - 2, safeTotal - 1, safeTotal];
+ }
+
+ return [1, page - 1, page, page + 1, safeTotal];
+}
 
 function formatPajakBulanan(value: string | null | undefined) {
  if (!value) return "-";
@@ -109,13 +125,10 @@ export default function BackofficeObjekPajak() {
  const [rekPajakFilterId, setRekPajakFilterId] = useState<string>("all");
  const [page, setPage] = useState(1);
  const [limit, setLimit] = useState(25);
- const [cursorHistory, setCursorHistory] = useState<number[]>([INITIAL_CURSOR]);
  const debouncedSearch = useDebouncedValue(searchQuery, 300);
- const activeCursor = cursorHistory[cursorHistory.length - 1] ?? INITIAL_CURSOR;
 
  useEffect(() => {
  setPage(1);
- setCursorHistory([INITIAL_CURSOR]);
  }, [debouncedSearch, statusFilter, verificationFilter, kecamatanFilterId, rekPajakFilterId, limit]);
 
  useEffect(() => {
@@ -129,9 +142,6 @@ export default function BackofficeObjekPajak() {
  const params = new URLSearchParams();
  params.set("page", String(page));
  params.set("limit", String(limit));
- if (activeCursor !== INITIAL_CURSOR) {
- params.set("cursor", String(activeCursor));
- }
  params.set("includeUnverified", "true");
  if (debouncedSearch) params.set("q", debouncedSearch);
  if (statusFilter !== "all") params.set("status", statusFilter);
@@ -139,7 +149,7 @@ export default function BackofficeObjekPajak() {
  if (kecamatanFilterId !== "all") params.set("kecamatanId", kecamatanFilterId);
  if (rekPajakFilterId !== "all") params.set("rekPajakId", rekPajakFilterId);
  return `/api/objek-pajak?${params.toString()}`;
- }, [activeCursor, debouncedSearch, kecamatanFilterId, limit, page, rekPajakFilterId, statusFilter, verificationFilter]);
+ }, [debouncedSearch, kecamatanFilterId, limit, page, rekPajakFilterId, statusFilter, verificationFilter]);
 
  const { data: listResult, isLoading, isFetching } = useQuery<PaginatedResult<ObjekPajakListItem>>({
  queryKey: [objekPajakQueryKey],
@@ -153,10 +163,11 @@ export default function BackofficeObjekPajak() {
  totalPages: 1,
  hasNext: false,
  hasPrev: false,
- mode: "cursor" as const,
- cursor: activeCursor,
+ mode: "offset" as const,
+ cursor: null,
  nextCursor: null,
  };
+ const pageItems = buildPageItems(page, opMeta.totalPages);
 
  const { data: wpPage } = useQuery<PaginatedResult<WajibPajakListItem>>({
  queryKey: ["/api/wajib-pajak?page=1&limit=100"],
@@ -220,7 +231,6 @@ export default function BackofficeObjekPajak() {
 
  const moveToTopPage = () => {
  setPage(1);
- setCursorHistory([INITIAL_CURSOR]);
  };
 
  const openEdit = async (id: number) => {
@@ -429,11 +439,11 @@ export default function BackofficeObjekPajak() {
  <MobileOpCard
  key={op.id}
  op={op}
-                 wp={wp}
-                 canMutate={canMutate}
-                 onEdit={openEdit}
-                 onView={openView}
-                 onDelete={(id) => deleteMutation.mutate(id)}
+ wp={wp}
+ canMutate={canMutate}
+ onEdit={openEdit}
+ onView={openView}
+ onDelete={(id) => deleteMutation.mutate(id)}
  onVerify={(id) => verificationMutation.mutate({ id, statusVerifikasi: "verified" })}
  onReject={rejectOp}
  />
@@ -486,7 +496,7 @@ export default function BackofficeObjekPajak() {
  <div className="min-w-0 rounded-xl border border-black/10 bg-white/70 px-3 py-2 shadow-[inset_1px_1px_0_rgba(255,255,255,0.7)]">
  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-400">Wajib Pajak</p>
  <p className="truncate font-sans text-sm font-medium text-slate-700" data-testid={`text-wp-${op.id}`}>
- {wp ? wp.displayName : "-"}
+ {wp?.displayName || op.wpDisplayName || "-"}
  </p>
  </div>
  </div>
@@ -633,11 +643,10 @@ export default function BackofficeObjekPajak() {
  type="button"
  variant="ghost"
  className={`h-10 justify-start rounded-[16px] px-2 font-mono text-[11px] uppercase tracking-[0.14em] text-black/45 ${
- cursorHistory.length > 1 ? "" : "pointer-events-none opacity-40"
+ page > 1 ? "" : "pointer-events-none opacity-40"
  }`}
  onClick={() => {
- if (cursorHistory.length > 1) {
- setCursorHistory((prev) => prev.slice(0, -1));
+ if (page > 1) {
  setPage((prev) => Math.max(1, prev - 1));
  }
  }}
@@ -646,18 +655,16 @@ export default function BackofficeObjekPajak() {
  <span className="truncate">Prev</span>
  </Button>
  <div className="flex h-10 min-w-[44px] items-center justify-center rounded-[16px] bg-white px-3 font-mono text-sm font-bold text-black shadow-[6px_6px_14px_rgba(148,163,184,0.18),-6px_-6px_14px_rgba(255,255,255,0.92)]">
- {page}
+ {page} / {opMeta.totalPages}
  </div>
  <Button
  type="button"
  variant="ghost"
  className={`h-10 justify-end rounded-[16px] px-2 font-mono text-[11px] uppercase tracking-[0.14em] text-black/45 ${
- opMeta.nextCursor ? "" : "pointer-events-none opacity-40"
+ opMeta.hasNext ? "" : "pointer-events-none opacity-40"
  }`}
  onClick={() => {
- const nextCursor = opMeta.nextCursor;
- if (typeof nextCursor === "number") {
- setCursorHistory((prev) => [...prev, nextCursor]);
+ if (page < opMeta.totalPages) {
  setPage((prev) => prev + 1);
  }
  }}
@@ -674,31 +681,40 @@ export default function BackofficeObjekPajak() {
  href="#"
  onClick={(event) => {
  event.preventDefault();
- if (cursorHistory.length > 1) {
- setCursorHistory((prev) => prev.slice(0, -1));
+ if (page > 1) {
  setPage((prev) => Math.max(1, prev - 1));
  }
  }}
- className={`font-mono text-xs ${cursorHistory.length > 1 ? "" : "pointer-events-none opacity-40"}`}
+ className={`font-mono text-xs ${page > 1 ? "" : "pointer-events-none opacity-40"}`}
  />
  </PaginationItem>
- <PaginationItem>
- <PaginationLink href="#" isActive className="font-mono text-xs">
- {page}
+ {pageItems.map((pageItem) => (
+ <PaginationItem key={pageItem}>
+ <PaginationLink
+ href="#"
+ isActive={pageItem === page}
+ className="font-mono text-xs"
+ onClick={(event) => {
+ event.preventDefault();
+ if (pageItem !== page) {
+ setPage(pageItem);
+ }
+ }}
+ >
+ {pageItem}
  </PaginationLink>
  </PaginationItem>
+ ))}
  <PaginationItem>
  <PaginationNext
  href="#"
  onClick={(event) => {
  event.preventDefault();
- const nextCursor = opMeta.nextCursor;
- if (typeof nextCursor === "number") {
- setCursorHistory((prev) => [...prev, nextCursor]);
+ if (page < opMeta.totalPages) {
  setPage((prev) => prev + 1);
  }
  }}
- className={`font-mono text-xs ${opMeta.nextCursor ? "" : "pointer-events-none opacity-40"}`}
+ className={`font-mono text-xs ${opMeta.hasNext ? "" : "pointer-events-none opacity-40"}`}
  />
  </PaginationItem>
  </PaginationContent>

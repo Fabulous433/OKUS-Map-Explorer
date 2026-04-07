@@ -143,13 +143,29 @@ type QualityWarning = {
  relatedIds: Array<string | number>;
  duplicates?: QualityWarningDuplicate[];
 };
-const INITIAL_CURSOR = 2147483647;
 const WP_ATTACHMENT_OPTIONS = [
  { value: "ktp", label: "KTP/NIK" },
  { value: "npwp", label: "NPWP" },
  { value: "surat_kuasa", label: "Surat Kuasa" },
  { value: "dokumen_lain", label: "Dokumen Lain" },
 ] as const;
+
+function buildPageItems(page: number, totalPages: number) {
+ const safeTotal = Math.max(1, totalPages);
+ if (safeTotal <= 5) {
+ return Array.from({ length: safeTotal }, (_, index) => index + 1);
+ }
+
+ if (page <= 3) {
+ return [1, 2, 3, 4, safeTotal];
+ }
+
+ if (page >= safeTotal - 2) {
+ return [1, safeTotal - 3, safeTotal - 2, safeTotal - 1, safeTotal];
+ }
+
+ return [1, page - 1, page, page + 1, safeTotal];
+}
 
 function warningFieldLabel(code: string) {
  switch (code) {
@@ -380,7 +396,6 @@ export default function BackofficeWajibPajak() {
  const [q, setQ] = useState("");
  const [page, setPage] = useState(1);
  const [limit, setLimit] = useState(25);
- const [cursorHistory, setCursorHistory] = useState<number[]>([INITIAL_CURSOR]);
  const [jenisWpFilter, setJenisWpFilter] = useState<"all" | "orang_pribadi" | "badan_usaha">("all");
  const [peranWpFilter, setPeranWpFilter] = useState<"all" | "pemilik" | "pengelola">("all");
  const [statusAktifFilter, setStatusAktifFilter] = useState<"all" | "active" | "inactive">("all");
@@ -391,26 +406,21 @@ export default function BackofficeWajibPajak() {
  const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false);
  const { toast } = useToast();
  const debouncedQ = useDebouncedValue(q, 300);
- const activeCursor = cursorHistory[cursorHistory.length - 1] ?? INITIAL_CURSOR;
 
  useEffect(() => {
  setPage(1);
- setCursorHistory([INITIAL_CURSOR]);
  }, [debouncedQ, jenisWpFilter, peranWpFilter, statusAktifFilter, limit]);
 
  const listQueryKey = useMemo(() => {
  const params = new URLSearchParams();
  params.set("page", String(page));
  params.set("limit", String(limit));
- if (activeCursor !== INITIAL_CURSOR) {
- params.set("cursor", String(activeCursor));
- }
  if (debouncedQ) params.set("q", debouncedQ);
  if (jenisWpFilter !== "all") params.set("jenisWp", jenisWpFilter);
  if (peranWpFilter !== "all") params.set("peranWp", peranWpFilter);
  if (statusAktifFilter !== "all") params.set("statusAktif", statusAktifFilter);
  return `/api/wajib-pajak?${params.toString()}`;
- }, [activeCursor, debouncedQ, jenisWpFilter, limit, page, peranWpFilter, statusAktifFilter]);
+ }, [debouncedQ, jenisWpFilter, limit, page, peranWpFilter, statusAktifFilter]);
 
  const invalidateWajibPajakQueries = () => {
  queryClient.invalidateQueries({
@@ -433,10 +443,11 @@ export default function BackofficeWajibPajak() {
  totalPages: 1,
  hasNext: false,
  hasPrev: false,
- mode: "cursor" as const,
- cursor: activeCursor,
+ mode: "offset" as const,
+ cursor: null,
  nextCursor: null,
  };
+ const pageItems = buildPageItems(page, meta.totalPages);
  const addForm = useForm<WpFormValues>({ resolver: zodResolver(wpSchema), defaultValues: defaults() });
  const editForm = useForm<WpFormValues>({ resolver: zodResolver(wpSchema), defaultValues: defaults() });
 
@@ -773,11 +784,10 @@ export default function BackofficeWajibPajak() {
  type="button"
  variant="ghost"
  className={`h-10 justify-start rounded-[16px] px-2 font-mono text-[11px] uppercase tracking-[0.14em] text-black/45 ${
- cursorHistory.length > 1 ? "" : "pointer-events-none opacity-40"
+ page > 1 ? "" : "pointer-events-none opacity-40"
  }`}
  onClick={() => {
- if (cursorHistory.length > 1) {
- setCursorHistory((prev) => prev.slice(0, -1));
+ if (page > 1) {
  setPage((prev) => Math.max(1, prev - 1));
  }
  }}
@@ -786,18 +796,16 @@ export default function BackofficeWajibPajak() {
  <span className="truncate">Prev</span>
  </Button>
  <div className="flex h-10 min-w-[44px] items-center justify-center rounded-[16px] bg-white px-3 font-mono text-sm font-bold text-black shadow-[6px_6px_14px_rgba(148,163,184,0.18),-6px_-6px_14px_rgba(255,255,255,0.92)]">
- {page}
+ {page} / {meta.totalPages}
  </div>
  <Button
  type="button"
  variant="ghost"
  className={`h-10 justify-end rounded-[16px] px-2 font-mono text-[11px] uppercase tracking-[0.14em] text-black/45 ${
- meta.nextCursor ? "" : "pointer-events-none opacity-40"
+ meta.hasNext ? "" : "pointer-events-none opacity-40"
  }`}
  onClick={() => {
- const nextCursor = meta.nextCursor;
- if (typeof nextCursor === "number") {
- setCursorHistory((prev) => [...prev, nextCursor]);
+ if (page < meta.totalPages) {
  setPage((prev) => prev + 1);
  }
  }}
@@ -814,31 +822,40 @@ export default function BackofficeWajibPajak() {
  href="#"
  onClick={(event) => {
  event.preventDefault();
- if (cursorHistory.length > 1) {
- setCursorHistory((prev) => prev.slice(0, -1));
+ if (page > 1) {
  setPage((prev) => Math.max(1, prev - 1));
  }
  }}
- className={`font-mono text-xs ${cursorHistory.length > 1 ? "" : "pointer-events-none opacity-40"}`}
+ className={`font-mono text-xs ${page > 1 ? "" : "pointer-events-none opacity-40"}`}
  />
  </PaginationItem>
- <PaginationItem>
- <PaginationLink href="#" isActive className="font-mono text-xs">
- {page}
+ {pageItems.map((pageItem) => (
+ <PaginationItem key={pageItem}>
+ <PaginationLink
+ href="#"
+ isActive={pageItem === page}
+ className="font-mono text-xs"
+ onClick={(event) => {
+ event.preventDefault();
+ if (pageItem !== page) {
+ setPage(pageItem);
+ }
+ }}
+ >
+ {pageItem}
  </PaginationLink>
  </PaginationItem>
+ ))}
  <PaginationItem>
  <PaginationNext
  href="#"
  onClick={(event) => {
  event.preventDefault();
- const nextCursor = meta.nextCursor;
- if (typeof nextCursor === "number") {
- setCursorHistory((prev) => [...prev, nextCursor]);
+ if (page < meta.totalPages) {
  setPage((prev) => prev + 1);
  }
  }}
- className={`font-mono text-xs ${meta.nextCursor ? "" : "pointer-events-none opacity-40"}`}
+ className={`font-mono text-xs ${meta.hasNext ? "" : "pointer-events-none opacity-40"}`}
  />
  </PaginationItem>
  </PaginationContent>

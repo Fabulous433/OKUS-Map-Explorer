@@ -621,6 +621,8 @@ function mapObjekPajakRecord(record: {
 
 function mapObjekPajakListRecord(record: {
   op: ObjekPajakRow;
+  wajibPajak: WajibPajak | null;
+  badanUsaha: WpBadanUsaha | null;
   rekening: MasterRekeningPajak | null;
   kecamatan: MasterKecamatan | null;
   kelurahan: MasterKelurahan | null;
@@ -630,6 +632,8 @@ function mapObjekPajakListRecord(record: {
     id: record.op.id,
     nopd: record.op.nopd,
     wpId: record.op.wpId,
+    wpDisplayName: record.wajibPajak ? buildWpDisplayName(record.wajibPajak, record.badanUsaha) : null,
+    wpNpwpd: record.wajibPajak?.npwpd ?? null,
     rekPajakId: record.op.rekPajakId,
     namaOp: record.op.namaOp,
     npwpOp: record.op.npwpOp,

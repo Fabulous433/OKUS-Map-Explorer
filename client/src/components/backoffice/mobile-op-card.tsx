@@ -40,6 +40,8 @@ export function MobileOpCard({
  onVerify,
  onReject,
 }: MobileOpCardProps) {
+ const wpLabel = wp?.displayName || op.wpDisplayName || "-";
+
  const actions: ActionItem[] = [
  {
  key: "view",
@@ -115,7 +117,7 @@ export function MobileOpCard({
  <div className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-4">
  <div className="col-span-2">
  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/50">Wajib Pajak</p>
- <p className="mt-1 font-mono text-xs font-bold">{wp?.displayName || "-"}</p>
+ <p className="mt-1 font-mono text-xs font-bold">{wpLabel}</p>
  </div>
  <div className="col-span-2">
  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-black/50">Alamat</p>

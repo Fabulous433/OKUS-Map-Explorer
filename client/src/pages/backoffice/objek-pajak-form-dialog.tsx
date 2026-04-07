@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Check, ChevronLeft, ChevronRight, ChevronsUpDown, Crosshair, MapPin, Upload, X } from "lucide-react";
@@ -266,33 +266,44 @@ const createMutation = useMutation({
  const selectedKecamatanId = form.watch("kecamatanId");
  const selectedWpId = form.watch("wpId");
  const selectedWp = wpList.find((item) => item.id === selectedWpId);
+ const { data: selectedWpFallback } = useQuery<WajibPajakListItem | null>({
+ queryKey: [`/api/wajib-pajak/detail/${selectedWpId}`],
+ enabled: Boolean(selectedWpId && !selectedWp),
+ queryFn: async () => {
+ if (!selectedWpId) return null;
+ const response = await fetch(`/api/wajib-pajak/detail/${selectedWpId}`, { credentials: "include" });
+ if (!response.ok) {
+ return null;
+ }
+ return (await response.json()) as WajibPajakListItem;
+ },
+ });
+ const resolvedSelectedWp = selectedWp ?? selectedWpFallback ?? null;
  const selectedKecamatanKode = kecamatanList.find((item) => item.cpmKecId === selectedKecamatanId)?.cpmKodeKec;
  const filteredKelurahanList = selectedKecamatanKode
  ? kelurahanList.filter((item) => item.cpmKodeKec === selectedKecamatanKode)
  : [];
- const currentValues = form.watch();
- const currentStepIndex = CREATE_WIZARD_STEPS.findIndex((item) => item.id === wizardStep);
- const draftDocumentLabelMap = Object.fromEntries(OP_ATTACHMENT_OPTIONS.map((item) => [item.value, item.label]));
- const normalizedWpSearch = wpSearch.trim().toLocaleLowerCase("id-ID");
+const currentValues = form.watch();
+const currentStepIndex = CREATE_WIZARD_STEPS.findIndex((item) => item.id === wizardStep);
+const draftDocumentLabelMap = Object.fromEntries(OP_ATTACHMENT_OPTIONS.map((item) => [item.value, item.label]));
+const normalizedWpSearch = wpSearch.trim().toLocaleLowerCase("id-ID");
+ const { data: searchedWpPage } = useQuery<{ items: WajibPajakListItem[] }>({
+ queryKey: [`/api/wajib-pajak?page=1&limit=100&q=${encodeURIComponent(normalizedWpSearch)}`],
+ enabled: normalizedWpSearch.length >= 3,
+ queryFn: async () => {
+ const response = await fetch(`/api/wajib-pajak?page=1&limit=100&q=${encodeURIComponent(normalizedWpSearch)}`, {
+ credentials: "include",
+ });
+ if (!response.ok) {
+ return { items: [] };
+ }
+ return (await response.json()) as { items: WajibPajakListItem[] };
+ },
+ });
  const filteredWpList = useMemo(() => {
  if (normalizedWpSearch.length < 3) return [];
- return [...wpList]
- .map((wp) => {
- const name = wp.displayName.toLocaleLowerCase("id-ID");
- const haystack = `${wp.displayName} ${wp.npwpd ?? ""}`.toLocaleLowerCase("id-ID");
- return {
- wp,
- startsWithName: name.startsWith(normalizedWpSearch),
- includes: haystack.includes(normalizedWpSearch),
- };
- })
- .filter((item) => item.includes)
- .sort((a, b) => {
- if (a.startsWithName !== b.startsWithName) return a.startsWithName ? -1 : 1;
- return a.wp.displayName.localeCompare(b.wp.displayName, "id-ID");
- })
- .map((item) => item.wp);
- }, [normalizedWpSearch, wpList]);
+ return Array.isArray(searchedWpPage?.items) ? searchedWpPage.items : [];
+ }, [normalizedWpSearch, searchedWpPage]);
 
  const resetDraftAttachmentInput = () => {
  if (draftFileInputRef.current) {
@@ -621,7 +632,7 @@ const reviewDetailEntries = (() => {
  data-testid="select-wp"
  >
  <span className="truncate text-left">
- {selectedWp ? `${selectedWp.displayName} - ${selectedWp.npwpd || "-"}` : "Cari nama WP"}
+ {resolvedSelectedWp ? `${resolvedSelectedWp.displayName} - ${resolvedSelectedWp.npwpd || "-"}` : "Cari nama WP"}
  </span>
  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
  </Button>
@@ -966,7 +977,7 @@ const reviewDetailEntries = (() => {
  <div className="border border-black/10 bg-white p-2 md:p-3">
  <p className="mb-1 text-[10px] uppercase tracking-[0.18em] text-black/55">Data OP</p>
  <p>Nama Objek: <span className="font-bold">{currentValues.namaOp || "-"}</span></p>
- <p>Wajib Pajak: <span className="font-bold">{wpList.find((wp) => wp.id === currentValues.wpId)?.displayName || "-"}</span></p>
+ <p>Wajib Pajak: <span className="font-bold">{resolvedSelectedWp?.displayName || "-"}</span></p>
  <p>Alamat: <span className="font-bold">{currentValues.alamatOp || "-"}</span></p>
  <p>NOPD: <span className="font-bold">{currentValues.nopd || "(otomatis)"}</span></p>
  </div>
