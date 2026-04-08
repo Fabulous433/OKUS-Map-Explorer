@@ -413,9 +413,9 @@ export default function BackofficeDashboard() {
                     onClick={() => {
                       window.location.href = exportUrl;
                     }}
-                    data-testid="button-dashboard-export-csv"
+                    data-testid="button-dashboard-export-xlsx"
                   >
-                    EXPORT CSV
+                    EXPORT XLSX
                   </Button>
                 </div>
               </div>

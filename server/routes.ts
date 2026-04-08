@@ -50,7 +50,6 @@ import {
   regionBoundaryPublishPayloadSchema,
   regionBoundaryTakeoverConfirmationPayloadSchema,
 } from "@shared/region-boundary-admin";
-import { stringify } from "csv-stringify/sync";
 import { parse } from "csv-parse/sync";
 import * as XLSX from "xlsx";
 import multer, { MulterError } from "multer";
@@ -75,6 +74,7 @@ import { buildAttachmentDownloadPath, deleteAttachmentFile, ensureAttachmentStor
 import { getActiveRegionBoundary } from "./region-boundaries";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: ATTACHMENT_MAX_FILE_SIZE_BYTES } });
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 type CsvImportRow = Record<string, string | undefined>;
 type ImportRowAction = "created" | "updated" | "skipped" | "failed";
@@ -176,6 +176,84 @@ const OP_CSV_DETAIL_COLUMNS = [
 ] as const;
 
 const OP_CSV_COLUMNS = [...OP_CSV_BASE_COLUMNS, ...OP_CSV_DETAIL_COLUMNS] as const;
+const OP_NUMERIC_EXPORT_COLUMNS = new Set<string>([
+  "omset_bulanan",
+  "tarif_persen",
+  "pajak_bulanan",
+  "latitude",
+  "longitude",
+  "detail_kapasitas_tempat",
+  "detail_jumlah_karyawan",
+  "detail_rata2_pengunjung",
+  "detail_harga_termurah",
+  "detail_harga_termahal",
+  "detail_jumlah_kamar",
+  "detail_rata2_pengunjung_harian",
+  "detail_kapasitas",
+  "detail_kapasitas_kendaraan",
+  "detail_tarif_parkir",
+  "detail_daya_listrik",
+  "detail_ukuran_panjang",
+  "detail_ukuran_lebar",
+  "detail_ukuran_tinggi",
+  "detail_rata2_ukuran_pemakaian",
+  "detail_panen_per_tahun",
+  "detail_rata2_berat_panen",
+]);
+const OP_THOUSANDS_FORMAT_COLUMNS = new Set<string>([
+  "omset_bulanan",
+  "pajak_bulanan",
+  "detail_kapasitas_tempat",
+  "detail_jumlah_karyawan",
+  "detail_rata2_pengunjung",
+  "detail_harga_termurah",
+  "detail_harga_termahal",
+  "detail_jumlah_kamar",
+  "detail_rata2_pengunjung_harian",
+  "detail_kapasitas",
+  "detail_kapasitas_kendaraan",
+  "detail_tarif_parkir",
+  "detail_daya_listrik",
+  "detail_ukuran_panjang",
+  "detail_ukuran_lebar",
+  "detail_ukuran_tinggi",
+  "detail_rata2_ukuran_pemakaian",
+  "detail_panen_per_tahun",
+  "detail_rata2_berat_panen",
+]);
+const DASHBOARD_EXPORT_COLUMNS = [
+  "section",
+  "jenis_pajak",
+  "total",
+  "updated",
+  "pending",
+  "percentage",
+  "period_start",
+  "period_end",
+  "created_op",
+  "verified_op",
+  "include_unverified",
+  "summary_from",
+  "summary_to",
+  "trend_group_by",
+  "trend_from",
+  "trend_to",
+] as const;
+const DASHBOARD_NUMERIC_EXPORT_COLUMNS = new Set<string>([
+  "total",
+  "updated",
+  "pending",
+  "percentage",
+  "created_op",
+  "verified_op",
+]);
+const DASHBOARD_THOUSANDS_FORMAT_COLUMNS = new Set<string>([
+  "total",
+  "updated",
+  "pending",
+  "created_op",
+  "verified_op",
+]);
 const DATA_TOOLS_SAMPLE_FILES = {
   wp: {
     fileName: "simpatda-wp-import-sample.xlsx",
@@ -243,6 +321,66 @@ function parseExcelImportRows(file: Express.Multer.File): CsvImportRow[] {
   return rawRows.slice(1).map((row) =>
     Object.fromEntries(columns.map((column, index) => [column, String(row[index] ?? "").trim()])),
   ) as CsvImportRow[];
+}
+
+function buildXlsxExportBuffer(
+  rows: Record<string, unknown>[],
+  columns: readonly string[],
+  sheetName: string,
+  numericColumns?: ReadonlySet<string>,
+  thousandsFormatColumns?: ReadonlySet<string>,
+) {
+  const normalizedRows =
+    numericColumns && numericColumns.size > 0
+      ? rows.map((row) =>
+          Object.fromEntries(
+            columns.map((column) => {
+              const rawValue = row[column];
+              if (!numericColumns.has(column)) {
+                return [column, rawValue ?? ""];
+              }
+
+              if (typeof rawValue === "number" && Number.isFinite(rawValue)) {
+                return [column, rawValue];
+              }
+
+              const parsed = parseNumber(rawValue);
+              if (parsed !== null) {
+                return [column, parsed];
+              }
+
+              return [column, rawValue ?? ""];
+            }),
+          ),
+        )
+      : rows;
+
+  const worksheet = XLSX.utils.json_to_sheet(normalizedRows, {
+    header: [...columns],
+    skipHeader: false,
+  });
+  if (thousandsFormatColumns && thousandsFormatColumns.size > 0 && rows.length > 0) {
+    for (let columnIndex = 0; columnIndex < columns.length; columnIndex++) {
+      const columnKey = columns[columnIndex];
+      if (!thousandsFormatColumns.has(columnKey)) {
+        continue;
+      }
+      for (let rowIndex = 1; rowIndex <= rows.length; rowIndex++) {
+        const address = XLSX.utils.encode_cell({ c: columnIndex, r: rowIndex });
+        const cell = worksheet[address];
+        if (cell && cell.t === "n") {
+          cell.z = "#,##0";
+        }
+      }
+    }
+  }
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  return XLSX.write(workbook, {
+    type: "buffer",
+    bookType: "xlsx",
+    compression: true,
+  });
 }
 
 const OP_OPERATIONAL_DETAIL_COLUMNS_BY_JENIS: Record<JenisPajakOption, readonly string[]> = {
@@ -1684,15 +1822,29 @@ function toResolvedWpShape(data: WajibPajakWithBadanUsaha | Record<string, unkno
 function parseInteger(value: unknown) {
   const cleaned = cleanText(value);
   if (!cleaned) return null;
-  const parsed = Number.parseInt(cleaned, 10);
+  const parsed = Number.parseInt(normalizeNumericInput(cleaned), 10);
   return Number.isNaN(parsed) ? null : parsed;
 }
 
 function parseNumber(value: unknown) {
   const cleaned = cleanText(value);
   if (!cleaned) return null;
-  const parsed = Number(cleaned);
+  const parsed = Number(normalizeNumericInput(cleaned));
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeNumericInput(value: string) {
+  const compact = value.replace(/\s+/g, "");
+  if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(compact)) {
+    return compact.replace(/,/g, "");
+  }
+  if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(compact)) {
+    return compact.replace(/\./g, "").replace(",", ".");
+  }
+  if (/^-?\d+,\d+$/.test(compact) && !compact.includes(".")) {
+    return compact.replace(",", ".");
+  }
+  return compact;
 }
 
 function compactObject<T extends Record<string, unknown>>(input: T): Partial<T> {
@@ -2480,14 +2632,14 @@ function buildOperationalDetailForCsv(detail: unknown, jenisPajak: JenisPajakOpt
 
 function buildObjekPajakExportFileName(mode: OpExportMode, jenisPajak?: JenisPajakOption | null) {
   if (mode === "template") {
-    return "objek_pajak_template.csv";
+    return "objek_pajak_template.xlsx";
   }
 
   const safeJenis = (jenisPajak ?? "operasional")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
-  return `objek_pajak_${safeJenis}.csv`;
+  return `objek_pajak_${safeJenis}.xlsx`;
 }
 
 async function sendDataToolsSample(
@@ -2500,7 +2652,7 @@ async function sendDataToolsSample(
   const sample = DATA_TOOLS_SAMPLE_FILES[sampleKey];
   const absolutePath = await resolveDataToolsSampleAbsolutePath(sample.relativePath);
   const content = await readFile(absolutePath);
-  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Type", XLSX_MIME);
   res.setHeader("Content-Disposition", `attachment; filename=${sample.fileName}`);
   res.send(content);
 }
@@ -2680,7 +2832,7 @@ async function buildDashboardSummaryData(params: {
   };
 }
 
-function buildDashboardSummaryCsv(summary: DashboardSummaryData) {
+function buildDashboardSummaryRows(summary: DashboardSummaryData) {
   const rows: Array<Record<string, string | number>> = [];
 
   rows.push({
@@ -2744,27 +2896,7 @@ function buildDashboardSummaryCsv(summary: DashboardSummaryData) {
     });
   }
 
-  return stringify(rows, {
-    header: true,
-    columns: [
-      "section",
-      "jenis_pajak",
-      "total",
-      "updated",
-      "pending",
-      "percentage",
-      "period_start",
-      "period_end",
-      "created_op",
-      "verified_op",
-      "include_unverified",
-      "summary_from",
-      "summary_to",
-      "trend_group_by",
-      "trend_from",
-      "trend_to",
-    ],
-  });
+  return rows;
 }
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
@@ -3274,10 +3406,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       email_badan_usaha: wp.badanUsaha?.emailBadanUsaha || "",
     }));
 
-    const csv = stringify(rows, { header: true, columns: [...WP_CSV_COLUMNS] });
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", "attachment; filename=wajib_pajak.csv");
-    res.send(csv);
+    const xlsx = buildXlsxExportBuffer(rows, WP_CSV_COLUMNS, "Wajib Pajak");
+    res.setHeader("Content-Type", XLSX_MIME);
+    res.setHeader("Content-Disposition", "attachment; filename=wajib_pajak.xlsx");
+    res.send(xlsx);
   });
 
   app.get("/api/data-tools/samples/wp", async (req, res) => {
@@ -4299,10 +4431,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       groupBy,
     });
 
-    const csv = buildDashboardSummaryCsv(summary);
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", "attachment; filename=dashboard_summary.csv");
-    return res.send(csv);
+    const rows = buildDashboardSummaryRows(summary);
+    const xlsx = buildXlsxExportBuffer(
+      rows,
+      DASHBOARD_EXPORT_COLUMNS,
+      "Dashboard Summary",
+      DASHBOARD_NUMERIC_EXPORT_COLUMNS,
+      DASHBOARD_THOUSANDS_FORMAT_COLUMNS,
+    );
+    res.setHeader("Content-Type", XLSX_MIME);
+    res.setHeader("Content-Disposition", "attachment; filename=dashboard_summary.xlsx");
+    return res.send(xlsx);
   });
 
   app.get("/api/objek-pajak", async (req, res) => {
@@ -4837,11 +4976,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       kecamatan_nama: op.kecamatan || "",
       kelurahan_id: op.kelurahanId,
       kelurahan_nama: op.kelurahan || "",
-      omset_bulanan: op.omsetBulanan || "",
-      tarif_persen: op.tarifPersen || "",
-      pajak_bulanan: op.pajakBulanan || "",
-      latitude: op.latitude || "",
-      longitude: op.longitude || "",
+      omset_bulanan: op.omsetBulanan ?? "",
+      tarif_persen: op.tarifPersen ?? "",
+      pajak_bulanan: op.pajakBulanan ?? "",
+      latitude: op.latitude ?? "",
+      longitude: op.longitude ?? "",
       status: op.status,
       lampiran: attachmentMap.get(op.id) ?? "",
       ...(mode === "template" || !jenisPajak
@@ -4849,13 +4988,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         : buildOperationalDetailForCsv(op.detailPajak, jenisPajak)),
     }));
 
-    const csv = stringify(rows, { header: true, columns });
-    res.setHeader("Content-Type", "text/csv");
+    const xlsx = buildXlsxExportBuffer(
+      rows,
+      columns,
+      "Objek Pajak",
+      OP_NUMERIC_EXPORT_COLUMNS,
+      OP_THOUSANDS_FORMAT_COLUMNS,
+    );
+    res.setHeader("Content-Type", XLSX_MIME);
     res.setHeader(
       "Content-Disposition",
       `attachment; filename=${buildObjekPajakExportFileName(mode, jenisPajak)}`,
     );
-    res.send(csv);
+    res.send(xlsx);
   });
 
   app.post("/api/objek-pajak/import", upload.single("file"), async (req, res) => {

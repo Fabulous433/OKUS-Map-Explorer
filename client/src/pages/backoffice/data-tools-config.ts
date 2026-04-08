@@ -41,7 +41,7 @@ export const DATA_TOOLS_ENTITY_CONFIG: DataToolsEntityConfig[] = [
         actions: [
           {
             kind: "export",
-            label: "Export CSV Compact",
+            label: "Export XLSX Compact",
             description: "Subjek tunggal mengikuti peran WP + kolom lampiran.",
             icon: Download,
             href: "/api/wajib-pajak/export",

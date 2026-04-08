@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 
 import { createIntegrationServer, type JsonRecord } from "./_helpers";
+import { readFirstSheetRows } from "./_excel";
 
 async function run() {
   const server = await createIntegrationServer();
-  const { requestJson, requestText, loginAs } = server;
+  const { requestJson, requestText, requestBytes, loginAs } = server;
 
   try {
     const unauthExport = await requestText("/api/dashboard/summary/export");
@@ -39,17 +40,24 @@ async function run() {
     assert.equal(typeof firstTrend.createdOp, "number");
     assert.equal(typeof firstTrend.verifiedOp, "number");
 
-    const exportResult = await requestText(
+    const exportResult = await requestBytes(
       "/api/dashboard/summary/export?includeUnverified=true&from=2024-01-01&to=2026-12-31&groupBy=week",
     );
     assert.equal(exportResult.response.status, 200);
     assert.ok(
-      (exportResult.response.headers.get("content-type") ?? "").includes("text/csv"),
-      "Export harus text/csv",
+      /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/i.test(
+        exportResult.response.headers.get("content-type") ?? "",
+      ),
+      "Export harus XLSX",
     );
-    assert.ok(exportResult.body.includes("section,jenis_pajak,total"), "Header CSV wajib sesuai format");
-    assert.ok(exportResult.body.includes("by_jenis"), "CSV wajib memuat section by_jenis");
-    assert.ok(exportResult.body.includes("trend"), "CSV wajib memuat section trend");
+    assert.match(exportResult.response.headers.get("content-disposition") ?? "", /dashboard_summary\.xlsx/i);
+    const exportRows = readFirstSheetRows(exportResult.body);
+    const header = (exportRows[0] ?? []).map((value) => String(value));
+    assert.ok(header.includes("section"), "Header XLSX wajib memuat kolom section");
+    const sectionIndex = header.indexOf("section");
+    const sections = exportRows.slice(1).map((row) => String(row[sectionIndex] ?? ""));
+    assert.ok(sections.includes("by_jenis"), "XLSX wajib memuat section by_jenis");
+    assert.ok(sections.includes("trend"), "XLSX wajib memuat section trend");
   } finally {
     await server.close();
   }

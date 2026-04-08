@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
-import { parse } from "csv-parse/sync";
 
 import { createIntegrationServer, requiredNumber, requiredString, type JsonRecord } from "./_helpers";
-import { buildExcelBlob } from "./_excel";
+import { buildExcelBlob, readFirstSheetRows } from "./_excel";
 
 const WP_COMPACT_COLUMNS = [
   "jenis_wp",
@@ -55,7 +54,7 @@ const WP_LEGACY_COLUMNS = [
 
 async function run() {
   const server = await createIntegrationServer();
-  const { loginAs, requestJson, requestText, requestForm, jsonRequest } = server;
+  const { loginAs, requestJson, requestBytes, requestForm, jsonRequest } = server;
 
   let compactWpId: number | null = null;
   let legacyWpId: number | null = null;
@@ -160,16 +159,20 @@ async function run() {
     assert.ok(legacyWp, "WP hasil import legacy harus ditemukan");
     legacyWpId = requiredNumber(legacyWp?.id, "legacy wp id wajib ada");
 
-    const exportCsv = await requestText("/api/wajib-pajak/export");
-    assert.equal(exportCsv.response.status, 200);
-    const exportRows = parse<Record<string, string>>(exportCsv.body, {
-      columns: true,
-      skip_empty_lines: true,
-      trim: true,
-    });
+    const exportWorkbook = await requestBytes("/api/wajib-pajak/export");
+    assert.equal(exportWorkbook.response.status, 200);
+    assert.match(
+      exportWorkbook.response.headers.get("content-type") ?? "",
+      /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/i,
+    );
+
+    const exportSheetRows = readFirstSheetRows(exportWorkbook.body);
+    const exportHeaders = (exportSheetRows[0] ?? []).map((value) => String(value));
+    const exportRows = exportSheetRows.slice(1).map((row) =>
+      Object.fromEntries(exportHeaders.map((header, idx) => [header, String(row[idx] ?? "")])),
+    );
     assert.ok(exportRows.length > 0);
 
-    const exportHeaders = Object.keys(exportRows[0]);
     assert.ok(exportHeaders.includes("nama_subjek"), "Export WP harus memakai header compact");
     assert.ok(exportHeaders.includes("lampiran"), "Export WP harus memuat status lampiran");
     assert.equal(exportHeaders.includes("nama_pengelola"), false, "Header legacy pengelola tidak boleh ikut di export compact");
@@ -222,10 +225,10 @@ async function run() {
 
 run()
   .then(() => {
-    console.log("[integration] WP Excel import + compact CSV export contract: PASS");
+    console.log("[integration] WP Excel import + compact XLSX export contract: PASS");
   })
   .catch((error) => {
-    console.error("[integration] WP Excel import + compact CSV export contract: FAIL");
+    console.error("[integration] WP Excel import + compact XLSX export contract: FAIL");
     console.error(error);
     process.exitCode = 1;
   });

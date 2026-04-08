@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
-import { parse } from "csv-parse/sync";
 
 import { createIntegrationServer, requiredNumber, requiredString, type JsonRecord } from "./_helpers";
-import { buildExcelBlob } from "./_excel";
+import { buildExcelBlob, readFirstSheetRows } from "./_excel";
 
 const OP_CSV_COLUMNS = [
   "nopd",
@@ -62,7 +61,7 @@ const OP_CSV_COLUMNS = [
 
 async function run() {
   const server = await createIntegrationServer();
-  const { requestJson, requestText, requestForm, jsonRequest, loginAs } = server;
+  const { requestJson, requestBytes, requestForm, jsonRequest, loginAs } = server;
 
   let sourceId: number | null = null;
   const importedIds: number[] = [];
@@ -117,17 +116,20 @@ async function run() {
     assert.equal(uploadAttachment.response.status, 201);
     attachmentId = String((uploadAttachment.body as JsonRecord).id);
 
-    const exportCsv = await requestText("/api/objek-pajak/export");
-    assert.equal(exportCsv.response.status, 200);
-
-    const rows = parse<Record<string, string>>(exportCsv.body, {
-      columns: true,
-      skip_empty_lines: true,
-      trim: true,
-    });
+    const exportWorkbook = await requestBytes("/api/objek-pajak/export");
+    assert.equal(exportWorkbook.response.status, 200);
+    assert.match(
+      exportWorkbook.response.headers.get("content-type") ?? "",
+      /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/i,
+    );
+    const exportSheetRows = readFirstSheetRows(exportWorkbook.body);
+    const exportHeaders = (exportSheetRows[0] ?? []).map((value) => String(value));
+    const rows = exportSheetRows.slice(1).map((row) =>
+      Object.fromEntries(exportHeaders.map((header, idx) => [header, String(row[idx] ?? "")])),
+    );
 
     assert.ok(rows.length > 0);
-    const firstRowKeys = Object.keys(rows[0]);
+    const firstRowKeys = exportHeaders;
     assert.ok(firstRowKeys.includes("nama_op"));
     assert.ok(firstRowKeys.includes("rek_pajak_id"));
     assert.ok(firstRowKeys.includes("kecamatan_id"));
@@ -146,17 +148,20 @@ async function run() {
     assert.ok(operationalCandidate, "Minimal harus ada satu OP seeded dengan detail jenis pajak spesifik");
     const operationalJenis = requiredString(operationalCandidate?.jenisPajak, "jenis pajak kandidat export wajib ada");
 
-    const operationalExport = await requestText(
+    const operationalExport = await requestBytes(
       `/api/objek-pajak/export?mode=operational&jenisPajak=${encodeURIComponent(operationalJenis)}`,
     );
     assert.equal(operationalExport.response.status, 200);
-    const operationalRows = parse<Record<string, string>>(operationalExport.body, {
-      columns: true,
-      skip_empty_lines: true,
-      trim: true,
-    });
+    assert.match(
+      operationalExport.response.headers.get("content-type") ?? "",
+      /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/i,
+    );
+    const operationalSheetRows = readFirstSheetRows(operationalExport.body);
+    const operationalHeaders = (operationalSheetRows[0] ?? []).map((value) => String(value));
+    const operationalRows = operationalSheetRows.slice(1).map((row) =>
+      Object.fromEntries(operationalHeaders.map((header, idx) => [header, String(row[idx] ?? "")])),
+    );
     assert.ok(operationalRows.length > 0, "Export operasional per jenis harus berisi data");
-    const operationalHeaders = Object.keys(operationalRows[0]);
     assert.ok(operationalHeaders.includes("lampiran"), "Export operasional harus memuat status lampiran");
     assert.ok(operationalHeaders.includes("nama_op"));
     assert.ok(operationalHeaders.includes("rek_pajak_id"));
@@ -305,10 +310,10 @@ async function run() {
 
 run()
   .then(() => {
-    console.log("[integration] OP Excel import + CSV export contract: PASS");
+    console.log("[integration] OP Excel import + XLSX export contract: PASS");
   })
   .catch((error) => {
-    console.error("[integration] OP Excel import + CSV export contract: FAIL");
+    console.error("[integration] OP Excel import + XLSX export contract: FAIL");
     console.error(error);
     process.exitCode = 1;
   });
