@@ -105,6 +105,7 @@ type ObjekPajakMapFilter = {
   q?: string;
   kecamatanId?: string;
   rekPajakId?: number;
+  focusOpId?: number;
   statusVerifikasi?: string;
   limit: number;
 };
@@ -1263,23 +1264,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getObjekPajakMap(filters: ObjekPajakMapFilter): Promise<{ items: MapObjekPajakItem[]; totalInView: number; isCapped: boolean }> {
-    const conditions: SQL[] = [
+    const sharedConditions: SQL[] = [
       sql`${objekPajak.latitude} is not null`,
       sql`${objekPajak.longitude} is not null`,
-      sql`cast(${objekPajak.latitude} as double precision) between ${filters.minLat} and ${filters.maxLat}`,
-      sql`cast(${objekPajak.longitude} as double precision) between ${filters.minLng} and ${filters.maxLng}`,
     ];
 
     if (filters.statusVerifikasi) {
-      conditions.push(eq(objekPajak.statusVerifikasi, filters.statusVerifikasi));
+      sharedConditions.push(eq(objekPajak.statusVerifikasi, filters.statusVerifikasi));
     }
 
     if (filters.kecamatanId) {
-      conditions.push(eq(objekPajak.kecamatanId, filters.kecamatanId));
+      sharedConditions.push(eq(objekPajak.kecamatanId, filters.kecamatanId));
     }
 
     if (filters.rekPajakId) {
-      conditions.push(eq(objekPajak.rekPajakId, filters.rekPajakId));
+      sharedConditions.push(eq(objekPajak.rekPajakId, filters.rekPajakId));
     }
 
     if (filters.q) {
@@ -1290,9 +1289,83 @@ export class DatabaseStorage implements IStorage {
         ilike(objekPajak.alamatOp, like),
       );
       if (searchCondition) {
-        conditions.push(searchCondition);
+        sharedConditions.push(searchCondition);
       }
     }
+
+    const mapRowToItem = (row: {
+      id: number;
+      wpId: number;
+      nopd: string;
+      namaOp: string;
+      alamatOp: string;
+      pajakBulanan: string | null;
+      statusVerifikasi: string;
+      jenisPajak: string | null;
+      latitude: number;
+      longitude: number;
+    }): MapObjekPajakItem => ({
+      id: row.id,
+      wpId: row.wpId,
+      nopd: row.nopd,
+      namaOp: row.namaOp,
+      jenisPajak: row.jenisPajak ?? "Pajak MBLB",
+      alamatOp: row.alamatOp,
+      pajakBulanan: row.pajakBulanan,
+      statusVerifikasi: row.statusVerifikasi,
+      latitude: row.latitude,
+      longitude: row.longitude,
+    });
+
+    if (filters.focusOpId) {
+      const focusConditions = [...sharedConditions, eq(objekPajak.id, filters.focusOpId)];
+      const [focusedRow] = await db
+        .select({
+          id: objekPajak.id,
+          wpId: objekPajak.wpId,
+          nopd: objekPajak.nopd,
+          namaOp: objekPajak.namaOp,
+          alamatOp: objekPajak.alamatOp,
+          pajakBulanan: objekPajak.pajakBulanan,
+          statusVerifikasi: objekPajak.statusVerifikasi,
+          jenisPajak: masterRekeningPajak.jenisPajak,
+          latitude: sql<number>`cast(${objekPajak.latitude} as double precision)`,
+          longitude: sql<number>`cast(${objekPajak.longitude} as double precision)`,
+        })
+        .from(objekPajak)
+        .leftJoin(masterRekeningPajak, eq(objekPajak.rekPajakId, masterRekeningPajak.id))
+        .where(and(...focusConditions))
+        .limit(1);
+
+      if (!focusedRow) {
+        return {
+          items: [],
+          totalInView: 0,
+          isCapped: false,
+        };
+      }
+
+      const isInsideKabupaten = await isPointInsideActiveKabupaten(focusedRow.longitude, focusedRow.latitude);
+      if (!isInsideKabupaten) {
+        return {
+          items: [],
+          totalInView: 0,
+          isCapped: false,
+        };
+      }
+
+      return {
+        items: [mapRowToItem(focusedRow)],
+        totalInView: 1,
+        isCapped: false,
+      };
+    }
+
+    const conditions = [
+      ...sharedConditions,
+      sql`cast(${objekPajak.latitude} as double precision) between ${filters.minLat} and ${filters.maxLat}`,
+      sql`cast(${objekPajak.longitude} as double precision) between ${filters.minLng} and ${filters.maxLng}`,
+    ];
 
     const candidateRows = await db
       .select({
@@ -1339,18 +1412,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(objekPajak.updatedAt), desc(objekPajak.id))
       .limit(filters.limit);
 
-    const items: MapObjekPajakItem[] = rows.map((row) => ({
-      id: row.id,
-      wpId: row.wpId,
-      nopd: row.nopd,
-      namaOp: row.namaOp,
-      jenisPajak: row.jenisPajak ?? "Pajak MBLB",
-      alamatOp: row.alamatOp,
-      pajakBulanan: row.pajakBulanan,
-      statusVerifikasi: row.statusVerifikasi,
-      latitude: row.latitude,
-      longitude: row.longitude,
-    }));
+    const items: MapObjekPajakItem[] = rows.map(mapRowToItem);
 
     return {
       items,

@@ -43,6 +43,8 @@ function parseCoordinate(value: string) {
 export function MapPickerEmbed(props: {
   lat: string;
   lng: string;
+  kecamatanId?: string;
+  kelurahanName?: string;
   onSelect: (lat: number, lng: number) => void;
   onInvalidSelection?: (message: string | null) => void;
 }) {
@@ -60,16 +62,59 @@ export function MapPickerEmbed(props: {
   const onInvalidSelectionRef = useRef(props.onInvalidSelection);
   const boundaryStateRef = useRef<RegionBoundaryClientState | null>(null);
   const hasAnchoredRegionRef = useRef(false);
+  const lastAnchorModeRef = useRef<"coordinate" | "kelurahan" | "kabupaten" | null>(null);
 
   const { data: activeKabupatenBoundary } = useQuery({
     queryKey: ["active-region-boundary", regionConfig.identity.regionKey, "kabupaten", "picker"],
     queryFn: ({ signal }) => loadActiveRegionBoundary({ level: "kabupaten", signal }),
     staleTime: 5 * 60 * 1000,
   });
+  const { data: activeDesaBoundary } = useQuery({
+    queryKey: [
+      "active-region-boundary",
+      regionConfig.identity.regionKey,
+      "desa",
+      "picker",
+      props.kecamatanId ?? "none",
+    ],
+    queryFn: ({ signal }) =>
+      loadActiveRegionBoundary({
+        level: "desa",
+        kecamatanId: props.kecamatanId,
+        signal,
+      }),
+    enabled: Boolean(props.kecamatanId),
+    staleTime: 5 * 60 * 1000,
+  });
 
   const boundaryState = useMemo(() => {
     return activeKabupatenBoundary ? createRegionBoundaryClientState(activeKabupatenBoundary.boundary) : null;
   }, [activeKabupatenBoundary]);
+  const selectedKelurahanBounds = useMemo(() => {
+    const targetName = String(props.kelurahanName ?? "").trim();
+    if (!targetName || !activeDesaBoundary?.boundary?.features?.length) {
+      return null;
+    }
+
+    const normalizeRegionName = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const normalizedTarget = normalizeRegionName(targetName);
+    const matchedFeature = activeDesaBoundary.boundary.features.find((feature) => {
+      const props = (feature.properties ?? {}) as Record<string, unknown>;
+      const candidateName = String(props.WADMKD ?? props.NAMOBJ ?? "").trim();
+      return candidateName.length > 0 && normalizeRegionName(candidateName) === normalizedTarget;
+    });
+
+    if (!matchedFeature) {
+      return null;
+    }
+
+    try {
+      const bounds = L.geoJSON(matchedFeature as any).getBounds();
+      return bounds.isValid() ? bounds : null;
+    } catch {
+      return null;
+    }
+  }, [activeDesaBoundary, props.kelurahanName]);
 
   useEffect(() => {
     onSelectRef.current = props.onSelect;
@@ -162,9 +207,33 @@ export function MapPickerEmbed(props: {
 
     map.setMaxBounds(boundaryState.maxBounds as L.LatLngBoundsExpression);
 
+    const latitude = parseCoordinate(props.lat);
+    const longitude = parseCoordinate(props.lng);
+    const hasCoordinateTarget = latitude !== null && longitude !== null;
+
     if (!hasAnchoredRegionRef.current) {
-      map.fitBounds(boundaryState.maxBounds as L.LatLngBoundsExpression, { padding: [16, 16] });
+      if (hasCoordinateTarget) {
+        map.setView([latitude, longitude], 17, { animate: false });
+        lastAnchorModeRef.current = "coordinate";
+      } else if (selectedKelurahanBounds) {
+        map.fitBounds(selectedKelurahanBounds, { padding: [16, 16] });
+        lastAnchorModeRef.current = "kelurahan";
+      } else {
+        map.fitBounds(boundaryState.maxBounds as L.LatLngBoundsExpression, { padding: [16, 16] });
+        lastAnchorModeRef.current = "kabupaten";
+      }
       hasAnchoredRegionRef.current = true;
+    } else if (hasCoordinateTarget && lastAnchorModeRef.current !== "coordinate") {
+      map.setView([latitude, longitude], 17, { animate: false });
+      lastAnchorModeRef.current = "coordinate";
+    } else if (
+      !hasCoordinateTarget &&
+      selectedKelurahanBounds &&
+      lastAnchorModeRef.current === "kabupaten"
+    ) {
+      // Upgrade focus from kabupaten fallback to selected kelurahan once desa boundary finishes loading.
+      map.fitBounds(selectedKelurahanBounds, { padding: [16, 16] });
+      lastAnchorModeRef.current = "kelurahan";
     }
 
     return () => {
@@ -173,7 +242,7 @@ export function MapPickerEmbed(props: {
         boundaryLayerRef.current = null;
       }
     };
-  }, [boundaryState]);
+  }, [boundaryState, props.lat, props.lng, selectedKelurahanBounds]);
 
   useEffect(() => {
     const map = mapInstanceRef.current;

@@ -26,6 +26,7 @@ import { AttachmentPreviewDialog } from "@/components/attachments/attachment-pre
 import { AttachmentTypeBadge } from "@/components/attachments/attachment-type-badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/lib/auth";
+import { createPublicMapDesaKey } from "@/lib/map/public-map-route-state";
 import { queryClient } from "@/lib/queryClient";
 import type {
   EntityAttachmentResponse,
@@ -332,7 +333,23 @@ export default function BackofficeObjekPajakDetail() {
       focusOpId: String(op.id),
       focusLat: String(op.latitude),
       focusLng: String(op.longitude),
+      includeUnverified: "true",
     });
+    const kelurahanName = (op.kelurahan ?? kelurahanList.find((item) => item.cpmKelId === op.kelurahanId)?.cpmKelurahan ?? "").trim();
+    if (op.kecamatanId && kelurahanName) {
+      params.set("stage", "desa");
+      params.set("kecamatanId", op.kecamatanId);
+      params.set(
+        "desaKey",
+        createPublicMapDesaKey({
+          kecamatanId: op.kecamatanId,
+          desaName: kelurahanName,
+        }),
+      );
+    } else if (op.kecamatanId) {
+      params.set("stage", "kecamatan");
+      params.set("kecamatanId", op.kecamatanId);
+    }
     setLocation(`/?${params.toString()}`);
   };
 

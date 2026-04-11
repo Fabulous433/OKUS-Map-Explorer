@@ -294,7 +294,7 @@ export function createPublicMapVisibleMarkers(params: {
   }
 
   const stageBoundaryFilteredMarkers =
-    params.stageState.stage === "desa" && params.stageState.selectedDesa
+    params.stageState.stage === "desa" && params.stageState.selectedDesa && !params.hasFocusOverride
       ? filterViewportMarkersByBoundarySelection({
           selection: {
             feature: params.stageState.selectedDesa.feature,
@@ -312,7 +312,12 @@ export function createPublicMapVisibleMarkers(params: {
 export function getPublicMapMarkerQueryBounds(params: {
   stageState: PublicMapStageState;
   viewportBbox: MapViewportBbox | null;
+  hasFocusOverride: boolean;
 }) {
+  if (params.hasFocusOverride && params.viewportBbox) {
+    return params.viewportBbox;
+  }
+
   if (params.stageState.stage === "desa" && params.stageState.selectedDesa) {
     return params.stageState.selectedDesa.bounds;
   }

@@ -47,6 +47,7 @@ const regionDataDir = path.join(
 let activeRegionBundlePromise: Promise<ActiveRegionBundle> | null = null;
 let mergedDesaPreciseBoundaryPromise: Promise<GeoJsonFeatureCollection> | null = null;
 let mergedDesaLightBoundaryPromise: Promise<GeoJsonFeatureCollection> | null = null;
+let hasLoggedBoundaryRevisionTableFallback = false;
 
 async function readCollection(fileName: string) {
   const raw = await readFile(path.join(regionDataDir, fileName), "utf-8");
@@ -190,28 +191,60 @@ function filterDesaBoundaryByKecamatan(
 
 async function loadPublishedDesaOverrides(): Promise<PublishedBoundaryFeature[]> {
   const { db } = await import("./storage");
-  const rows = await db
-    .select({
-      revisionId: regionBoundaryRevision.id,
-      publishedAt: regionBoundaryRevision.publishedAt,
-      boundaryKey: regionBoundaryRevisionFeature.boundaryKey,
-      kecamatanId: regionBoundaryRevisionFeature.kecamatanId,
-      kelurahanId: regionBoundaryRevisionFeature.kelurahanId,
-      namaDesa: regionBoundaryRevisionFeature.namaDesa,
-      geometry: regionBoundaryRevisionFeature.geometry,
-    })
-    .from(regionBoundaryRevisionFeature)
-    .innerJoin(regionBoundaryRevision, eq(regionBoundaryRevisionFeature.revisionId, regionBoundaryRevision.id))
-    .where(
-      and(
-        eq(regionBoundaryRevision.regionKey, "okus"),
-        eq(regionBoundaryRevision.level, "desa"),
-        eq(regionBoundaryRevision.status, "published"),
-      ),
-    )
-    .orderBy(desc(regionBoundaryRevision.publishedAt), desc(regionBoundaryRevision.id), desc(regionBoundaryRevisionFeature.id));
 
-  return collectLatestPublishedBoundaryFeatures(rows);
+  try {
+    const rows = await db
+      .select({
+        revisionId: regionBoundaryRevision.id,
+        publishedAt: regionBoundaryRevision.publishedAt,
+        boundaryKey: regionBoundaryRevisionFeature.boundaryKey,
+        kecamatanId: regionBoundaryRevisionFeature.kecamatanId,
+        kelurahanId: regionBoundaryRevisionFeature.kelurahanId,
+        namaDesa: regionBoundaryRevisionFeature.namaDesa,
+        geometry: regionBoundaryRevisionFeature.geometry,
+      })
+      .from(regionBoundaryRevisionFeature)
+      .innerJoin(regionBoundaryRevision, eq(regionBoundaryRevisionFeature.revisionId, regionBoundaryRevision.id))
+      .where(
+        and(
+          eq(regionBoundaryRevision.regionKey, "okus"),
+          eq(regionBoundaryRevision.level, "desa"),
+          eq(regionBoundaryRevision.status, "published"),
+        ),
+      )
+      .orderBy(desc(regionBoundaryRevision.publishedAt), desc(regionBoundaryRevision.id), desc(regionBoundaryRevisionFeature.id));
+
+    return collectLatestPublishedBoundaryFeatures(rows);
+  } catch (error) {
+    if (isMissingBoundaryRevisionTableError(error)) {
+      if (!hasLoggedBoundaryRevisionTableFallback) {
+        hasLoggedBoundaryRevisionTableFallback = true;
+        console.warn(
+          "[region-boundaries] Table revisi boundary belum tersedia. Fallback ke boundary file default tanpa override.",
+        );
+      }
+      return [];
+    }
+    throw error;
+  }
+}
+
+function isMissingBoundaryRevisionTableError(error: unknown) {
+  const code = typeof error === "object" && error !== null && "code" in error ? String((error as any).code ?? "") : "";
+  const message = error instanceof Error ? error.message : String(error ?? "");
+
+  if (code === "42P01") {
+    return true;
+  }
+
+  const normalizedMessage = message.toLowerCase();
+  return (
+    normalizedMessage.includes("region_boundary_revision_feature") &&
+    normalizedMessage.includes("does not exist")
+  ) || (
+    normalizedMessage.includes("region_boundary_revision") &&
+    normalizedMessage.includes("does not exist")
+  );
 }
 
 function collectLatestPublishedBoundaryFeatures(

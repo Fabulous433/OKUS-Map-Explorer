@@ -135,6 +135,7 @@ async function run() {
         maxLng: number;
         maxLat: number;
       } | null;
+      hasFocusOverride: boolean;
     }) => {
       minLng: number;
       minLat: number;
@@ -451,6 +452,26 @@ async function run() {
   );
   assert.equal(
     createPublicMapVisibleMarkers!({
+      stageState: afterDesa,
+      hasFocusOverride: true,
+      markers: [
+        {
+          id: 99,
+          focusKey: "99",
+          namaOp: "OP Fokus",
+          nopd: "13.01.01.0099",
+          jenisPajak: "Pajak Reklame",
+          alamatOp: "Luar polygon desa",
+          latitude: -4.3,
+          longitude: 104.8,
+        },
+      ],
+    }).length,
+    1,
+    "deep-link fokus tidak boleh menyembunyikan marker target hanya karena filter polygon desa",
+  );
+  assert.equal(
+    createPublicMapVisibleMarkers!({
       stageState: initialState,
       hasFocusOverride: true,
       markers: markerList,
@@ -467,9 +488,29 @@ async function run() {
         maxLng: 104.6,
         maxLat: -4.2,
       },
+      hasFocusOverride: false,
     }),
     afterDesa.selectedDesa?.bounds ?? null,
     "query marker tahap desa harus memakai bounds desa aktif, bukan viewport sempit saat zoom paling dekat",
+  );
+  assert.deepEqual(
+    getPublicMapMarkerQueryBounds!({
+      stageState: afterDesa,
+      viewportBbox: {
+        minLng: 104.5,
+        minLat: -4.3,
+        maxLng: 104.6,
+        maxLat: -4.2,
+      },
+      hasFocusOverride: true,
+    }),
+    {
+      minLng: 104.5,
+      minLat: -4.3,
+      maxLng: 104.6,
+      maxLat: -4.2,
+    },
+    "deep-link fokus harus tetap memakai viewport aktual agar marker target tetap bisa terambil",
   );
   assert.deepEqual(
     getPublicMapMarkerQueryBounds!({
@@ -480,6 +521,7 @@ async function run() {
         maxLng: 104.6,
         maxLat: -4.2,
       },
+      hasFocusOverride: false,
     }),
     {
       minLng: 104.5,

@@ -29,11 +29,12 @@ import { ApiError, type ApiFieldError, apiRequest } from "@/lib/queryClient";
 import { AttachmentPanel } from "@/components/attachments/attachment-panel";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type {
- MasterKecamatan,
- MasterKelurahan,
- MasterRekeningPajak,
- ObjekPajak,
- WajibPajakListItem,
+  EntityAttachmentResponse,
+  MasterKecamatan,
+  MasterKelurahan,
+  MasterRekeningPajak,
+  ObjekPajak,
+  WajibPajakListItem,
 } from "@shared/schema";
 import { DetailFieldsByJenis } from "./objek-pajak-detail-fields";
 import { MapPickerEmbed } from "./objek-pajak-map-picker";
@@ -264,9 +265,10 @@ const createMutation = useMutation({
  );
  const rekeningOptions = rekeningList;
  const selectedKecamatanId = form.watch("kecamatanId");
+ const selectedKelurahanId = form.watch("kelurahanId");
  const selectedWpId = form.watch("wpId");
  const selectedWp = wpList.find((item) => item.id === selectedWpId);
- const { data: selectedWpFallback } = useQuery<WajibPajakListItem | null>({
+  const { data: selectedWpFallback } = useQuery<WajibPajakListItem | null>({
  queryKey: [`/api/wajib-pajak/detail/${selectedWpId}`],
  enabled: Boolean(selectedWpId && !selectedWp),
  queryFn: async () => {
@@ -278,14 +280,31 @@ const createMutation = useMutation({
  return (await response.json()) as WajibPajakListItem;
  },
  });
- const resolvedSelectedWp = selectedWp ?? selectedWpFallback ?? null;
- const selectedKecamatanKode = kecamatanList.find((item) => item.cpmKecId === selectedKecamatanId)?.cpmKodeKec;
+  const resolvedSelectedWp = selectedWp ?? selectedWpFallback ?? null;
+  const { data: editAttachments } = useQuery<EntityAttachmentResponse[] | null>({
+    queryKey: ["/api/objek-pajak", editOp?.id ?? "new", "attachments"],
+    enabled: mode === "edit" && Boolean(editOp?.id) && isOpen,
+    queryFn: async () => {
+      if (!editOp?.id) return null;
+      const response = await fetch(`/api/objek-pajak/${editOp.id}/attachments`, { credentials: "include" });
+      if (!response.ok) {
+        return null;
+      }
+      return (await response.json()) as EntityAttachmentResponse[];
+    },
+  });
+  const selectedKecamatanKode = kecamatanList.find((item) => item.cpmKecId === selectedKecamatanId)?.cpmKodeKec;
+ const selectedKelurahanName = kelurahanList.find((item) => item.cpmKelId === selectedKelurahanId)?.cpmKelurahan;
  const filteredKelurahanList = selectedKecamatanKode
  ? kelurahanList.filter((item) => item.cpmKodeKec === selectedKecamatanKode)
  : [];
 const currentValues = form.watch();
 const currentStepIndex = CREATE_WIZARD_STEPS.findIndex((item) => item.id === wizardStep);
 const draftDocumentLabelMap = Object.fromEntries(OP_ATTACHMENT_OPTIONS.map((item) => [item.value, item.label]));
+ const hasDraftLocationPhoto = useMemo(
+  () => draftAttachments.some((item) => item.documentType === "foto_lokasi"),
+  [draftAttachments],
+ );
 const normalizedWpSearch = wpSearch.trim().toLocaleLowerCase("id-ID");
  const { data: searchedWpPage } = useQuery<{ items: WajibPajakListItem[] }>({
  queryKey: [`/api/wajib-pajak?page=1&limit=100&q=${encodeURIComponent(normalizedWpSearch)}`],
@@ -366,7 +385,7 @@ const normalizedWpSearch = wpSearch.trim().toLocaleLowerCase("id-ID");
  }
  };
 
- const runQualityCheck = async (payload: NormalizedOpPayload) => {
+  const runQualityCheck = async (payload: NormalizedOpPayload) => {
  const candidate = {
  nopd: payload.nopd,
  nama: payload.namaOp,
@@ -377,19 +396,59 @@ const normalizedWpSearch = wpSearch.trim().toLocaleLowerCase("id-ID");
  const warnings = body.warnings ?? [];
  setQualityWarnings(warnings);
  return warnings;
- };
+  };
 
- const handleSubmit = async (data: OPFormValues) => {
+  const resolveHasLocationPhoto = async () => {
+    if (mode === "create") {
+      return hasDraftLocationPhoto;
+    }
+
+    if (Array.isArray(editAttachments)) {
+      return editAttachments.some((item) => item.documentType === "foto_lokasi");
+    }
+
+    if (!editOp?.id) {
+      return false;
+    }
+
+    try {
+      const response = await fetch(`/api/objek-pajak/${editOp.id}/attachments`, { credentials: "include" });
+      if (!response.ok) {
+        return false;
+      }
+      const payload = (await response.json()) as EntityAttachmentResponse[];
+      return payload.some((item) => item.documentType === "foto_lokasi");
+    } catch {
+      return false;
+    }
+  };
+
+  const handleSubmit = async (data: OPFormValues) => {
  form.clearErrors();
  setSubmitFieldErrors([]);
  const payload = normalizeOpPayload(data, rekeningList);
  const warnings = await runQualityCheck(payload);
- if (warnings.length > 0) {
- const proceed = window.confirm(`Ditemukan ${warnings.length} warning data quality. Lanjutkan simpan?`);
- if (!proceed) return;
- }
+  if (warnings.length > 0) {
+  const proceed = window.confirm(`Ditemukan ${warnings.length} warning data quality. Lanjutkan simpan?`);
+  if (!proceed) return;
+  }
 
- if (mode === "edit") {
+  const hasCoordinates =
+    typeof payload.latitude === "string" &&
+    payload.latitude.trim().length > 0 &&
+    typeof payload.longitude === "string" &&
+    payload.longitude.trim().length > 0;
+  if (hasCoordinates) {
+    const hasLocationPhoto = await resolveHasLocationPhoto();
+    if (!hasLocationPhoto) {
+      const proceedWithoutLocationPhoto = window.confirm(
+        "Koordinat sudah diisi, tetapi lampiran Foto Lokasi belum ada. Lanjut simpan tanpa foto lokasi?",
+      );
+      if (!proceedWithoutLocationPhoto) return;
+    }
+  }
+
+  if (mode === "edit") {
  updateMutation.mutate(payload);
  return;
  }
@@ -832,6 +891,8 @@ const reviewDetailEntries = (() => {
  <MapPickerEmbed
  lat={form.getValues("latitude") || ""}
  lng={form.getValues("longitude") || ""}
+ kecamatanId={selectedKecamatanId || undefined}
+ kelurahanName={selectedKelurahanName || undefined}
  onSelect={(lat, lng) => {
  form.clearErrors(["latitude", "longitude"]);
  setMapPickerFeedback(null);

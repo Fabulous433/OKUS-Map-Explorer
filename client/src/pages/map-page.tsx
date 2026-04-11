@@ -3,7 +3,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { motion, useReducedMotion } from "framer-motion";
 import { Link } from "wouter";
 import { MapContainer, Marker, Popup, TileLayer, useMap, ZoomControl } from "react-leaflet";
-import { Layers3, Loader2, MapPin, Settings, Target } from "lucide-react";
+import { ExternalLink, Layers3, Loader2, MapPin, Settings, Target } from "lucide-react";
 import L from "leaflet";
 import { PublicBoundaryLayer, PublicKabupatenMask } from "@/components/map/public-boundary-layer";
 import { PublicMapOpBottomSheet } from "@/components/map/public-map-op-bottom-sheet";
@@ -41,6 +41,11 @@ import {
   buildPublicMapRegionJumpGroups,
   type PublicMapRegionJumpItem,
 } from "@/lib/map/public-map-region-search";
+import {
+  createPublicMapSingleOpUiModel,
+  isPublicMapSingleOpMode,
+  resolvePublicMapFocusZoom,
+} from "@/lib/map/public-map-single-op-mode";
 import { applyPublicMapRouteStateToSearch, createPublicMapDesaKey, parsePublicMapRouteState, type PublicMapRouteState } from "@/lib/map/public-map-route-state";
 import {
   createDefaultPublicMapStageState,
@@ -72,7 +77,7 @@ import { loadActiveRegionBoundary } from "@/lib/map/region-boundary-query";
 import { getQueryFn } from "@/lib/queryClient";
 import { regionConfig } from "@/lib/region-config";
 import type { GeoJsonFeatureCollection, RegionBoundaryBounds } from "@shared/region-boundary";
-import type { MasterKecamatan } from "@shared/schema";
+import type { EntityAttachmentResponse, MasterKecamatan } from "@shared/schema";
 import "leaflet/dist/leaflet.css";
 
 function buildMarkerIcon(jenisPajak: string) {
@@ -455,6 +460,38 @@ function MapRailMarkerFocusController(props: {
   return null;
 }
 
+function MapInteractionLockController(props: {
+  locked: boolean;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!props.locked) {
+      return;
+    }
+
+    map.dragging.disable();
+    map.touchZoom.disable();
+    map.doubleClickZoom.disable();
+    map.scrollWheelZoom.disable();
+    map.boxZoom.disable();
+    map.keyboard.disable();
+    map.getContainer().style.cursor = "default";
+
+    return () => {
+      map.dragging.enable();
+      map.touchZoom.enable();
+      map.doubleClickZoom.enable();
+      map.scrollWheelZoom.enable();
+      map.boxZoom.enable();
+      map.keyboard.enable();
+      map.getContainer().style.cursor = "";
+    };
+  }, [map, props.locked]);
+
+  return null;
+}
+
 export default function MapPage() {
   const queryClient = useQueryClient();
   const reducedMotion = useReducedMotion() ?? false;
@@ -470,6 +507,9 @@ export default function MapPage() {
     createDefaultPublicMapMobileOpSheetState(),
   );
   const [focusParams, setFocusParams] = useState(() => parseMapFocusParams(window.location.search));
+  const [includeUnverifiedForFocus, setIncludeUnverifiedForFocus] = useState(
+    () => new URLSearchParams(window.location.search).get("includeUnverified") === "true",
+  );
   const initialRouteStateRef = useRef(parsePublicMapRouteState(window.location.search));
   const [routeRestoreComplete, setRouteRestoreComplete] = useState(initialRouteStateRef.current.stage === "kabupaten");
   const [transitionPulseKey, setTransitionPulseKey] = useState(0);
@@ -557,6 +597,7 @@ export default function MapPage() {
     const markerQueryBounds = getPublicMapMarkerQueryBounds({
       stageState,
       viewportBbox: bbox,
+      hasFocusOverride,
     });
 
     if (!markerQueryBounds || !isMarkerQueryActive) {
@@ -567,9 +608,11 @@ export default function MapPage() {
       bbox: markerQueryBounds,
       zoom,
       limit: 500,
-      kecamatanId: stageState.selectedKecamatan?.id ?? undefined,
+      kecamatanId: hasFocusOverride ? undefined : (stageState.selectedKecamatan?.id ?? undefined),
+      includeUnverified: hasFocusOverride && includeUnverifiedForFocus,
+      focusOpId: hasFocusOverride ? (focusParams.id ?? undefined) : undefined,
     });
-  }, [bbox, isMarkerQueryActive, stageState, zoom]);
+  }, [bbox, focusParams.id, hasFocusOverride, includeUnverifiedForFocus, isMarkerQueryActive, stageState, zoom]);
 
   const { data: mapData, isFetching, error } = useQuery<MapViewportResult>({
     queryKey: [
@@ -615,6 +658,59 @@ export default function MapPage() {
       }),
     [hasFocusOverride, markerList, stageState],
   );
+  const isSingleOpFocusMode = isPublicMapSingleOpMode({
+    hasFocusOverride,
+    focusId: focusParams.id,
+  });
+  const singleOpUiModel = useMemo(() => createPublicMapSingleOpUiModel(isSingleOpFocusMode), [isSingleOpFocusMode]);
+  const focusedOpMarker = useMemo(() => {
+    if (!isSingleOpFocusMode || focusParams.id === null) {
+      return null;
+    }
+
+    return visibleMarkerList.find((item) => String(item.id) === String(focusParams.id)) ?? null;
+  }, [focusParams.id, isSingleOpFocusMode, visibleMarkerList]);
+  const renderedMarkerList = useMemo(() => {
+    if (!isSingleOpFocusMode) {
+      return visibleMarkerList;
+    }
+
+    return focusedOpMarker ? [focusedOpMarker] : [];
+  }, [focusedOpMarker, isSingleOpFocusMode, visibleMarkerList]);
+  const focusAttachmentsQueryKey =
+    isSingleOpFocusMode && focusParams.id !== null ? `/api/objek-pajak/${focusParams.id}/attachments` : null;
+  const { data: focusAttachmentsData, isFetching: isFocusAttachmentsFetching } = useQuery<EntityAttachmentResponse[] | null>({
+    queryKey: [focusAttachmentsQueryKey ?? "focus-op-attachments-disabled"],
+    enabled: focusAttachmentsQueryKey !== null,
+    queryFn: getQueryFn({ on401: "returnNull" }),
+  });
+  const focusLocationPhotoAttachment = useMemo(() => {
+    if (!Array.isArray(focusAttachmentsData)) {
+      return null;
+    }
+
+    return (
+      focusAttachmentsData.find(
+        (item) => item.documentType === "foto_lokasi" && item.mimeType.toLowerCase().startsWith("image/"),
+      ) ?? null
+    );
+  }, [focusAttachmentsData]);
+  const focusLocationPhotoUrl =
+    focusLocationPhotoAttachment && focusParams.id !== null
+      ? `/api/objek-pajak/${focusParams.id}/attachments/${focusLocationPhotoAttachment.id}/download`
+      : null;
+  const focusTargetCoordinates = useMemo(() => {
+    if (focusedOpMarker) {
+      return {
+        lat: focusedOpMarker.latitude,
+        lng: focusedOpMarker.longitude,
+      };
+    }
+    return focusParams.target;
+  }, [focusParams.target, focusedOpMarker]);
+  const googleMapsUrl = focusTargetCoordinates
+    ? `https://www.google.com/maps?q=${focusTargetCoordinates.lat},${focusTargetCoordinates.lng}`
+    : null;
   const opRailModel: PublicMapOpRailModel = useMemo(
     () =>
       createPublicMapOpRailModel({
@@ -807,9 +903,9 @@ export default function MapPage() {
   }, [queryClient, stageState]);
 
   useEffect(() => {
-    if (!focusParams.id || visibleMarkerList.length === 0 || !focusedMarkerRef.current) return;
+    if (isSingleOpFocusMode || !focusParams.id || renderedMarkerList.length === 0 || !focusedMarkerRef.current) return;
 
-    const markerExists = visibleMarkerList.some((item) => String(item.id) === String(focusParams.id));
+    const markerExists = renderedMarkerList.some((item) => String(item.id) === String(focusParams.id));
     if (!markerExists) return;
 
     const timer = window.setTimeout(() => {
@@ -817,7 +913,7 @@ export default function MapPage() {
     }, 250);
 
     return () => window.clearTimeout(timer);
-  }, [focusParams.id, visibleMarkerList]);
+  }, [focusParams.id, isSingleOpFocusMode, renderedMarkerList]);
 
   useEffect(() => {
     if (selectedRailMarkerId === null) {
@@ -952,11 +1048,17 @@ export default function MapPage() {
     nextUrl.searchParams.delete("focusLat");
     nextUrl.searchParams.delete("focusLng");
     nextUrl.searchParams.delete("focusOpId");
+    nextUrl.searchParams.delete("includeUnverified");
+    setIncludeUnverifiedForFocus(false);
     const nextSearch = nextUrl.searchParams.toString();
     window.history.replaceState({}, "", `${nextUrl.pathname}${nextSearch ? `?${nextSearch}` : ""}${nextUrl.hash}`);
   }
 
   function handleBoundaryFeatureSelect(selection: BoundaryFeatureSelection) {
+    if (isSingleOpFocusMode) {
+      return;
+    }
+
     startTransition(() => {
       clearFocusOverride();
 
@@ -1111,24 +1213,79 @@ export default function MapPage() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background" data-testid="map-page">
-      <div className="absolute left-3 top-3 z-[1000] flex max-w-[min(calc(100vw-1.5rem),30rem)] flex-col gap-3 sm:left-4 sm:top-4">
-        <PublicMapStageHeader
-          model={stageHeaderModel}
-          status={stageStatusModel}
-          onBack={handleBackStage}
-          reducedMotion={reducedMotion}
-        />
-        <PublicMapRegionJump
-          compactViewport={compactViewport}
-          groups={regionJumpGroups}
-          open={regionJumpOpen}
-          query={regionJumpQuery}
-          selectedKecamatanName={stageState.selectedKecamatan?.name ?? null}
-          onOpenChange={handleRegionJumpOpenChange}
-          onQueryChange={setRegionJumpQuery}
-          onSelect={handleRegionJumpSelect}
-        />
-      </div>
+      {singleOpUiModel.showCompactStageShell ? (
+        <div className="absolute left-3 top-3 z-[1000] flex max-w-[min(calc(100vw-1.5rem),30rem)] flex-col gap-3 sm:left-4 sm:top-4">
+          <PublicMapStageHeader
+            model={stageHeaderModel}
+            status={stageStatusModel}
+            onBack={handleBackStage}
+            reducedMotion={reducedMotion}
+          />
+          <PublicMapRegionJump
+            compactViewport={compactViewport}
+            groups={regionJumpGroups}
+            open={regionJumpOpen}
+            query={regionJumpQuery}
+            selectedKecamatanName={stageState.selectedKecamatan?.name ?? null}
+            onOpenChange={handleRegionJumpOpenChange}
+            onQueryChange={setRegionJumpQuery}
+            onSelect={handleRegionJumpSelect}
+          />
+        </div>
+      ) : (
+        <div className="absolute left-3 top-3 z-[1000] w-[min(calc(100vw-1.5rem),28rem)] sm:left-4 sm:top-4">
+          <div className="rounded-[30px] border border-black/10 bg-white p-5 shadow-card">
+            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[#5e6875]">Lokasi Objek Pajak</p>
+            <h2 className="mt-2 font-sans text-3xl font-black leading-none text-[#071021]">
+              {focusedOpMarker?.namaOp ?? "Objek Pajak"}
+            </h2>
+            <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.16em] text-[#5e6875]">
+              NOPD {focusedOpMarker?.nopd ?? "-"}
+            </p>
+            <p className="mt-2 text-sm text-[#445066]">{focusedOpMarker?.alamatOp ?? "Lokasi OP tidak ditemukan di viewport."}</p>
+            {focusParams.id !== null ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link href={`/backoffice/objek-pajak/${focusParams.id}`}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 rounded-xl border-black/20 bg-white px-4 font-mono text-[11px] uppercase tracking-[0.16em] text-[#263041]"
+                  >
+                    Kembali ke Data OP
+                  </Button>
+                </Link>
+                {googleMapsUrl ? (
+                  <a href={googleMapsUrl} target="_blank" rel="noreferrer">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 rounded-xl border-black/20 bg-white px-4 font-mono text-[11px] uppercase tracking-[0.16em] text-[#263041]"
+                    >
+                      <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                      Buka Google Maps
+                    </Button>
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="mt-4 rounded-2xl border border-black/10 bg-[#eef2f7] p-3">
+              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#566175]">Foto Lokasi OP</p>
+              {isFocusAttachmentsFetching ? (
+                <p className="mt-2 text-sm text-[#667085]">Memuat foto lokasi...</p>
+              ) : focusLocationPhotoUrl ? (
+                <img
+                  src={focusLocationPhotoUrl}
+                  alt={`Foto lokasi ${focusedOpMarker?.namaOp ?? "objek pajak"}`}
+                  className="mt-2 h-44 w-full rounded-xl border border-black/10 object-cover"
+                />
+              ) : (
+                <p className="mt-2 text-sm text-[#667085]">Tidak ada foto OP.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="absolute right-3 top-3 z-[1000] flex items-center gap-2 sm:right-4 sm:top-4">
         <Button
@@ -1143,17 +1300,19 @@ export default function MapPage() {
           <span className="font-mono text-[11px] uppercase tracking-[0.18em]">{mapConfig.buttonLabel}</span>
         </Button>
 
-        <Button
-          type="button"
-          size="icon"
-          variant="outline"
-          className="h-11 w-11 rounded-2xl border-white/75 bg-white/90 shadow-card"
-          onClick={handleResetStage}
-          aria-label="Kembali ke peta OKU Selatan"
-          title="Kembali ke peta OKU Selatan"
-        >
-          <Target className="h-4 w-4" aria-hidden="true" />
-        </Button>
+        {singleOpUiModel.showResetButton ? (
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            className="h-11 w-11 rounded-2xl border-white/75 bg-white/90 shadow-card"
+            onClick={handleResetStage}
+            aria-label="Kembali ke peta OKU Selatan"
+            title="Kembali ke peta OKU Selatan"
+          >
+            <Target className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        ) : null}
 
         <Link href="/backoffice">
           <Button
@@ -1169,7 +1328,7 @@ export default function MapPage() {
         </Link>
       </div>
 
-      {stageState.stage === "desa" && !compactViewport ? (
+      {stageState.stage === "desa" && !compactViewport && singleOpUiModel.showTaxFilter ? (
         <div className="absolute bottom-20 left-3 right-3 z-[1000] sm:bottom-auto sm:left-4 sm:right-auto sm:top-[8.8rem]">
           <PublicMapTaxFilterChips
             options={taxTypeOptions}
@@ -1180,7 +1339,7 @@ export default function MapPage() {
         </div>
       ) : null}
 
-      {opRailModel.visible ? (
+      {opRailModel.visible && singleOpUiModel.showOpRail ? (
         <div className="absolute right-4 top-[8.8rem] z-[1000] hidden lg:block">
           <PublicMapOpRail
             model={opRailModel}
@@ -1191,7 +1350,7 @@ export default function MapPage() {
         </div>
       ) : null}
 
-      {mobileOpSheetModel.visible ? (
+      {mobileOpSheetModel.visible && singleOpUiModel.showMobileSheet ? (
         <div className="absolute bottom-3 left-3 right-3 z-[1000] sm:hidden">
           <PublicMapOpBottomSheet
             model={mobileOpSheetModel}
@@ -1229,60 +1388,79 @@ export default function MapPage() {
       >
         <TileLayer attribution={mapConfig.attribution} url={mapConfig.url} maxZoom={mapConfig.maxZoom} />
         <MapBaseMapZoomController maxZoom={mapConfig.maxZoom} />
-        <MapStageConstraintController
-          kabupatenBounds={activeKabupatenBoundary?.bounds ?? null}
-          stageBounds={activeStageConstraintBounds}
-          stage={stageState.stage}
-        />
-        <MapStageViewportController
-          stageState={stageState}
-          kabupatenBounds={activeKabupatenBoundary?.bounds ?? null}
-          baseMapMaxZoom={mapConfig.maxZoom}
-          focusTarget={focusParams.target}
+        <MapInteractionLockController locked={singleOpUiModel.lockMapInteractions} />
+        {!isSingleOpFocusMode ? (
+          <MapStageConstraintController
+            kabupatenBounds={activeKabupatenBoundary?.bounds ?? null}
+            stageBounds={activeStageConstraintBounds}
+            stage={stageState.stage}
+          />
+        ) : null}
+        {!isSingleOpFocusMode ? (
+          <MapStageViewportController
+            stageState={stageState}
+            kabupatenBounds={activeKabupatenBoundary?.bounds ?? null}
+            baseMapMaxZoom={mapConfig.maxZoom}
+            focusTarget={focusParams.target}
+            reducedMotion={reducedMotion}
+            resetToken={viewportResetToken}
+          />
+        ) : null}
+        <MapFocusController
+          target={focusParams.target}
+          zoom={resolvePublicMapFocusZoom({
+            singleOpMode: isSingleOpFocusMode,
+            baseMapMaxZoom: mapConfig.maxZoom,
+            defaultFocusZoom: Math.max(regionConfig.map.defaultZoom, 18),
+          })}
           reducedMotion={reducedMotion}
-          resetToken={viewportResetToken}
         />
-        <MapFocusController target={focusParams.target} zoom={Math.max(regionConfig.map.defaultZoom, 18)} reducedMotion={reducedMotion} />
-        <ZoomControl position="bottomright" />
+        {singleOpUiModel.showZoomControl ? <ZoomControl position="bottomright" /> : null}
         <MapViewportTracker
           onChange={(nextBbox, nextZoom) => {
             setBbox(nextBbox);
             setZoom(nextZoom);
           }}
         />
-        <MapDesaMarkerFocusController
-          stageState={stageState}
-          markers={visibleMarkerList}
-          reducedMotion={reducedMotion}
-          requiredZoom={activeViewportPlan.maxZoom}
-          zoom={zoom}
-        />
-        <MapRailMarkerFocusController
-          markerId={selectedRailMarkerId}
-          target={
-            selectedRailMarker
-              ? {
-                  lat: selectedRailMarker.latitude,
-                  lng: selectedRailMarker.longitude,
-                }
-              : null
-          }
-          zoom={activeViewportPlan.maxZoom}
-          reducedMotion={reducedMotion}
-        />
-        <MapRailMarkerFocusController
-          markerId={mobileOpSheetState.mode === "detail" ? mobileOpSheetState.markerId : null}
-          target={
-            selectedMobileSheetMarker
-              ? {
-                  lat: selectedMobileSheetMarker.latitude,
-                  lng: selectedMobileSheetMarker.longitude,
-                }
-              : null
-          }
-          zoom={activeViewportPlan.maxZoom}
-          reducedMotion={reducedMotion}
-        />
+        {!isSingleOpFocusMode ? (
+          <MapDesaMarkerFocusController
+            stageState={stageState}
+            markers={visibleMarkerList}
+            reducedMotion={reducedMotion}
+            requiredZoom={activeViewportPlan.maxZoom}
+            zoom={zoom}
+          />
+        ) : null}
+        {!isSingleOpFocusMode ? (
+          <MapRailMarkerFocusController
+            markerId={selectedRailMarkerId}
+            target={
+              selectedRailMarker
+                ? {
+                    lat: selectedRailMarker.latitude,
+                    lng: selectedRailMarker.longitude,
+                  }
+                : null
+            }
+            zoom={activeViewportPlan.maxZoom}
+            reducedMotion={reducedMotion}
+          />
+        ) : null}
+        {!isSingleOpFocusMode ? (
+          <MapRailMarkerFocusController
+            markerId={mobileOpSheetState.mode === "detail" ? mobileOpSheetState.markerId : null}
+            target={
+              selectedMobileSheetMarker
+                ? {
+                    lat: selectedMobileSheetMarker.latitude,
+                    lng: selectedMobileSheetMarker.longitude,
+                  }
+                : null
+            }
+            zoom={activeViewportPlan.maxZoom}
+            reducedMotion={reducedMotion}
+          />
+        ) : null}
 
         {activeKabupatenGeoJson ? <PublicKabupatenMask boundary={activeKabupatenGeoJson} /> : null}
 
@@ -1303,7 +1481,7 @@ export default function MapPage() {
             opacity={76}
             zoom={zoom}
             forceShowLabels
-            onFeatureSelect={handleBoundaryFeatureSelect}
+            onFeatureSelect={isSingleOpFocusMode ? undefined : handleBoundaryFeatureSelect}
           />
         ) : null}
 
@@ -1314,7 +1492,7 @@ export default function MapPage() {
             opacity={68}
             zoom={zoom}
             forceShowLabels
-            onFeatureSelect={handleBoundaryFeatureSelect}
+            onFeatureSelect={isSingleOpFocusMode ? undefined : handleBoundaryFeatureSelect}
           />
         ) : null}
 
@@ -1333,11 +1511,11 @@ export default function MapPage() {
                 opacity: 72,
               })
             }
-            onFeatureSelect={handleBoundaryFeatureSelect}
+            onFeatureSelect={isSingleOpFocusMode ? undefined : handleBoundaryFeatureSelect}
           />
         ) : null}
 
-        {visibleMarkerList.map((item) => (
+        {renderedMarkerList.map((item) => (
           <Marker
             key={item.focusKey}
             position={[item.latitude, item.longitude]}
@@ -1353,26 +1531,32 @@ export default function MapPage() {
                 markerRefs.current.delete(String(item.id));
               }
             }}
-            eventHandlers={{
-              click: () => {
-                if (compactViewport && stageState.stage === "desa") {
-                  setMobileOpSheetState(openPublicMapMobileOpSheetDetail(item.id));
-                  return;
-                }
+            eventHandlers={
+              isSingleOpFocusMode
+                ? undefined
+                : {
+                    click: () => {
+                      if (compactViewport && stageState.stage === "desa") {
+                        setMobileOpSheetState(openPublicMapMobileOpSheetDetail(item.id));
+                        return;
+                      }
 
-                setSelectedRailMarkerId(item.id);
-              },
-            }}
+                      setSelectedRailMarkerId(item.id);
+                    },
+                  }
+            }
           >
-            <Popup autoPan={false}>
-              <div className="min-w-[180px] space-y-1 font-mono text-xs">
-                <p className="font-bold">{item.namaOp}</p>
-                <p className="text-[11px] text-gray-600">{item.jenisPajak}</p>
-                <p>NOPD: {item.nopd}</p>
-                <p>{item.alamatOp}</p>
-                <p className="font-bold">{formatCurrency(item.pajakBulanan)} / bulan</p>
-              </div>
-            </Popup>
+            {!isSingleOpFocusMode ? (
+              <Popup autoPan={false}>
+                <div className="min-w-[180px] space-y-1 font-mono text-xs">
+                  <p className="font-bold">{item.namaOp}</p>
+                  <p className="text-[11px] text-gray-600">{item.jenisPajak}</p>
+                  <p>NOPD: {item.nopd}</p>
+                  <p>{item.alamatOp}</p>
+                  <p className="font-bold">{formatCurrency(item.pajakBulanan)} / bulan</p>
+                </div>
+              </Popup>
+            ) : null}
           </Marker>
         ))}
       </MapContainer>
@@ -1384,7 +1568,7 @@ export default function MapPage() {
         </div>
       ) : null}
 
-      {showMarkerBadges && !(compactViewport && mobileOpSheetModel.visible) ? (
+      {showMarkerBadges && !(compactViewport && mobileOpSheetModel.visible) && !isSingleOpFocusMode ? (
         <div className="absolute bottom-4 right-3 z-[1000] flex flex-wrap justify-end gap-2 sm:right-4">
           <Badge className="bg-[#2d3436] text-white">{visibleMarkerList.length} {viewportLabel}</Badge>
           {stageState.selectedTaxType !== "all" ? <Badge variant="secondary">{stageState.selectedTaxType}</Badge> : null}
@@ -1397,11 +1581,20 @@ export default function MapPage() {
         </div>
       ) : null}
 
-      {showEmptyViewportState ? (
+      {showEmptyViewportState && !isSingleOpFocusMode ? (
         <div className="absolute bottom-4 left-3 z-[1000] rounded-2xl bg-white/92 p-3 font-mono text-xs shadow-card sm:left-4">
           <div className="flex items-center gap-2">
             <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
             Tidak ada objek pajak di desa ini untuk filter yang aktif.
+          </div>
+        </div>
+      ) : null}
+
+      {isSingleOpFocusMode && !error && !isFetching && renderedMarkerList.length === 0 ? (
+        <div className="absolute bottom-4 left-3 z-[1000] rounded-2xl bg-white/92 p-3 font-mono text-xs shadow-card sm:left-4">
+          <div className="flex items-center gap-2">
+            <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+            Lokasi OP fokus tidak ditemukan pada data peta saat ini.
           </div>
         </div>
       ) : null}

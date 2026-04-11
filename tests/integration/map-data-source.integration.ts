@@ -65,6 +65,24 @@ async function run() {
     internalQueryUrl,
     "/api/map-proxy?bbox=104%2C-4.6%2C104.1%2C-4.4&zoom=13&limit=500&q=pasar+pagi&kecamatanId=1609010&rekPajakId=9",
   );
+
+  const internalFocusQueryUrl = buildInternalApiMapQueryUrl({
+    endpoint: defaultConfig.internalApiEndpoint,
+    bbox: {
+      minLng: 104,
+      minLat: -4.6,
+      maxLng: 104.1,
+      maxLat: -4.4,
+    },
+    zoom: 18,
+    limit: 500,
+    includeUnverified: true,
+    focusOpId: 1237,
+  });
+  assert.equal(
+    internalFocusQueryUrl,
+    "/api/objek-pajak/map?bbox=104%2C-4.6%2C104.1%2C-4.4&zoom=18&limit=500&includeUnverified=true&focusOpId=1237",
+  );
 }
 
 run()

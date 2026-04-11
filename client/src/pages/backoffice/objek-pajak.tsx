@@ -56,11 +56,12 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
+import { createPublicMapDesaKey } from "@/lib/map/public-map-route-state";
 import { apiRequest } from "@/lib/queryClient";
 import type {
- MasterKecamatan,
- MasterKelurahan,
- MasterRekeningPajak,
+  MasterKecamatan,
+  MasterKelurahan,
+  MasterRekeningPajak,
  ObjekPajak,
  ObjekPajakListItem,
  PaginatedResult,
@@ -253,15 +254,31 @@ export default function BackofficeObjekPajak() {
  setLocation(`/backoffice/objek-pajak/${id}`);
  };
 
- const openLocation = (op: ObjekPajakListItem) => {
- if (!op.latitude || !op.longitude) return;
+  const openLocation = (op: ObjekPajakListItem) => {
+  if (!op.latitude || !op.longitude) return;
 
- const params = new URLSearchParams();
- params.set("focusOpId", String(op.id));
- params.set("focusLat", op.latitude);
- params.set("focusLng", op.longitude);
- window.open(`/?${params.toString()}`, "_blank", "noopener,noreferrer");
- };
+  const params = new URLSearchParams();
+  params.set("focusOpId", String(op.id));
+  params.set("focusLat", op.latitude);
+  params.set("focusLng", op.longitude);
+  params.set("includeUnverified", "true");
+  const kelurahanName = (op.kelurahan ?? kelurahanMap.get(op.kelurahanId) ?? "").trim();
+  if (op.kecamatanId && kelurahanName) {
+  params.set("stage", "desa");
+  params.set("kecamatanId", op.kecamatanId);
+  params.set(
+  "desaKey",
+  createPublicMapDesaKey({
+  kecamatanId: op.kecamatanId,
+  desaName: kelurahanName,
+  }),
+  );
+  } else if (op.kecamatanId) {
+  params.set("stage", "kecamatan");
+  params.set("kecamatanId", op.kecamatanId);
+  }
+  window.open(`/?${params.toString()}`, "_blank", "noopener,noreferrer");
+  };
 
  return (
  <BackofficeLayout>

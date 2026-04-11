@@ -1990,6 +1990,20 @@ function normalizeOpData(payload: Record<string, unknown>, partial = false) {
   return normalized;
 }
 
+function shouldIgnoreUnchangedNopdOnUpdate(inputNopd: unknown, existingNopd: string) {
+  if (typeof inputNopd !== "string") {
+    return false;
+  }
+
+  const next = inputNopd.trim();
+  const current = String(existingNopd ?? "").trim();
+  if (!next || !current) {
+    return false;
+  }
+
+  return next === current;
+}
+
 async function getJenisPajakFromRekId(rekPajakId: number) {
   const rekeningList = await storage.getAllMasterRekeningPajak();
   const rekening = rekeningList.find((item) => item.id === rekPajakId);
@@ -4476,7 +4490,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (rekPajakId === null) {
       return res.status(400).json({ message: "rekPajakId tidak valid" });
     }
-
     const wpId = parseOptionalNumber(req.query.wpId);
     if (wpId === null) {
       return res.status(400).json({ message: "wpId tidak valid" });
@@ -4825,6 +4838,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (rekPajakId === null) {
       return res.status(400).json({ message: "rekPajakId tidak valid" });
     }
+    const focusOpId = parseOptionalNumber(req.query.focusOpId);
+    if (focusOpId === null) {
+      return res.status(400).json({ message: "focusOpId tidak valid" });
+    }
 
     const statusVerifikasi = parseVerificationStatus(req.query.statusVerifikasi);
     if (statusVerifikasi === null) {
@@ -4846,6 +4863,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       q,
       kecamatanId,
       rekPajakId: rekPajakId ?? undefined,
+      focusOpId: focusOpId ?? undefined,
       statusVerifikasi: effectiveStatusVerifikasi,
       limit,
     });
@@ -4888,6 +4906,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (rekPajakId === null) {
       return res.status(400).json({ message: "rekPajakId tidak valid" });
     }
+    const focusOpId = parseOptionalNumber(req.query.focusOpId);
+    if (focusOpId === null) {
+      return res.status(400).json({ message: "focusOpId tidak valid" });
+    }
 
     const statusVerifikasi = parseVerificationStatus(req.query.statusVerifikasi);
     if (statusVerifikasi === null) {
@@ -4909,6 +4931,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       q,
       kecamatanId,
       rekPajakId: rekPajakId ?? undefined,
+      focusOpId: focusOpId ?? undefined,
       statusVerifikasi: effectiveStatusVerifikasi,
       limit,
     });
@@ -5710,6 +5733,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const partialSchema = insertObjekPajakSchema.partial();
     const normalized = normalizeOpData(req.body, true);
+    if (shouldIgnoreUnchangedNopdOnUpdate(normalized.nopd, existing.nopd)) {
+      delete normalized.nopd;
+    }
     const parsed = partialSchema.safeParse(normalized);
     if (!parsed.success) {
       return sendZodValidationError(res, parsed.error, "Data objek pajak tidak valid");

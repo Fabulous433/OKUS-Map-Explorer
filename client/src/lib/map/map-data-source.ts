@@ -28,6 +28,8 @@ export type MapDataRequestInput = {
   searchQuery?: string;
   kecamatanId?: string;
   rekPajakId?: string;
+  includeUnverified?: boolean;
+  focusOpId?: number;
 };
 
 export type MapDataRequest =
@@ -88,6 +90,10 @@ export function buildInternalApiMapQueryUrl(
   if (input.searchQuery) params.set("q", input.searchQuery);
   if (input.kecamatanId) params.set("kecamatanId", input.kecamatanId);
   if (input.rekPajakId) params.set("rekPajakId", input.rekPajakId);
+  if (input.includeUnverified) params.set("includeUnverified", "true");
+  if (typeof input.focusOpId === "number" && Number.isFinite(input.focusOpId) && input.focusOpId > 0) {
+    params.set("focusOpId", String(input.focusOpId));
+  }
 
   return `${input.endpoint}?${params.toString()}`;
 }
